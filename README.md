@@ -1,5 +1,6 @@
 # Folioblocks
 
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/2a71cf953cf14f97beae8fa4d614b1c0)](https://www.codacy.com/gh/CodexLink/folioblocks/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CodexLink/folioblocks&amp;utm_campign=Badge_Grade)
 [![CodeFactor](https://www.codefactor.io/repository/github/codexlink/folioblocks/badge)](https://www.codefactor.io/repository/github/codexlink/folioblocks)
 
 The main repository for the design project that contains submodules that links to other parts of the repository.
