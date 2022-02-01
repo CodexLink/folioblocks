@@ -7,7 +7,8 @@ license = "GPL-3.0-or-later"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-djangorestframework = "^3.13.1"
+fastapi = "^0.73.0"
+uvicorn = {extras = ["standard"], version = "^0.17.1"}
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"
