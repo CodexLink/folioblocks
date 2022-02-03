@@ -36,6 +36,11 @@ The following are endpoints that is **initially planned** for the development of
 
 In order to avoid polluting branches, I will be releasing checkpoints/save-states via tags. I will try my best to follow the semantic version for this type of matter.
 
+## Information
+
+Video: ???
+Documentation: ???
+
 ## Members
 
 The following are the group members or associates of this project.
