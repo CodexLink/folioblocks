@@ -11,28 +11,54 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 # Libraries
-from fastapi import Body, Depends, FastAPI, Query, Router
+from fastapi import Depends, FastAPI, Query, Router
 from typing import Any, Dict, Final
-from secrets import token_hex
-from sys import _exit as terminate
+from utils.constantsi import NodeAPITags
+# from secrets import token_hex
 
-# Custom Modules
+node_router = APIRouter(
+    prefix="/node",
+    tags=["Node API"],
+    responses= {404: {"description": "Not Found."}} # TODO: Handle more than Not Found.
+)
 
-@node.get("/config"):
+
+
+@node.get(
+    "/config",
+    tags=[
+    ]
+):
 async def fetch_node_config():
     pass
 
-"""
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-@node.get():
-"""
+@node.post(
+    "/register"
+)
+async def register_node():
+    pass
+
+@node.get(
+    "/login"
+)
+async def login_node():
+    pass
+
+@node.get(
+    "/info"
+)
+async def chain_info(): # Includes, time_estimates, mining_status, consensus.
+    pass
+
+@node.post(
+    "/negotiate"
+)
+async def pre_post_negotiate(): # Actions should be, receive_block, send_hash_block (During this, one of the assert processes will be executed.)
+    pass
+
+@node.put(
+    "/negotiate"
+)
+async def process_negotiate(): # Actions should be updating data for the master node to communicate.
+    pass
+

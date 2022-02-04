@@ -35,16 +35,21 @@ NODE_ROLE_CHOICES: Final[list[NodeRoles]] = ["MASTER", "SIDE"]
 # Enums
 class ExplorerAPITags(IntEnum):
     # Overall
-    GENERAL_FETCH: Final[int] = auto()
+    GENERAL_FETCH: int = auto()
 
     # Action-Type
-    LIST_FETCH: Final[int] = auto()
-    SPECIFIC_FETCH: Final[int] = auto()
+    LIST_FETCH: int = auto()
+    SPECIFIC_FETCH: int = auto()
 
     # Sepcific-Type
-    BLOCK_FETCH: Final[int] = auto()
-    TRANSACTION_FETCH: Final[int] = auto()
-    ADDRESS_FETCH: Final[int] = auto()
+    BLOCK_FETCH: int = auto()
+    TRANSACTION_FETCH: int = auto()
+    ADDRESS_FETCH: int = auto()
+
+class NodeAPITags(IntEnum):
+    GENERAL_NODE_API: int = auto()
+    MASTER_NODE_API: int = auto()
+    SIDE_NODE_API: int = auto()
 
 # Constraints — Blockchain (Explorer) Query
 # These are the min and max constraint for querying blockchain data.
