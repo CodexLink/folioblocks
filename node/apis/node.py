@@ -13,7 +13,7 @@ You should have received a copy of the GNU General Public License along with Fol
 # Libraries
 from fastapi import Depends, FastAPI, Query, Router
 from typing import Any, Dict, Final
-from utils.constantsi import NodeAPITags
+from utils.constants import NodeAPITags
 # from secrets import token_hex
 
 node_router = APIRouter(
@@ -22,43 +22,62 @@ node_router = APIRouter(
     responses= {404: {"description": "Not Found."}} # TODO: Handle more than Not Found.
 )
 
-
-
-@node.get(
-    "/config",
-    tags=[
-    ]
-):
-async def fetch_node_config():
-    pass
-
 @node.post(
-    "/register"
+    "/register",
+    tags=[
+        NodeAPITags.GENERAL_NODE_API.name
+    ],
+    #response_model=NodeRegisterCredentials,
+    summary="Registers a node from the blockchain network.",
+    description="An API endpoint that allows a node to be introduced to the blockchain network."
 )
-async def register_node():
+async def register_node( """node_credentials: NodeRegisterCredentials """):
     pass
 
 @node.get(
-    "/login"
+    "/login",
+    tags=[
+        NodeAPITags.GENERAL_NODE_API.name
+    ],
+    summary="Logs a node from the blockchain network.",
+    description="An API endpoint that logs the node to the blockchain network."
 )
 async def login_node():
     pass
 
 @node.get(
-    "/info"
+    "/info",
+    tags=[
+        NodeAPITags.GENERAL_NODE.name,
+        NodeAPITags.NODE_TO_NODE_API.name,
+        NodeAPITags.MASTER_NODE_API.name
+    ],
+    summary="Fetch information from the master node.",
+    description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers." # TODO
 )
-async def chain_info(): # Includes, time_estimates, mining_status, consensus.
+async def fetch_chain_info(): # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
 @node.post(
-    "/negotiate"
+    "/negotiate/{phase_state}",
+    tags=[
+        NodeAPITags.NODE_TO_NODE_API.name,
+    ],
+    summary="Initiates and finishes negotiation from master node to side node and vice versa.",
+    description="An API endpoint that handles the negotiations from node-to-node." # TODO: Add some test cases. This was intended to ensure that we really know wtf are we doing.
 )
-async def pre_post_negotiate(): # Actions should be, receive_block, send_hash_block (During this, one of the assert processes will be executed.)
+async def pre_post_negotiate(phase_state: str | None = None): # Argument is TODO. Actions should be, receive_block, send_hash_block (During this, one of the assert processes will be executed.)
     pass
 
 @node.put(
-    "/negotiate"
+    "/negotiate/{negotiation_id}", # Aside from client identification, we should have an identifier.
+    tags=[
+        NodeAPITags.NODE_TO_NODE_API.name
+    ],
+    summary="Execute and acknowledge payloads given from this endpoint.",
+    description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation."
 )
 async def process_negotiate(): # Actions should be updating data for the master node to communicate.
     pass
 
+# TODO: Add a consensus endpoint or a functionality from the negotiation!!!
