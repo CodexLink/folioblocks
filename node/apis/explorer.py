@@ -4,12 +4,11 @@ Node Component, Explorer API
 It contains the necessary API endpoints for the nodes who will participate in the blockchain. Note that some of these endpoints will be exclusive under 'master' node role. Also, note that most of these endpoints require JWT token to access.
 It contains API endpoints that can be accessed by the Explorer Frontend UI (combined with the Dashboard UI @ 'web/' directory). Note that the base endpoint will not be the same from Frontend API endpoints.That is intended so that there will be no confusion, upon selection of the endpoint to use.
 
-======================================================
+This file is part of FolioBlocks.
 
-This file is part of Folioblocks.
-Folioblocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-Folioblocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-You should have received a copy of the GNU General Public License along with Folioblocks. If not, see <https://www.gnu.org/licenses/>.
+FolioBlocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
 # TODO: Finish config, and then design schema for both the blockchain and the config and test it later on.
@@ -51,7 +50,7 @@ async def get_blockchain():
     tags=[ExplorerAPITags.LIST_FETCH.name, ExplorerAPITags.BLOCK_FETCH.name],
     # response_model=Blocks,
     summary="Fetches all blocks from the blockchain.",
-    description="An API endpoint that specifically fetches all blocks from the blockchain.",  # TODO: Search for the cached output.
+    description="An API endpoint that specifically obtains all blocks from the blockchain.",  # TODO: Search for the cached output.
 )
 async def get_blocks(
     block_count: int
@@ -75,7 +74,7 @@ async def get_blocks(
     tags=[ExplorerAPITags.SPECIFIC_FETCH.name, ExplorerAPITags.BLOCK_FETCH.name],
     # response_model=Block,
     summary="Fetches a certain block from the blockchain.",
-    description="An API endpoint that specifically fetches a certain block from the blockchain.",  # TODO: Search for the cached output.
+    description="An API endpoint that specifically obtains a certain block from the blockchain.",  # TODO: Search for the cached output.
 )
 async def get_certain_block(
     block_id: BlockID,
@@ -159,7 +158,7 @@ async def get_addresses(
     tags=[ExplorerAPITags.SPECIFIC_FETCH.name, ExplorerAPITags.ADDRESS_FETCH.name],
     # response_model=Address,
     summary="Fetch a specific address recorded in blockchain.",
-    description="An API endpoint that fetches an address and display its transactions associated in the blockchain.",
+    description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
 async def get_particular_addresses(
     address_uuid: AddressUUID,

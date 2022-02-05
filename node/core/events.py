@@ -1,23 +1,22 @@
 """
 Events (events.py) | Functions to Execute during FastAPI Events.
-
 [1] FastAPI has an event handler which allows us to run code before the actual instantiation of the FastAPI in the uvicorn instance. [2] Other than that, an extension module for the FastAPI named as 'fastapi-utils' provide us an event function that can run on the loop at a certain time. The decorator named '@repeat_every' will be utilized to run some blockchain-based actions along with the API endpoints.
-
 This file contains functions that is under event category. This means they run exclusively at a certain time or at a certain phase.
 
-This file is part of Folioblocks.
+This file is part of FolioBlocks.
 
-Folioblocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-Folioblocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with Folioblocks. If not, see <https://www.gnu.org/licenses/>.
+FolioBlocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
 if __name__ == "__main__":
-    raise SystemExit(f"This {__file__} (module) should not be executed as an entrypoint code! It only contains event functions that is exclusively used in the entrypoint code (main.py)!")
+    raise SystemExit(
+        f"This {__file__} (module) should not be executed as an entrypoint code! It only contains event functions that is exclusively used in the entrypoint code (main.py)!"
+    )
 
 from fastapi_utils.tasks import repeat_every
+
 # from fastapi import Body, Depends, FastAPI, Query, Router
 
 
@@ -31,6 +30,7 @@ Evaluation:
 - If not, set its own instance to be the master node. Otherwise, be a master node.
 """
 
+
 @node.on_event("startup")
 async def system_checks():
     # Should contain the node lookup.
@@ -42,6 +42,7 @@ async def system_checks():
 
     # Should check for the file of the JSON if still the same as before via database. Or should hash or rehash the file. Also set the permission to undeletable, IF POSSIBLE.
     pass
+
 
 """
 Shutdown
@@ -56,9 +57,11 @@ Put all other JWT on expiration or on blacklist.
 What else?
 """
 
+
 @node.on_event("shutdown")
-async def perform_shutdown(): # TODO: Should we seperate this along with other shutdown thing since this was asnyc?
+async def perform_shutdown():  # TODO: Should we seperate this along with other shutdown thing since this was asnyc?
     pass
+
 
 """
 Repeated Tasks
@@ -71,10 +74,12 @@ Consensus Method (Remember, that we need the consensus dependency.)
 
 """
 
+
 @repeat_every(seconds=60)
 async def jwt_invalidation():
     pass
 
-@repeat_every(seconds=10) # unconfirmed.
+
+@repeat_every(seconds=10)  # unconfirmed.
 async def consensus_with_side_nodes():
     pass

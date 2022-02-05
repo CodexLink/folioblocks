@@ -1,15 +1,12 @@
 """
 Argument Handler (args.py) | for the Blockchain Node and Explorer API Component Handler (main.py)
-
 This handler (module) helps the entrypoint code to manage the given arguments. This retricts of what can be passed and what cannot. To use this, simply import it to the entrypoint code as this should not be used as a main module (See first line of code in condition.)
 
-This file is part of Folioblocks.
+This file is part of FolioBlocks.
 
-Folioblocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-Folioblocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with Folioblocks. If not, see <https://www.gnu.org/licenses/>.
+FolioBlocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
 if __name__ == "__main__":

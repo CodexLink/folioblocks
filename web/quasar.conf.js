@@ -140,8 +140,8 @@ module.exports = configure(function (ctx) {
       },
 
       manifest: {
-        name: `Folioblocks Web`,
-        short_name: `Folioblocks Web`,
+        name: `FolioBlocks Web`,
+        short_name: `FolioBlocks Web`,
         description: `SPA that contains the explorer and the dashboard.`,
         display: "standalone",
         orientation: "portrait",

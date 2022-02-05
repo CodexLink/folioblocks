@@ -1,4 +1,4 @@
-# Folioblocks
+# FolioBlocks
 
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/2a71cf953cf14f97beae8fa4d614b1c0)](https://www.codacy.com/gh/CodexLink/folioblocks/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CodexLink/folioblocks&amp;utm_campign=Badge_Grade)
 [![CodeFactor](https://www.codefactor.io/repository/github/codexlink/folioblocks/badge)](https://www.codefactor.io/repository/github/codexlink/folioblocks)
@@ -18,19 +18,19 @@ The following directory describes its use:
 
 The following are endpoints that is **initially planned** for the development of the system.
 
-- **blockchain/** | 
-- **node/** | 
-- **node/<type>** | 
-- **node/<???>** | 
-- **consensus/** | 
-- **participation/** | 
-- ** ** | 
-- ** ** | 
-- ** ** | 
-- ** ** | 
-- ** ** | 
-- ** ** | 
-- ** ** | 
+- **blockchain/** |
+- **node/** |
+- **node/<type>** |
+- **node/<???>** |
+- **consensus/** |
+- **participation/** |
+- ** ** |
+- ** ** |
+- ** ** |
+- ** ** |
+- ** ** |
+- ** ** |
+- ** ** |
 
 ## About Save-State
 
@@ -54,4 +54,3 @@ The following are the group members or associates of this project.
 ## Resources
 
 To be done, 3 months from now.
-

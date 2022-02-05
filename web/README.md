@@ -1,4 +1,4 @@
-# Folioblocks Web (folioblocks-web)
+# FolioBlocks Web (folioblocks-web)
 
 SPA that contains the explorer and the dashboard.
 

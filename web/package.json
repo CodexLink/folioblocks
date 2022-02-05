@@ -2,7 +2,7 @@
   "name": "folioblocks-web",
   "version": "0.0.1",
   "description": "SPA that contains the explorer and the dashboard.",
-  "productName": "Folioblocks Web",
+  "productName": "FolioBlocks Web",
   "author": "Janrey Licas <self.codexlink@gmail.com>",
   "private": true,
   "scripts": {
