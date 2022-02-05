@@ -19,7 +19,7 @@ from utils.constants import NodeAPITags
 node_router = APIRouter(
     prefix="/node",
     tags=["Node API"],
-    responses= {404: {"description": "Not Found."}} # TODO: Handle more than Not Found.
+    responses = {404: {"description": "Not Found."}} # TODO: Handle more than Not Found.
 )
 
 @node.post(
@@ -81,3 +81,4 @@ async def process_negotiate(): # Actions should be updating data for the master 
     pass
 
 # TODO: Add a consensus endpoint or a functionality from the negotiation!!!
+

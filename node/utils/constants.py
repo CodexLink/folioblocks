@@ -33,6 +33,14 @@ NODE_IP_PORT_FLOOR: int = 5000 # Contains the floor port to be used for generati
 NODE_ROLE_CHOICES: Final[list[NodeRoles]] = ["MASTER", "SIDE"]
 
 # Enums
+
+class DashboardAPITags(IntEnum):
+    GENERAL_API: int = auto()
+    CLIENT_ONLY_API: int = auto()
+    APPLICANT_ONLY_API: int = auto()
+    EMPLOYER_ONLY_API: int = auto()
+    INSTITUTION_ONLY_API: int = auto()
+
 class ExplorerAPITags(IntEnum):
     # Overall
     GENERAL_FETCH: int = auto()
@@ -50,6 +58,7 @@ class NodeAPITags(IntEnum):
     GENERAL_NODE_API: int = auto()
     MASTER_NODE_API: int = auto()
     SIDE_NODE_API: int = auto()
+    NODE_TO_NODE_API: int = auto()
 
 # Constraints — Blockchain (Explorer) Query
 # These are the min and max constraint for querying blockchain data.
