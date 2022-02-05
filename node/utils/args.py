@@ -1,4 +1,3 @@
-
 """
 Argument Handler (args.py) | for the Blockchain Node and Explorer API Component Handler (main.py)
 
@@ -14,15 +13,26 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 if __name__ == "__main__":
-    raise SystemExit(f"This {__file__} (module) should not be executed as an entrypoint code! It only contains handling for the arguments when the '__main__' module is launched.")
+    raise SystemExit(
+        f"This {__file__} (module) should not be executed as an entrypoint code! It only contains handling for the arguments when the '__main__' module is launched."
+    )
 
-from argparse import ArgumentParser # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
-from utils.constants import FOLIOBLOCKS_NODE_TITLE, FOLIOBLOCKS_NODE_DESCRIPTION, FOLIOBLOCKS_EPILOG, FOLIOBLOCKS_HELP, NODE_ROLE_CHOICES
+from argparse import (
+    ArgumentParser,
+)  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
+
+from utils.constants import (
+    FOLIOBLOCKS_EPILOG,
+    FOLIOBLOCKS_HELP,
+    FOLIOBLOCKS_NODE_DESCRIPTION,
+    FOLIOBLOCKS_NODE_TITLE,
+    NODE_ROLE_CHOICES,
+)
 
 args_handler = ArgumentParser(
     prog=FOLIOBLOCKS_NODE_TITLE,
     description=FOLIOBLOCKS_NODE_DESCRIPTION,
-    epilog=FOLIOBLOCKS_EPILOG
+    epilog=FOLIOBLOCKS_EPILOG,
 )
 
 args_handler.add_argument(
@@ -30,7 +40,7 @@ args_handler.add_argument(
     "--no-logs",
     action="store_false",
     help=FOLIOBLOCKS_HELP["NO_LOG_FILE"],
-    required=False
+    required=False,
 )
 
 args_handler.add_argument(
@@ -38,7 +48,7 @@ args_handler.add_argument(
     "--prefer-role",
     choices=NODE_ROLE_CHOICES,
     help=FOLIOBLOCKS_HELP["PREFER_ROLE"],
-    required=True
+    required=True,
 )
 
 args_handler.add_argument(
@@ -47,6 +57,5 @@ args_handler.add_argument(
     action="store",
     help=FOLIOBLOCKS_HELP["PORT"],
     type=int,
-    required=False
+    required=False,
 )
-
