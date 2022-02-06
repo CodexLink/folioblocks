@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from fastapi import Depends, FastAPI, Query, APIRouter
 from typing import Final
-from utils.constants import DashboardAPITags, ItemReturnCount
+from node.utils.constants import DashboardAPITags, ItemReturnCount
 
 dashboard_router = APIRouter(
     prefix="/dashboard",

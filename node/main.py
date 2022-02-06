@@ -19,7 +19,7 @@ import uvicorn
 from fastapi import FastAPI
 
 # Components
-from utils.constants import NODE_IP_PORT_FLOOR
+from node.utils.constants import NODE_IP_PORT_FLOOR
 from utils.args import args_handler as ArgsHandler
 
 # Routers, this will be inserted from the If and else in the ArgsHandler.
@@ -29,8 +29,9 @@ from apis.node import node_router
 
 # Step 1: Handle the parameters first.
 _parsed_args = ArgsHandler.parse_args()  # idk what type is this.
-
 api = FastAPI()  # What should we depend on?
+print(_parsed_args)
+
 # api.include_router()
 
 # TODO: Add the API Router or combine them later.
