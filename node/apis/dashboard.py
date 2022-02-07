@@ -9,9 +9,28 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from http import HTTPStatus
 from fastapi import Depends, FastAPI, Query, APIRouter
-from typing import Final
-from node.utils.constants import DashboardAPITags, ItemReturnCount
+from typing import Final, List
+from node.core.models import (
+    Applicant,
+    Applicants,
+    DashboardContext,
+    Issuance,
+    Issuances,
+    IssueToStudentIn,
+    IssueToStudentOut,
+    NewStudentIn,
+    NewStudentOut,
+    Request,
+    Requests,
+    Student,
+    Students,
+    UserLoginIn,
+    UserLoginResult,
+    UserLogoutIn,
+)
+from node.utils.constants import AddressUUID, DashboardAPITags, ItemReturnCount
 
 dashboard_router = APIRouter(
     prefix="/dashboard",
@@ -23,39 +42,40 @@ dashboard_router = APIRouter(
 @dashboard_router.get(
     "/dashboard",
     tags=[DashboardAPITags.GENERAL_API.name],
+    response_model=DashboardContext,
     summary="Obtains necessary information for the dashboard display.",
     description="An API endpoint that returns the data of the user based on their role.",
 )
-async def get_data_to_dashboard():
+async def get_data_to_dashboard(context: DashboardContext):
     pass
 
 
-@dashboard_router.get(
+@dashboard_router.post(
     "/login",
     tags=[DashboardAPITags.GENERAL_API.name],
-    # response_model=[LoginInput, LoginOutput], # Not sure if this was applicable.
+    response_model=UserLoginResult,
     summary="Logs the user from the dashboard.",
     description="An API endpoint that logs the user based on their credentials.",
 )
-async def login_user():
-    pass
+async def login_user(credentials: UserLoginIn):
+    return None  # For now.
 
 
-@dashboard_router.get(
+@dashboard_router.post(
     "/logout",
     tags=[DashboardAPITags.GENERAL_API.name],
-    # response_model=[LoginInput, LoginOutput], # Not sure if this was applicable.
     summary="Invalidates user's session.",
     description="An API endpoint that logouts the user by invalidating the JWT token.",
+    status_code=HTTPStatus.OK,
 )
-async def logout_user():
+async def logout_user(to_invalidate: UserLogoutIn):
     pass
 
 
 @dashboard_router.get(
     "/applicants",
     tags=[DashboardAPITags.EMPLOYER_ONLY_API.name],
-    # response_model=Applicants,
+    response_model=List[Applicants],
     summary="Obtains a list of individuals who opted from the employer's company.",
     description="An API-exclusive to employers that obtains a list of individuals (applicants) who applies to them.",
 )
@@ -79,18 +99,18 @@ async def get_applicants(
 @dashboard_router.get(
     "/applicant/{applicant_id}",
     tags=[DashboardAPITags.EMPLOYER_ONLY_API.name],
-    # response_model=ApplicantDetail,
+    response_model=Applicant,
     summary="Obtain a certain individual.",
     description="An API-exclusive to employers that obtains a particular individual, which displays their information.",
 )
-async def get_applicant(applicant_id: int):  # TODO: Require custom types.
+async def get_applicant(applicant_id: AddressUUID):
     pass
 
 
 @dashboard_router.get(
     "/requests",
     tags=[DashboardAPITags.CLIENT_ONLY_API.name],
-    # response_model = Requests,
+    response_model=List[Requests],
     summary="Obtains all requests associated to this client-individual.",
     description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
 )
@@ -101,7 +121,7 @@ async def get_all_requests():
 @dashboard_router.get(
     "/request/{request_id}",
     tags=[DashboardAPITags.CLIENT_ONLY_API.name],
-    # response_model = [RequestUser, RequestEmployer, RequestInstitution],
+    response_model=Request,
     summary="Obtain a particular request. Context-protected based on the association of the user.",
     description="An API endpoint that returns a particular requests that is associated from this user.",
 )
@@ -125,7 +145,7 @@ async def request_document_view(
 @dashboard_router.get(
     "/issuances",
     tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
-    # response_model = Issuances,
+    response_model=Issuances,
     summary="Get a list of issuances from the students.",
     description="An API endpoint that returns of a list of issuances that was invoked from the students.",
 )
@@ -149,18 +169,18 @@ async def get_issuances(
 @dashboard_router.post(
     "/issue",
     tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
-    # response_model = IssuedToMintDocument,
+    response_model=IssueToStudentOut,
     summary="Submit a document to mint from the blockchain.",
     description="An API endpoint that allows institutions to submit new documents in the blockchain. Note that minting them requires user (address) reference.",
 )
-async def mint_document():
+async def mint_document(doc_context: IssueToStudentIn):
     pass
 
 
 @dashboard_router.get(
     "/issuance/{issue_id}",
     tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
-    # response_model=IssuedDocuments,
+    response_model=Issuance,
     summary="Obtain a particular issued document.",
     description="An API endpoint that obtains a specified document based on its ID.",
 )
@@ -171,7 +191,7 @@ async def get_issued_docs(issue_id: int):
 @dashboard_router.get(
     "/students",
     tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
-    # response_model=Students,
+    response_model=Students,
     summary="Obtain a list of classified students in the blockchain.",
     description="An API endpoint that returns a list of addresses that is classified as student.",
 )
@@ -193,21 +213,23 @@ async def get_students(
 
 
 @dashboard_router.get(
-    "/student/{student_id}",
+    "/student/{student_addr}",
     tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    response_model=Student,
     summary="Obtain a particular student's information.",
     description="An API endpoint that obtains a student along with its readable information.",
 )
-async def get_student(student_id: int):  # Remember the types bro.
+async def get_student(student_addr: AddressUUID):
     pass
 
 
+# ! TODO: We need PUT method and a batch push accounts method to the blockchain so that it is less error prone. We implement that if we already have the web.
 @dashboard_router.post(
     "/student",
     tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
-    # response_model = StudentCreate,
+    response_model=NewStudentOut,
     summary="Create a student information for the blockchain to recognize.",
     description="An API endpoint that creates a student account on the blockchain.",
 )
-async def create_student():
+async def create_student(student_context: NewStudentIn):
     pass

@@ -9,18 +9,44 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 # * Libraries
-from typing import Final, NewType as _N
+from typing import Any, Final, NewType as _N
 from enum import auto, IntEnum
 
-# Custom Types
+# Priority Classification Types
+class DocToRequestTypes(IntEnum):
+    # TODO: We need more information. Preferrable under
+    TOR: int = auto()
+    SPECIFIED: int = auto()
+
+
+# Custom Variable Types
+NotificationContext = list[dict[str, Any]]
+RoleContext = dict[str, Any]
+DocumentSet = list[dict[str, Any]]
+
+# Custom Assertable Types
+# TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.
+AcademicExperience = _N("AcademicExperience", str)
 AddressUUID = _N("AddressUUID", str)
 ArgumentParameter = _N("ArgumentParameter", str)
 ArgumentDescription = _N("ArgumentDescription", str)
 BlockID = _N("BlockID", str)
+Certificates = _N("Certificates", DocumentSet)
+CredentialContext = _N("CredentialContext", str)
+DocRequestType = _N("DocRequestType", DocToRequestTypes)
+Documents = _N("Documents", DocumentSet)
+DocumentMeta = _N("DocumentMeta", str)
+DocumentProof = _N("DocumentProof", DocumentSet)
+GenericUUID = _N("GenericUUID", str)
+InternExperience = _N("InternExperience", DocumentSet)
 NodeRoles = _N("NodeRoles", str)
-URLAddress = _N("URLAddress", str)
+JWTToken = _N("JWTToken", str)
 ProgramMetadata = _N("ProgramMetadata", str)
+RequestContext = _N("RequestContext", str)
+URLAddress = _N("URLAddress", str)
+UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
+WorkExperience = _N("WorkExperience", DocumentSet)
 
 # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[

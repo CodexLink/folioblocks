@@ -20,6 +20,16 @@ if __name__ == "__main__":
 
 from typing import Final
 from fastapi import APIRouter, Depends, Query
+from node.core.models import (
+    Address,
+    Addresses,
+    Block,
+    Blockchain,
+    Blocks,
+    SearchContext,
+    Transaction,
+    Transactions,
+)
 from utils.constants import BlockID, ExplorerAPITags, ItemReturnCount
 from utils.constants import AddressUUID, TxID
 
@@ -37,7 +47,7 @@ explorer_router = APIRouter(
 @explorer_router.get(
     "/",
     tags=[ExplorerAPITags.GENERAL_FETCH.name, ExplorerAPITags.LIST_FETCH.name],
-    # response_model=Blockchain,
+    response_model=Blockchain,
     summary="Fetch the context of the blockchain, formatted for displaying in the web.",
     description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",  # TODO
 )
@@ -48,7 +58,7 @@ async def get_blockchain():
 @explorer_router.get(
     "/blocks",
     tags=[ExplorerAPITags.LIST_FETCH.name, ExplorerAPITags.BLOCK_FETCH.name],
-    # response_model=Blocks,
+    response_model=Blocks,
     summary="Fetches all blocks from the blockchain.",
     description="An API endpoint that specifically obtains all blocks from the blockchain.",  # TODO: Search for the cached output.
 )
@@ -72,7 +82,7 @@ async def get_blocks(
 @explorer_router.get(
     "/block/{block_id}",
     tags=[ExplorerAPITags.SPECIFIC_FETCH.name, ExplorerAPITags.BLOCK_FETCH.name],
-    # response_model=Block,
+    response_model=Block,
     summary="Fetches a certain block from the blockchain.",
     description="An API endpoint that specifically obtains a certain block from the blockchain.",  # TODO: Search for the cached output.
 )
@@ -97,7 +107,7 @@ async def get_certain_block(
 @explorer_router.get(
     "/transactions",
     tags=[ExplorerAPITags.LIST_FETCH.name, ExplorerAPITags.TRANSACTION_FETCH.name],
-    # response_model=TXs,
+    response_model=Transactions,
     summary="Fetch all transactions for all blocks.",
     description="An API endpoint that returns all transactions that recently entered in the blockchain.",
 )
@@ -121,7 +131,7 @@ async def get_transactions(
 @explorer_router.get(
     "/transaction/{tx_id}",
     tags=[ExplorerAPITags.SPECIFIC_FETCH.name, ExplorerAPITags.TRANSACTION_FETCH.name],
-    # response_model=TX,
+    response_model=Transaction,
     summary="Fetches a specific transaction.",
     description="An API endpoint that returns a specific transaction that matches for all block inserted in the blockchain.",
 )
@@ -132,7 +142,7 @@ async def get_particular_transaction(tx_id: TxID):
 @explorer_router.get(
     "/addresses",
     tags=[ExplorerAPITags.LIST_FETCH.name, ExplorerAPITags.ADDRESS_FETCH.name],
-    # response_model=Addresses,
+    response_model=Addresses,
     summary="Fetch all addresses that has been recorded in blockchain.",
     description="An API endpoint that returns all addresses that is recorded in blockchain.",
 )
@@ -156,7 +166,7 @@ async def get_addresses(
 @explorer_router.get(
     "/address/{address_uuid}",
     tags=[ExplorerAPITags.SPECIFIC_FETCH.name, ExplorerAPITags.ADDRESS_FETCH.name],
-    # response_model=Address,
+    response_model=Address,
     summary="Fetch a specific address recorded in blockchain.",
     description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
@@ -181,7 +191,7 @@ async def get_particular_addresses(
 @explorer_router.get(
     "/search",
     tags=[ExplorerAPITags.GENERAL_FETCH.name],
-    # response_model=Search,
+    response_model=SearchContext,
     summary="Search an entity (block, transaction, address) on the blockchain.",
     description="An API endpoint that attempts to search for an entity provided by input. This endpoint enforce length restrictions, as well as returns a singleton data as a redirection link.",
 )
