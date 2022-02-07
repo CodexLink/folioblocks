@@ -33,19 +33,15 @@ args_handler = ArgumentParser(
 )
 
 args_handler.add_argument(
-    "-nl",
-    "--no-logs",
-    action="store_false",
-    help=FOLIOBLOCKS_HELP["NO_LOG_FILE"],
-    required=False,
+    "-l", "--local", action="store_true", help=FOLIOBLOCKS_HELP["LOCAL"]
 )
 
 args_handler.add_argument(
-    "-pr",
-    "--prefer-role",
-    choices=NODE_ROLE_CHOICES,
-    help=FOLIOBLOCKS_HELP["PREFER_ROLE"],
-    required=True,
+    "-nl",
+    "--no-logs",
+    action="store_true",
+    help=FOLIOBLOCKS_HELP["NO_LOG_FILE"],
+    required=False,
 )
 
 args_handler.add_argument(
@@ -55,4 +51,12 @@ args_handler.add_argument(
     help=FOLIOBLOCKS_HELP["PORT"],
     type=int,
     required=False,
+)
+
+args_handler.add_argument(
+    "-pr",
+    "--prefer-role",
+    choices=NODE_ROLE_CHOICES,
+    help=FOLIOBLOCKS_HELP["PREFER_ROLE"],
+    required=True,
 )

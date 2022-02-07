@@ -8,10 +8,13 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from re import T
+from typing import Any, List
 from pydantic import BaseModel, EmailStr, FilePath
 from datetime import datetime
+from node.utils.constants import HashUUID, TransactionActions, TransactionStatus
 
-from node.utils.constants import (
+from utils.constants import (
     AcademicExperience,
     AddressUUID,
     Certificates,
@@ -170,36 +173,66 @@ class NewStudentOut(BaseModel):
 # # Explorer API — START
 
 
-class Blockchain(BaseModel):
-    pass
-
-
-class Blocks(BaseModel):
-    pass
-
-
-class Block(BaseModel):
-    pass
-
-
 class Transactions(BaseModel):
-    pass
+    tx_hash: AddressUUID
+    action: TransactionActions
+    status: TransactionStatus
+    stored_at_block: int
+    date_executed: datetime
 
 
 class Transaction(BaseModel):
-    pass
+    tx_hash: AddressUUID
+    action: TransactionActions
+    date_executed: datetime
+    from_address: AddressUUID
+    to_address: AddressUUID
+    context: Any  # TODO: We have to type this one as well. Or create an Enum that classifies those actions.
+    status: TransactionStatus
+    stored_at_block: int
+
+
+class Block(BaseModel):
+    id: int
+    nonce: int
+    validator: AddressUUID
+    prer_block: HashUUID
+    next_block: HashUUID | None
+    transactions: List[Transaction]
+    block_size: int
+    timestamp: datetime
+
+
+class Blockchain(BaseModel):
+    block: List[Block]
+    transactions: List[Transaction]
+    status_reports: Any  # TODO: We have to return more than this, to provide insights about the current master node.
+
+
+class Blocks(BaseModel):
+    id: int
+    date_created: datetime
+    transaction_count: int
+    validator: AddressUUID
 
 
 class Addresses(BaseModel):
-    pass
+    id: int
+    address: AddressUUID
+    date_created: datetime
 
 
 class Address(BaseModel):
-    pass
+    id: int
+    address: AddressUUID
+    transactions: List[Transaction]
+    role: str
 
 
-class SearchContext(BaseModel):
-    pass
+class SearchContext(
+    BaseModel
+):  # ! Idk, is there something else? Maybe we will expand this when we have the web.
+    context: str
 
 
 # # Explorer API — END
@@ -208,16 +241,25 @@ class SearchContext(BaseModel):
 
 # Model for the Block Details
 class NodeRegisterCredentials(BaseModel):
-    pass
+    username: CredentialContext
+    password: CredentialContext
+    user_address: AddressUUID
 
 
 class NodeLoginContext(BaseModel):
-    pass
+    jwt_token: JWTToken
+    expiration: datetime
+    time_elapsed: datetime  # This indicates the time before you can participate in the blockchain network, as per consensus condition.
 
 
 class NodeLoginCredentials(BaseModel):
-    pass
+    user_address: AddressUUID
+    password: CredentialContext
+    auth_code: str  # TODO: This functionality is not official. As this may be the same as the Google Authenticator or any other time based authorization.
 
+
+# # AT THIS POINT, I CANNOT ADD THE FIELDS SINCE I STILL HAVE NO IDEA ON HOW TO IMPLEMENT THEM.
+# * There are other fields were I don't know if they are helpful or not.
 
 # Other NodeInfoXXX have to be expand later.
 class NodeInfoConfig(BaseModel):
@@ -237,8 +279,13 @@ class NodeNegotiationInit(BaseModel):
     pass
 
 
-class NodeNegoitiationEnd(BaseModel):
+class NodeNegotiationEnd(BaseModel):
     pass
+
+
+class NodeNegotiation(BaseModel):
+    negotiation: NodeNegotiationInit | NodeNegotiationEnd
+
 
 # During process, we also have to invoke other information as well.
 class NodeNegotiationProcess(BaseModel):

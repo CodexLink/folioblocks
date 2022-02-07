@@ -9,30 +9,36 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-if __name__ != "__main__":
-    raise SystemExit(
-        "You cannot make this module as a submodule! This module contains all necessary functions for the startup of the system."
-    )
-
 # Libraries
+from argparse import Namespace
 import uvicorn
 from fastapi import FastAPI
 
 # Components
-from node.utils.constants import NODE_IP_PORT_FLOOR
-from utils.args import args_handler as ArgsHandler
-
-# Routers, this will be inserted from the If and else in the ArgsHandler.
 from apis.dashboard import dashboard_router
 from apis.explorer import explorer_router
 from apis.node import node_router
+from utils.args import args_handler as ArgsHandler
+from utils.constants import NODE_IP_PORT_FLOOR, NODE_ROLE_CHOICES
 
-# Step 1: Handle the parameters first.
-_parsed_args = ArgsHandler.parse_args()  # idk what type is this.
-api = FastAPI()  # What should we depend on?
-print(_parsed_args)
+parsed_args: Namespace = ArgsHandler.parse_args()
+api: FastAPI = FastAPI()
 
-# api.include_router()
+if parsed_args.prefer_role != NODE_ROLE_CHOICES[0]:
+    api.include_router(node_router)
 
-# TODO: Add the API Router or combine them later.
-# uvicorn.run(instance, host="localhost", port=NODE_IP_PORT_FLOOR) # TODO: log_level = .
+else:
+    api.include_router(node_router)
+    api.include_router(dashboard_router)
+    api.include_router(explorer_router)
+
+# ! We cannot encapsulate the whole (main.py) module as there's a subprocess u sage where there's  custom __main__ that will run this script. Doing so may cause recursion.
+if __name__ == "__main__":
+    uvicorn.run(
+        "__main__:api",
+        host="localhost",
+        port=NODE_IP_PORT_FLOOR,
+        reload=parsed_args.local,
+        workers=2,
+        # log_level = ???
+    )

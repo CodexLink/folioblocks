@@ -11,16 +11,17 @@ You should have received a copy of the GNU General Public License along with Fol
 # Libraries
 from typing import Union
 from fastapi import APIRouter
-from node.core.models import (
+from core.models import (
     NodeInfoContext,
+    NodeLoginContext,
     NodeLoginCredentials,
-    NodeNegoitiationEnd,
+    NodeNegotiation,
+    NodeNegotiationEnd,
     NodeNegotiationInit,
     NodeNegotiationProcess,
     NodeRegisterCredentials,
 )
-from node.stubs.models import NodeLoginContext
-from utils.constants import NodeAPITags
+from utils.constants import NodeAPI
 
 # from secrets import token_hex
 
@@ -33,7 +34,7 @@ node_router = APIRouter(
 
 @node_router.post(
     "/register",
-    tags=[NodeAPITags.GENERAL_NODE_API.name],
+    tags=[NodeAPI.GENERAL_NODE_API.value],
     response_model=NodeRegisterCredentials,
     summary="Registers a node from the blockchain network.",
     description="An API endpoint that allows a node to be introduced to the blockchain network.",
@@ -44,7 +45,7 @@ async def register_node():
 
 @node_router.get(
     "/login",
-    tags=[NodeAPITags.GENERAL_NODE_API.name],
+    tags=[NodeAPI.GENERAL_NODE_API.value],
     response_model=NodeLoginContext,
     summary="Logs a node from the blockchain network.",
     description="An API endpoint that logs the node to the blockchain network.",
@@ -56,9 +57,9 @@ async def login_node(credentials: NodeLoginCredentials):
 @node_router.get(
     "/info",
     tags=[
-        NodeAPITags.GENERAL_NODE_API.name,
-        NodeAPITags.NODE_TO_NODE_API.name,
-        NodeAPITags.MASTER_NODE_API.name,
+        NodeAPI.GENERAL_NODE_API.value,
+        NodeAPI.NODE_TO_NODE_API.value,
+        NodeAPI.MASTER_NODE_API.value,
     ],
     response_model=NodeInfoContext,
     summary="Fetch information from the master node.",
@@ -71,9 +72,9 @@ async def get_chain_info():  # Includes, time_estimates, mining_status, consensu
 @node_router.post(
     "/negotiate/{phase_state}",
     tags=[
-        NodeAPITags.NODE_TO_NODE_API.name,
+        NodeAPI.NODE_TO_NODE_API.value,
     ],
-    response_model=Union[NodeNegotiationInit, NodeNegoitiationEnd],
+    response_model=NodeNegotiation,
     summary="Initiates and finishes negotiation from master node to side node and vice versa.",
     description="An API endpoint that handles the negotiations from node-to-node.",  # TODO: Add some test cases. This was intended to ensure that we really know wtf are we doing.
 )
@@ -85,7 +86,7 @@ async def pre_post_negotiate(
 
 @node_router.put(
     "/negotiate/{negotiation_id}",  # Aside from client identification, we should have an identifier.
-    tags=[NodeAPITags.NODE_TO_NODE_API.name],
+    tags=[NodeAPI.NODE_TO_NODE_API.value],
     response_model=NodeNegotiationProcess,
     summary="Execute and acknowledge payloads given from this endpoint.",
     description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation.",

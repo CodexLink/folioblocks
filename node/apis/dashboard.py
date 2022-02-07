@@ -10,9 +10,9 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from http import HTTPStatus
-from fastapi import Depends, FastAPI, Query, APIRouter
-from typing import Final, List
-from node.core.models import (
+from fastapi import Query, APIRouter
+from typing import List
+from core.models import (
     Applicant,
     Applicants,
     DashboardContext,
@@ -30,7 +30,7 @@ from node.core.models import (
     UserLoginResult,
     UserLogoutIn,
 )
-from node.utils.constants import AddressUUID, DashboardAPITags, ItemReturnCount
+from utils.constants import AddressUUID, DashboardAPI, ItemReturnCount
 
 dashboard_router = APIRouter(
     prefix="/dashboard",
@@ -41,7 +41,7 @@ dashboard_router = APIRouter(
 
 @dashboard_router.get(
     "/dashboard",
-    tags=[DashboardAPITags.GENERAL_API.name],
+    tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
     response_model=DashboardContext,
     summary="Obtains necessary information for the dashboard display.",
     description="An API endpoint that returns the data of the user based on their role.",
@@ -52,7 +52,7 @@ async def get_data_to_dashboard(context: DashboardContext):
 
 @dashboard_router.post(
     "/login",
-    tags=[DashboardAPITags.GENERAL_API.name],
+    tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
     response_model=UserLoginResult,
     summary="Logs the user from the dashboard.",
     description="An API endpoint that logs the user based on their credentials.",
@@ -63,7 +63,7 @@ async def login_user(credentials: UserLoginIn):
 
 @dashboard_router.post(
     "/logout",
-    tags=[DashboardAPITags.GENERAL_API.name],
+    tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
     summary="Invalidates user's session.",
     description="An API endpoint that logouts the user by invalidating the JWT token.",
     status_code=HTTPStatus.OK,
@@ -74,7 +74,7 @@ async def logout_user(to_invalidate: UserLogoutIn):
 
 @dashboard_router.get(
     "/applicants",
-    tags=[DashboardAPITags.EMPLOYER_ONLY_API.name],
+    tags=[DashboardAPI.EMPLOYER_ONLY_API.value],
     response_model=List[Applicants],
     summary="Obtains a list of individuals who opted from the employer's company.",
     description="An API-exclusive to employers that obtains a list of individuals (applicants) who applies to them.",
@@ -98,7 +98,7 @@ async def get_applicants(
 
 @dashboard_router.get(
     "/applicant/{applicant_id}",
-    tags=[DashboardAPITags.EMPLOYER_ONLY_API.name],
+    tags=[DashboardAPI.EMPLOYER_ONLY_API.value],
     response_model=Applicant,
     summary="Obtain a certain individual.",
     description="An API-exclusive to employers that obtains a particular individual, which displays their information.",
@@ -109,7 +109,7 @@ async def get_applicant(applicant_id: AddressUUID):
 
 @dashboard_router.get(
     "/requests",
-    tags=[DashboardAPITags.CLIENT_ONLY_API.name],
+    tags=[DashboardAPI.CLIENT_ONLY_API.value],
     response_model=List[Requests],
     summary="Obtains all requests associated to this client-individual.",
     description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
@@ -120,7 +120,7 @@ async def get_all_requests():
 
 @dashboard_router.get(
     "/request/{request_id}",
-    tags=[DashboardAPITags.CLIENT_ONLY_API.name],
+    tags=[DashboardAPI.CLIENT_ONLY_API.value],
     response_model=Request,
     summary="Obtain a particular request. Context-protected based on the association of the user.",
     description="An API endpoint that returns a particular requests that is associated from this user.",
@@ -131,7 +131,7 @@ async def get_request(request_id: int):  # Remember the type assertion here.
 
 @dashboard_router.get(
     "/request/{request_id}/request_view/{doc_type}",
-    tags=[DashboardAPITags.EMPLOYER_ONLY_API.name],
+    tags=[DashboardAPI.EMPLOYER_ONLY_API.value],
     # reposnde_model = RequestDocView,
     summary="Submit request for viewing a particular document from the applicant.",
     description="An API-exclusive to employers that allows them to make request for documents to be viewed.",
@@ -144,7 +144,7 @@ async def request_document_view(
 
 @dashboard_router.get(
     "/issuances",
-    tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    tags=[DashboardAPI.INSTITUTION_ONLY_API.value],
     response_model=Issuances,
     summary="Get a list of issuances from the students.",
     description="An API endpoint that returns of a list of issuances that was invoked from the students.",
@@ -168,7 +168,7 @@ async def get_issuances(
 
 @dashboard_router.post(
     "/issue",
-    tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    tags=[DashboardAPI.INSTITUTION_ONLY_API.value],
     response_model=IssueToStudentOut,
     summary="Submit a document to mint from the blockchain.",
     description="An API endpoint that allows institutions to submit new documents in the blockchain. Note that minting them requires user (address) reference.",
@@ -179,7 +179,7 @@ async def mint_document(doc_context: IssueToStudentIn):
 
 @dashboard_router.get(
     "/issuance/{issue_id}",
-    tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    tags=[DashboardAPI.INSTITUTION_ONLY_API.value],
     response_model=Issuance,
     summary="Obtain a particular issued document.",
     description="An API endpoint that obtains a specified document based on its ID.",
@@ -190,7 +190,7 @@ async def get_issued_docs(issue_id: int):
 
 @dashboard_router.get(
     "/students",
-    tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    tags=[DashboardAPI.INSTITUTION_ONLY_API.value],
     response_model=Students,
     summary="Obtain a list of classified students in the blockchain.",
     description="An API endpoint that returns a list of addresses that is classified as student.",
@@ -214,7 +214,7 @@ async def get_students(
 
 @dashboard_router.get(
     "/student/{student_addr}",
-    tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    tags=[DashboardAPI.INSTITUTION_ONLY_API.value],
     response_model=Student,
     summary="Obtain a particular student's information.",
     description="An API endpoint that obtains a student along with its readable information.",
@@ -226,7 +226,7 @@ async def get_student(student_addr: AddressUUID):
 # ! TODO: We need PUT method and a batch push accounts method to the blockchain so that it is less error prone. We implement that if we already have the web.
 @dashboard_router.post(
     "/student",
-    tags=[DashboardAPITags.INSTITUTION_ONLY_API.name],
+    tags=[DashboardAPI.INSTITUTION_ONLY_API.value],
     response_model=NewStudentOut,
     summary="Create a student information for the blockchain to recognize.",
     description="An API endpoint that creates a student account on the blockchain.",

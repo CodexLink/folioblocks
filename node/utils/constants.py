@@ -8,9 +8,12 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from enum import Enum, IntEnum, auto
+
 # * Libraries
-from typing import Any, Final, NewType as _N
-from enum import auto, IntEnum
+from typing import Any, Final
+from typing import NewType as _N
+
 
 # Priority Classification Types
 class DocToRequestTypes(IntEnum):
@@ -38,6 +41,7 @@ Documents = _N("Documents", DocumentSet)
 DocumentMeta = _N("DocumentMeta", str)
 DocumentProof = _N("DocumentProof", DocumentSet)
 GenericUUID = _N("GenericUUID", str)
+HashUUID = _N("HashUUID", str)
 InternExperience = _N("InternExperience", DocumentSet)
 NodeRoles = _N("NodeRoles", str)
 JWTToken = _N("JWTToken", str)
@@ -61,35 +65,56 @@ NODE_IP_PORT_FLOOR: int = 5000  # Contains the floor port to be used for generat
 NODE_ROLE_CHOICES: Final[list[NodeRoles]] = [NodeRoles("MASTER"), NodeRoles("SIDE")]
 
 # Enums
+class BaseAPI(Enum):
+    DASHBOARD: str = "Dashboard API"
+    EXPLORER: str = "Explorer API"
+    NODE: str = "Node API"
 
 
-class DashboardAPITags(IntEnum):
-    GENERAL_API: int = auto()
-    CLIENT_ONLY_API: int = auto()
-    APPLICANT_ONLY_API: int = auto()
-    EMPLOYER_ONLY_API: int = auto()
-    INSTITUTION_ONLY_API: int = auto()
+class DashboardAPI(Enum):
+    DASHBOARD_GENERAL_API: str = f"{BaseAPI.DASHBOARD.value}: Overview"
+    CLIENT_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Client"
+    APPLICANT_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Applicant"
+    EMPLOYER_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Employer"
+    INSTITUTION_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Institution"
 
 
-class ExplorerAPITags(IntEnum):
-    # Overall
-    GENERAL_FETCH: int = auto()
-
-    # Action-Type
-    LIST_FETCH: int = auto()
-    SPECIFIC_FETCH: int = auto()
-
-    # Sepcific-Type
-    BLOCK_FETCH: int = auto()
-    TRANSACTION_FETCH: int = auto()
-    ADDRESS_FETCH: int = auto()
+class ExplorerAPI(Enum):
+    GENERAL_FETCH: str = f"{BaseAPI.EXPLORER.value}: General Fetch"
+    LIST_FETCH: str = f"{BaseAPI.EXPLORER.value}: List Fetch"
+    SPECIFIC_FETCH: str = f"{BaseAPI.EXPLORER.value}: Specific Fetch"
+    BLOCK_FETCH: str = f"{BaseAPI.EXPLORER.value}: Block Fetch"
+    TRANSACTION_FETCH: str = f"{BaseAPI.EXPLORER.value}: Transaction Fetch"
+    ADDRESS_FETCH: str = f"{BaseAPI.EXPLORER.value}: Address Fetch"
 
 
-class NodeAPITags(IntEnum):
-    GENERAL_NODE_API: int = auto()
-    MASTER_NODE_API: int = auto()
-    SIDE_NODE_API: int = auto()
-    NODE_TO_NODE_API: int = auto()
+class NodeAPI(Enum):
+    GENERAL_NODE_API: str = f"{BaseAPI.NODE.value}: Overview"
+    MASTER_NODE_API: str = f"{BaseAPI.NODE.value}: Master Node"
+    SIDE_NODE_API: str = f"{BaseAPI.NODE.value}: Side Node"
+    NODE_TO_NODE_API: str = f"{BaseAPI.NODE.value}: Node-to-Node"
+
+
+class TransactionStatus(IntEnum):
+    PENDING: int = auto()
+    SUCCESS: int = auto()
+    FAILED: int = auto()
+
+
+class TransactionActions(IntEnum):  # TODO: This will be expanded later on.
+    ACCOUNT_GENERATED: int = auto()
+    DATA_UPDATED: int = auto()
+    DATA_DISREGARDED: int = auto()
+    DATA_BATCH_MINTING: int = auto()
+    DOCUMENT_INSUANCE: int = auto()
+    REQUEST_INITIATION: int = auto()
+    REQUEST_PROCESSING: int = auto()
+    REQUEST_MARKED_ENDED: int = auto()
+    REQUEST_SPECIFIC_DOC: int = auto()
+
+
+class TransactionActionString(Enum):
+    pass
 
 
 # Constraints — Blockchain (Explorer) Query
@@ -115,6 +140,9 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
     ArgumentParameter("NO_LOG_FILE"): ArgumentDescription(
         "Disables logging to a file. This assert that the log should be outputted in the CLI."
+    ),
+    ArgumentParameter("LOCAL"): ArgumentDescription(
+        "When specified, run the blockchain node system with hot reload and other elements that enables debug features."
     ),
     ArgumentParameter("PREFER_ROLE"): ArgumentDescription(
         f"Assigns a role supplied from this parameter. The role {NODE_ROLE_CHOICES[0]} can be enforced once. If there's a node that has a role of {NODE_ROLE_CHOICES[0]} before this node, then assign {NODE_ROLE_CHOICES[1]} to this node."
