@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  folioblocks-master-node:
+    ports:
+      - "5000:5000"
+
+    build:
+      args:
+        INSTANCE_PORT: 5000
+
+      context: .node/
+      dockerfile: Dockerfile-node
+      # TODO: Experiment this one in the future when deployed in Microsoft Azure.
+      network: host
+      shm_size: "3gb"
+
+    image: foloblocks-node:latest
