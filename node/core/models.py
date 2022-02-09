@@ -8,11 +8,10 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from re import T
 from typing import Any, List
 from pydantic import BaseModel, EmailStr, FilePath
 from datetime import datetime
-from node.utils.constants import HashUUID, TransactionActions, TransactionStatus
+from utils.constants import HashUUID, TransactionActions, TransactionStatus
 
 from utils.constants import (
     AcademicExperience,

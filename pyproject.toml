@@ -12,6 +12,8 @@ uvicorn = {extras = ["standard"], version = "^0.17.1"}
 fastapi-utils = "^0.2.1"
 python-multipart = "^0.0.5"
 pydantic = {extras = ["email"], version = "^1.9.0"}
+fastapi-mail = "^1.0.4"
+cryptography = "^36.0.1"
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"

@@ -72,11 +72,10 @@ class BaseAPI(Enum):
 
 
 class DashboardAPI(Enum):
-    DASHBOARD_GENERAL_API: str = f"{BaseAPI.DASHBOARD.value}: Overview"
-    CLIENT_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Client"
-    APPLICANT_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Applicant"
-    EMPLOYER_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Employer"
-    INSTITUTION_ONLY_API: str = f"{BaseAPI.DASHBOARD.value}: Institution"
+    DASHBOARD_GENERAL_API: str = f"{BaseAPI.DASHBOARD.value}: General"
+    APPLICANT_API: str = f"{BaseAPI.DASHBOARD.value}: Applicant"
+    EMPLOYER_API: str = f"{BaseAPI.DASHBOARD.value}: Employer"
+    INSTITUTION_API: str = f"{BaseAPI.DASHBOARD.value}: Institution"
 
 
 class ExplorerAPI(Enum):
@@ -147,5 +146,7 @@ FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
     ArgumentParameter("PREFER_ROLE"): ArgumentDescription(
         f"Assigns a role supplied from this parameter. The role {NODE_ROLE_CHOICES[0]} can be enforced once. If there's a node that has a role of {NODE_ROLE_CHOICES[0]} before this node, then assign {NODE_ROLE_CHOICES[1]} to this node."
     ),
-    ArgumentParameter("PORT"): ArgumentDescription(""),
+    ArgumentParameter("PORT"): ArgumentDescription(
+        "Specify the port for this instance. Ensure that this instance is not conflicted with other instances as it will cause to fail before it can get to running its ASGI instance."
+    ),
 }

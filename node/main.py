@@ -28,9 +28,9 @@ if parsed_args.prefer_role != NODE_ROLE_CHOICES[0]:
     api.include_router(node_router)
 
 else:
-    api.include_router(node_router)
     api.include_router(dashboard_router)
     api.include_router(explorer_router)
+    api.include_router(node_router)
 
 # ! We cannot encapsulate the whole (main.py) module as there's a subprocess u sage where there's  custom __main__ that will run this script. Doing so may cause recursion.
 if __name__ == "__main__":

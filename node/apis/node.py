@@ -9,15 +9,12 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 # Libraries
-from typing import Union
 from fastapi import APIRouter
 from core.models import (
     NodeInfoContext,
     NodeLoginContext,
     NodeLoginCredentials,
     NodeNegotiation,
-    NodeNegotiationEnd,
-    NodeNegotiationInit,
     NodeNegotiationProcess,
     NodeRegisterCredentials,
 )
