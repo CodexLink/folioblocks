@@ -16,6 +16,7 @@ if __name__ == "__main__":
 
 from pydantic import BaseModel
 from typing import Any
+from pathlib import Path
 
 
 class CustomInjectLoggerConfig(BaseModel):
@@ -54,12 +55,6 @@ class LoggerHandler:
             # * add the variable of use_colors with a value of False.
 
             # * Create variants.
-
-            base_config["formatters"]["access_no_colors"] = base_config["formatters"][
-                "access"
-            ].copy()
-            base_config["formatters"]["access_no_colors"]["use_colors"] = False
-
             base_config["formatters"]["default_no_colors"] = base_config["formatters"][
                 "default"
             ].copy()
@@ -69,7 +64,7 @@ class LoggerHandler:
                 "class": "logging.handlers.TimedRotatingFileHandler",
                 "when": "midnight",
                 "interval": 1,
-                "filename": "../logs/node_logs.log",  # TODO: Observe and add datetime when necessary.
+                "filename": f"{Path(__file__).cwd()}/logs/node_logs.log",  # TODO: Observe and add datetime when necessary.
                 "formatter": "default_no_colors",
             }
 
