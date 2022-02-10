@@ -16,6 +16,12 @@ if __name__ == "__main__":
 
 from argparse import (
     ArgumentParser,
+)
+from typing import Any, List, Optional
+from utils.constants import ENUM_NAME_PATTERN
+from utils.constants import (
+    LoggerLevelCoverage,
+    LoggerTarget,
 )  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
 
 from utils.constants import (
@@ -23,8 +29,10 @@ from utils.constants import (
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
-    NODE_ROLE_CHOICES,
+    NodeRoles,
 )
+
+from re import Match, Pattern, compile
 
 args_handler = ArgumentParser(
     prog=FOLIOBLOCKS_NODE_TITLE,
@@ -32,17 +40,56 @@ args_handler = ArgumentParser(
     epilog=FOLIOBLOCKS_EPILOG,
 )
 
+# Before adding arguments, let's process and inject those IntEnums from the constants.py. We cannot use IntEnums legally because the author of argparse seems to be conflicted with the use case of the Enums.
+
+
+# Prep the RegExpr.
+compiled_pattern: Pattern = compile(ENUM_NAME_PATTERN)
+for each_enum in [LoggerLevelCoverage, LoggerTarget, NodeRoles]:
+    temp_choice: list[str] = []
+    re_matched: List[str] = compiled_pattern.findall(
+        each_enum.__name__,
+    )
+
+    for each_value in each_enum:
+        temp_choice.append(each_value.name)
+
+    eval_enum_name: str = "".join([letters for letters in re_matched])
+    locals()[f"_injected_{eval_enum_name.lower()}_choices"] = temp_choice
+
+
 args_handler.add_argument(
     "-l", "--local", action="store_true", help=FOLIOBLOCKS_HELP["LOCAL"]
 )
 
 args_handler.add_argument(
-    "-nl",
-    "--no-logs",
+    "-ll",
+    "--log-level",
+    choices=locals()["_injected_llc_choices"],
+    default=LoggerLevelCoverage.INFO,
+)
+
+args_handler.add_argument(
+    "-lt",
+    "--log-target",
+    choices=locals()["_injected_lt_choices"],
+    default=LoggerTarget.LOG_ALL,
+    help=FOLIOBLOCKS_HELP["LOG_TARGET"],
+    required=False,
+)
+
+args_handler.add_argument(
+    "-lj", "--log-joint", action="store_true", help="?", required=False
+)  # TODO: Check the notepad.
+
+args_handler.add_argument(
+    "-nlf",
+    "--no-log-file",
     action="store_true",
     help=FOLIOBLOCKS_HELP["NO_LOG_FILE"],
     required=False,
 )
+
 
 args_handler.add_argument(
     "-p",
@@ -56,7 +103,7 @@ args_handler.add_argument(
 args_handler.add_argument(
     "-pr",
     "--prefer-role",
-    choices=NODE_ROLE_CHOICES,
+    choices=locals()["_injected_nr_choices"],
     help=FOLIOBLOCKS_HELP["PREFER_ROLE"],
     required=True,
 )

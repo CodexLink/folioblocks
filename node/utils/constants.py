@@ -9,6 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from enum import Enum, IntEnum, auto
+from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 
 # * Libraries
 from typing import Any, Final
@@ -46,13 +47,17 @@ InternExperience = _N("InternExperience", DocumentSet)
 NodeRoles = _N("NodeRoles", str)
 JWTToken = _N("JWTToken", str)
 ProgramMetadata = _N("ProgramMetadata", str)
+RegExp = _N("RegExp", str)
 RequestContext = _N("RequestContext", str)
 URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 
-# Constraints — Node Operation Parameter
+# # Constants
+ENUM_NAME_PATTERN: str = RegExp(r"[A-Z]")
+
+# # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[
     int
 ] = 5  # The number of nodes that should exists in the network. Master node will reject any connections when the pool is full.
@@ -61,10 +66,7 @@ NODE_IP_URL_TARGET: Final[
 ] = "localhost"  # The IP address that any instance of the program will check for any existing nodes.
 NODE_IP_PORT_FLOOR: int = 5000  # Contains the floor port to be used for generating usable and allowable ports.
 
-# Variable Constants
-NODE_ROLE_CHOICES: Final[list[NodeRoles]] = [NodeRoles("MASTER"), NodeRoles("SIDE")]
-
-# Enums
+# # Enums - API Models
 class BaseAPI(Enum):
     DASHBOARD: str = "Dashboard API"
     EXPLORER: str = "Explorer API"
@@ -116,7 +118,8 @@ class TransactionActionString(Enum):
     pass
 
 
-# Constraints — Blockchain (Explorer) Query
+# # Enums, Constraints
+# ! Blockchain (Explorer) Query
 # These are the min and max constraint for querying blockchain data.
 class ItemReturnCount(IntEnum):
     LOW: Final[int] = 5
@@ -124,6 +127,26 @@ class ItemReturnCount(IntEnum):
     MID: Final[int] = 50
     HIGH: Final[int] = 75
     MAX: Final[int] = 100
+
+
+# ! Logger Level
+class LoggerLevelCoverage(IntEnum):
+    DEBUG: Final[int] = DEBUG
+    INFO: Final[int] = INFO
+    WARNING: Final[int] = WARNING
+    ERROR: Final[int] = ERROR
+    CRITICAL: Final[int] = CRITICAL
+
+
+class LoggerTarget(IntEnum):
+    LOG_UVICORN: int = auto()
+    LOG_MAIN: int = auto()
+    LOG_ALL: int = auto()
+
+
+class NodeRoles(IntEnum):
+    MASTER: int = auto()
+    SIDE: int = auto()
 
 
 # Program Metadata
@@ -137,16 +160,22 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
     "The use of arguments are intended for debugging purposes and development only. Please be careful and be vigilant about the requirements to make certain arguments functioning."
 )
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
-    ArgumentParameter("NO_LOG_FILE"): ArgumentDescription(
-        "Disables logging to a file. This assert that the log should be outputted in the CLI."
-    ),
     ArgumentParameter("LOCAL"): ArgumentDescription(
         "When specified, run the blockchain node system with hot reload and other elements that enables debug features."
     ),
-    ArgumentParameter("PREFER_ROLE"): ArgumentDescription(
-        f"Assigns a role supplied from this parameter. The role {NODE_ROLE_CHOICES[0]} can be enforced once. If there's a node that has a role of {NODE_ROLE_CHOICES[0]} before this node, then assign {NODE_ROLE_CHOICES[1]} to this node."
+    ArgumentParameter("LOG_LEVEL"): ArgumentDescription(
+        "Specifies the level to log in both console and to the file (if enabled). Refer to the Logging Levels of Logging Documentation."
+    ),
+    ArgumentParameter("LOG_TARGET"): ArgumentDescription(
+        "Logs a specific part of the runtime. You can either log the uvicorn (fastapi) instance or log the custom logs provided at several functions. Or just both. Note that by providing both means two files will be generated since they can't be jointed at one file."
+    ),
+    ArgumentParameter("NO_LOG_FILE"): ArgumentDescription(
+        "Disables logging to a file. This assert that the log should be outputted in the CLI."
     ),
     ArgumentParameter("PORT"): ArgumentDescription(
         "Specify the port for this instance. Ensure that this instance is not conflicted with other instances as it will cause to fail before it can get to running its ASGI instance."
+    ),
+    ArgumentParameter("PREFER_ROLE"): ArgumentDescription(
+        f"Assigns a role supplied from this parameter. The role {NodeRoles.MASTER.name} can be enforced once. If there's a node that has a role of {NodeRoles.MASTER.name} before this node, then assign {NodeRoles.SIDE.name} to this node."
     ),
 }
