@@ -5,13 +5,13 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Folioblocks Node Backend: Debug as MASTER (JMC False)",
+      "name": "Folioblocks Node Backend: Debug as MASTER (Top-Level Code Check)",
       "type": "python",
       "request": "launch",
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--local", "--prefer-role", "MASTER"] // TODO: Reflect final arguments from the args.py.
+      "args": ["--local", "--prefer-role", "MASTER", "-d"] // TODO: Reflect final arguments from the args.py.
     },
     {
       "name": "Folioblocks Node Backend: Debug as SIDE",
