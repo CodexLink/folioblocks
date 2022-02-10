@@ -9,7 +9,6 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from enum import Enum, IntEnum, auto
-from logging import CRITICAL, DEBUG, ERROR, INFO, WARNING
 
 # * Libraries
 from typing import Any, Final
@@ -130,18 +129,13 @@ class ItemReturnCount(IntEnum):
 
 
 # ! Logger Level
-class LoggerLevelCoverage(IntEnum):
-    DEBUG: Final[int] = DEBUG
-    INFO: Final[int] = INFO
-    WARNING: Final[int] = WARNING
-    ERROR: Final[int] = ERROR
-    CRITICAL: Final[int] = CRITICAL
-
-
-class LoggerTarget(IntEnum):
-    LOG_UVICORN: int = auto()
-    LOG_MAIN: int = auto()
-    LOG_ALL: int = auto()
+class LoggerLevelCoverage(Enum):
+    DEBUG: Final[str] = "debug"
+    INFO: Final[str] = "info"
+    WARNING: Final[str] = "warning"
+    ERROR: Final[str] = "error"
+    CRITICAL: Final[str] = "critical"
+    TRACE: Final[str] = "trace"
 
 
 class NodeRoles(IntEnum):
@@ -160,14 +154,14 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
     "The use of arguments are intended for debugging purposes and development only. Please be careful and be vigilant about the requirements to make certain arguments functioning."
 )
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
+    ArgumentParameter("DEBUG"): ArgumentDescription(
+        "Enables some of the debug features."
+    ),
     ArgumentParameter("LOCAL"): ArgumentDescription(
         "When specified, run the blockchain node system with hot reload and other elements that enables debug features."
     ),
     ArgumentParameter("LOG_LEVEL"): ArgumentDescription(
         "Specifies the level to log in both console and to the file (if enabled). Refer to the Logging Levels of Logging Documentation."
-    ),
-    ArgumentParameter("LOG_TARGET"): ArgumentDescription(
-        "Logs a specific part of the runtime. You can either log the uvicorn (fastapi) instance or log the custom logs provided at several functions. Or just both. Note that by providing both means two files will be generated since they can't be jointed at one file."
     ),
     ArgumentParameter("NO_LOG_FILE"): ArgumentDescription(
         "Disables logging to a file. This assert that the log should be outputted in the CLI."

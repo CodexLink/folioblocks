@@ -17,11 +17,9 @@ if __name__ == "__main__":
 from argparse import (
     ArgumentParser,
 )
-from typing import Any, List, Optional
 from utils.constants import ENUM_NAME_PATTERN
 from utils.constants import (
     LoggerLevelCoverage,
-    LoggerTarget,
 )  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
 
 from utils.constants import (
@@ -32,7 +30,7 @@ from utils.constants import (
     NodeRoles,
 )
 
-from re import Match, Pattern, compile
+from re import Pattern, compile
 
 args_handler = ArgumentParser(
     prog=FOLIOBLOCKS_NODE_TITLE,
@@ -44,10 +42,10 @@ args_handler = ArgumentParser(
 
 
 # Prep the RegExpr.
-compiled_pattern: Pattern = compile(ENUM_NAME_PATTERN)
-for each_enum in [LoggerLevelCoverage, LoggerTarget, NodeRoles]:
+compiled_pattern: Pattern[str] = compile(ENUM_NAME_PATTERN)
+for each_enum in [LoggerLevelCoverage, NodeRoles]:
     temp_choice: list[str] = []
-    re_matched: List[str] = compiled_pattern.findall(
+    re_matched: list[str] = compiled_pattern.findall(
         each_enum.__name__,
     )
 
@@ -59,6 +57,10 @@ for each_enum in [LoggerLevelCoverage, LoggerTarget, NodeRoles]:
 
 
 args_handler.add_argument(
+    "-d", "--debug", action="store_true", help=FOLIOBLOCKS_HELP["DEBUG"], required=False
+)
+
+args_handler.add_argument(
     "-l", "--local", action="store_true", help=FOLIOBLOCKS_HELP["LOCAL"]
 )
 
@@ -66,21 +68,9 @@ args_handler.add_argument(
     "-ll",
     "--log-level",
     choices=locals()["_injected_llc_choices"],
-    default=LoggerLevelCoverage.INFO,
+    help=FOLIOBLOCKS_HELP["LOG_LEVEL"],
+    default=LoggerLevelCoverage.INFO.value,
 )
-
-args_handler.add_argument(
-    "-lt",
-    "--log-target",
-    choices=locals()["_injected_lt_choices"],
-    default=LoggerTarget.LOG_ALL,
-    help=FOLIOBLOCKS_HELP["LOG_TARGET"],
-    required=False,
-)
-
-args_handler.add_argument(
-    "-lj", "--log-joint", action="store_true", help="?", required=False
-)  # TODO: Check the notepad.
 
 args_handler.add_argument(
     "-nlf",
@@ -89,7 +79,6 @@ args_handler.add_argument(
     help=FOLIOBLOCKS_HELP["NO_LOG_FILE"],
     required=False,
 )
-
 
 args_handler.add_argument(
     "-p",

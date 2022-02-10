@@ -11,6 +11,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 # Libraries
 from argparse import Namespace
+import logging
 import uvicorn
 from fastapi import FastAPI
 
@@ -18,27 +19,62 @@ from fastapi import FastAPI
 from apis.dashboard import dashboard_router
 from apis.explorer import explorer_router
 from apis.node import node_router
+from utils.logger import LoggerHandler
 from utils.args import args_handler as ArgsHandler
-from utils.constants import NODE_IP_PORT_FLOOR, NODE_ROLE_CHOICES
+from utils.constants import NODE_IP_PORT_FLOOR, NodeRoles
+from fastapi_utils.tasks import repeat_every
 
 parsed_args: Namespace = ArgsHandler.parse_args()
-api: FastAPI = FastAPI()
 
-if parsed_args.prefer_role != NODE_ROLE_CHOICES[0]:
-    api.include_router(node_router)
+logger_config = LoggerHandler.init(
+    base_config=uvicorn.config.LOGGING_CONFIG,
+    disable_logging=parsed_args.no_log_file,
+)
+
+logger = logging.getLogger("uvicorn")
+
+api_handler: FastAPI = FastAPI(debug=parsed_args.debug)
+
+if parsed_args.prefer_role is NodeRoles.SIDE:
+    api_handler.include_router(node_router)
 
 else:
-    api.include_router(dashboard_router)
-    api.include_router(explorer_router)
-    api.include_router(node_router)
+    api_handler.include_router(dashboard_router)
+    api_handler.include_router(explorer_router)
+    api_handler.include_router(node_router)
+
+# * Event Functions | I cannot find or hack a method that can run on the top-level from the low-level.
+# * They specify that I cannot do that.
+
+
+@api_handler.on_event("startup")
+async def system_checks():
+
+    # Should contain the node lookup.
+    # Should check for the credentials.
+    # Should check for the database. Create if it doesn't exists.
+    # Ensure permissions of the file. Also note, that on shutdown it should be protected.
+
+    # ! NOTE: The idea for the available nodes is dangerous. But this is just the setbacks. Just use SSL for HTTPS.
+
+    # Should check for the file of the JSON if still the same as before via database. Or should hash or rehash the file. Also set the permission to undeletable, IF POSSIBLE.
+    pass
+
+
+@api_handler.on_event("startup")
+@repeat_every(seconds=3)
+async def test_logging():
+    logger.error("This is just a test.")
+
 
 # ! We cannot encapsulate the whole (main.py) module as there's a subprocess u sage where there's  custom __main__ that will run this script. Doing so may cause recursion.
 if __name__ == "__main__":
     uvicorn.run(
-        "__main__:api",
+        "__main__:api_handler",
         host="localhost",
         port=NODE_IP_PORT_FLOOR,
         reload=parsed_args.local,
         workers=2,
-        # log_level = ???
+        log_config=logger_config,
+        log_level=parsed_args.log_level.lower(),
     )
