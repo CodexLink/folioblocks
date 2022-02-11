@@ -28,7 +28,7 @@ parsed_args: Namespace = ArgsHandler.parse_args()
 
 logger_config = LoggerHandler.init(
     base_config=uvicorn.config.LOGGING_CONFIG,
-    disable_logging=parsed_args.no_log_file,
+    disable_file_logging=parsed_args.no_log_file,
 )
 
 logger = logging.getLogger("uvicorn")
@@ -68,13 +68,13 @@ async def test_logging():
 
 
 # ! We cannot encapsulate the whole (main.py) module as there's a subprocess u sage where there's  custom __main__ that will run this script. Doing so may cause recursion.
+print(parsed_args.local)
 if __name__ == "__main__":
     uvicorn.run(
         "__main__:api_handler",
         host="localhost",
         port=NODE_IP_PORT_FLOOR,
         reload=parsed_args.local,
-        workers=2,
         log_config=logger_config,
         log_level=parsed_args.log_level.lower(),
     )

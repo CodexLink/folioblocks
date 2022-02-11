@@ -63,7 +63,7 @@ NODE_LIMIT_NETWORK: Final[
 NODE_IP_URL_TARGET: Final[
     str
 ] = "localhost"  # The IP address that any instance of the program will check for any existing nodes.
-NODE_IP_PORT_FLOOR: int = 5000  # Contains the floor port to be used for generating usable and allowable ports.
+NODE_IP_PORT_FLOOR: int = 5001  # Contains the floor port to be used for generating usable and allowable ports.
 
 # # Enums - API Models
 class BaseAPI(Enum):
