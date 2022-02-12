@@ -1,5 +1,4 @@
 import json
-from hashlib import sha256
 from typing import Any, Dict
 from cryptography.fernet import Fernet
 from secrets import token_hex
