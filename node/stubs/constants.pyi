@@ -24,15 +24,16 @@ InternExperience: Any
 NodeRoles: Any
 JWTToken: Any
 ProgramMetadata: Any
+RegExp: Any
 RequestContext: Any
 URLAddress: Any
 UserRole: Any
 TxID: Any
 WorkExperience: Any
+ENUM_NAME_PATTERN: str
 NODE_LIMIT_NETWORK: Final[int]
 NODE_IP_URL_TARGET: Final[str]
 NODE_IP_PORT_FLOOR: int
-NODE_ROLE_CHOICES: Final[list[NodeRoles]]
 
 class BaseAPI(Enum):
     DASHBOARD: str
@@ -41,10 +42,9 @@ class BaseAPI(Enum):
 
 class DashboardAPI(Enum):
     DASHBOARD_GENERAL_API: str
-    CLIENT_ONLY_API: str
-    APPLICANT_ONLY_API: str
-    EMPLOYER_ONLY_API: str
-    INSTITUTION_ONLY_API: str
+    APPLICANT_API: str
+    EMPLOYER_API: str
+    INSTITUTION_API: str
 
 class ExplorerAPI(Enum):
     GENERAL_FETCH: str
@@ -84,6 +84,18 @@ class ItemReturnCount(IntEnum):
     MID: Final[int]
     HIGH: Final[int]
     MAX: Final[int]
+
+class LoggerLevelCoverage(Enum):
+    DEBUG: Final[str]
+    INFO: Final[str]
+    WARNING: Final[str]
+    ERROR: Final[str]
+    CRITICAL: Final[str]
+    TRACE: Final[str]
+
+class NodeRoles(IntEnum):
+    MASTER: int
+    SIDE: int
 
 FOLIOBLOCKS_NODE_TITLE: Final[ProgramMetadata]
 FOLIOBLOCKS_NODE_DESCRIPTION: Final[ProgramMetadata]
