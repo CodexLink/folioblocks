@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with Fol
 from http import HTTPStatus
 from fastapi import Query, APIRouter
 from typing import List
-from core.models import (
+from api.core.models import (
     Applicant,
     Applicants,
     DashboardContext,
@@ -173,6 +173,7 @@ async def get_issuances(
 ):
     pass
 
+
 @dashboard_router.get(
     "/issuance/{issue_id}",
     tags=[DashboardAPI.INSTITUTION_API.value],
@@ -183,6 +184,7 @@ async def get_issuances(
 async def get_issued_docs(issue_id: int):
     pass
 
+
 @dashboard_router.post(
     "/issue",
     tags=[DashboardAPI.INSTITUTION_API.value],
@@ -192,6 +194,7 @@ async def get_issued_docs(issue_id: int):
 )
 async def mint_document(doc_context: IssueToStudentIn):
     pass
+
 
 @dashboard_router.get(
     "/students",

@@ -10,7 +10,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 # Libraries
 from fastapi import APIRouter
-from core.models import (
+from api.core.models import (
     NodeInfoContext,
     NodeLoginContext,
     NodeLoginCredentials,

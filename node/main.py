@@ -16,9 +16,9 @@ import uvicorn
 from fastapi import FastAPI
 
 # Components
-from apis.dashboard import dashboard_router
-from apis.explorer import explorer_router
-from apis.node import node_router
+from api.endpoints.dashboard import dashboard_router
+from api.endpoints.explorer import explorer_router
+from api.endpoints.node import node_router
 from utils.logger import LoggerHandler
 from utils.args import args_handler as ArgsHandler
 from utils.constants import NODE_IP_PORT_FLOOR, NodeRoles

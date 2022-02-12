@@ -1,13 +1,14 @@
 """
-Events (events.py) | Functions to Execute during FastAPI Events.
-[1] FastAPI has an event handler which allows us to run code before the actual instantiation of the FastAPI in the uvicorn instance. [2] Other than that, an extension module for the FastAPI named as 'fastapi-utils' provide us an event function that can run on the loop at a certain time. The decorator named '@repeat_every' will be utilized to run some blockchain-based actions along with the API endpoints.
-This file contains functions that is under event category. This means they run exclusively at a certain time or at a certain phase.
+Event Functions for the FastAPI events (events.py) | functions to execute during fastapi events.
 
-This file is part of FolioBlocks.
+[1] fastapi has an event handler which allows us to run code before the actual instantiation of the fastapi in the uvicorn instance. [2] other than that, an extension module for the fastapi named as 'fastapi-utils' provide us an event function that can run on the loop at a certain time. the decorator named '@repeat_every' will be utilized to run some blockchain-based actions along with the api endpoints.
+this file contains functions that is under event category. this means they run exclusively at a certain time or at a certain phase.
 
-FolioBlocks is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
+this file is part of folioblocks.
+
+folioblocks is free software: you can redistribute it and/or modify it under the terms of the gnu general public license as published by the free software foundation, either version 3 of the license, or (at your option) any later version.
+folioblocks is distributed in the hope that it will be useful, but without any warranty; without even the implied warranty of merchantability or fitness for a particular purpose. see the gnu general public license for more details.
+you should have received a copy of the gnu general public license along with folioblocks. if not, see <https://www.gnu.org/licenses/>.
 """
 
 if __name__ == "__main__":
@@ -16,6 +17,8 @@ if __name__ == "__main__":
     )
 
 from fastapi_utils.tasks import repeat_every
+from main import api_handler
+import logging
 
 # from fastapi import Body, Depends, FastAPI, Query, Router
 
@@ -31,8 +34,12 @@ Evaluation:
 """
 
 
-@node.on_event("startup")
+@api_handler.on_event("startup")
 async def system_checks():
+    logger = logging.getLogger("uvicorn.access")
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    logger.addHandler(handler)
     # Should contain the node lookup.
     # Should check for the credentials.
     # Should check for the database. Create if it doesn't exists.
@@ -44,10 +51,16 @@ async def system_checks():
     pass
 
 
+@api_handler.on_event("startup")
+@repeat_every(seconds=3)
+async def test_logging() -> None:
+    logging.error("This is just a test.")
+
+
 """
 Shutdown
 
-Before we kill the cameras, we need to ensure that everything is saved and the files for blockchain is saved.
+We need to ensure that everything is saved and the files for blockchain is saved.
 
 TODO
 Shutdown SQL Session
@@ -58,9 +71,9 @@ What else?
 """
 
 
-@node.on_event("shutdown")
-async def perform_shutdown():  # TODO: Should we seperate this along with other shutdown thing since this was asnyc?
-    pass
+# @node.on_event("shutdown")
+# async def perform_shutdown():  # TODO: Should we seperate this along with other shutdown thing since this was asnyc?
+#     pass
 
 
 """

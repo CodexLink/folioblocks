@@ -18,9 +18,8 @@ if __name__ == "__main__":
         "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
     )
 
-from typing import Final
 from fastapi import APIRouter, Depends, Query
-from core.models import (
+from api.core.models import (
     Address,
     Addresses,
     Block,
@@ -33,7 +32,7 @@ from core.models import (
 from utils.constants import BlockID, ExplorerAPI, ItemReturnCount
 from utils.constants import AddressUUID, TxID
 
-# from core.models import Blockchain
+# from api.core.models import Blockchain
 
 explorer_router = APIRouter(
     prefix="/explorer",

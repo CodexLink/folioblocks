@@ -1,5 +1,5 @@
 """
-FastAPI Models for the API (api.py).
+FastAPI Pydantic Models (models.py) for the Node Backend API (api.py).
 
 This file is part of FolioBlocks.
 

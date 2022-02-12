@@ -14,7 +14,6 @@ if __name__ == "__main__":
         f"This {__file__} is not designed for main / entrypoint purposes! It only invokes modified ogging properties to the entrypoint code."
     )
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
