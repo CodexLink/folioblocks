@@ -21,7 +21,7 @@ DocumentProof: Any
 GenericUUID: Any
 HashUUID: Any
 InternExperience: Any
-NodeRoles: Any
+NodeRole: Any
 JWTToken: Any
 ProgramMetadata: Any
 RegExp: Any
@@ -31,6 +31,8 @@ UserRole: Any
 TxID: Any
 WorkExperience: Any
 ENUM_NAME_PATTERN: str
+DATABASE_NAME: Final[str]
+DATABASE_URL_PATH: str
 NODE_LIMIT_NETWORK: Final[int]
 NODE_IP_URL_TARGET: Final[str]
 NODE_IP_PORT_FLOOR: int
@@ -96,6 +98,27 @@ class LoggerLevelCoverage(Enum):
 class NodeRoles(IntEnum):
     MASTER: int
     SIDE: int
+
+class Activity(Enum):
+    OFFLINE: str
+    ONLINE: str
+
+class BlacklistDuration(Enum):
+    INDEFINITE: str
+    WARN_1: str
+    WARN_2: str
+    WARN_3: str
+    FINAL_WARNING: str
+
+class TokenType(IntEnum):
+    EXPIRED: int
+    RECENTLY_CREATED: int
+    ON_USE: int
+    TOKEN_RETAINED_WHILE_EXPIRED: int
+
+class UserType(Enum):
+    AS_NODE: str
+    AS_USER: str
 
 FOLIOBLOCKS_NODE_TITLE: Final[ProgramMetadata]
 FOLIOBLOCKS_NODE_DESCRIPTION: Final[ProgramMetadata]

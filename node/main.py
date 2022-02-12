@@ -21,8 +21,9 @@ from api.endpoints.explorer import explorer_router
 from api.endpoints.node import node_router
 from utils.logger import LoggerHandler
 from utils.args import args_handler as ArgsHandler
-from utils.constants import NODE_IP_PORT_FLOOR, NodeRoles
+from utils.constants import NODE_IP_PORT_FLOOR, NodeRole
 from fastapi_utils.tasks import repeat_every
+from database.core import db_instance
 
 parsed_args: Namespace = ArgsHandler.parse_args()
 
@@ -35,7 +36,7 @@ logger = logging.getLogger("uvicorn")
 
 api_handler: FastAPI = FastAPI(debug=parsed_args.debug)
 
-if parsed_args.prefer_role is NodeRoles.SIDE:
+if parsed_args.prefer_role is NodeRole.SIDE:
     api_handler.include_router(node_router)
 
 else:
@@ -50,6 +51,7 @@ else:
 @api_handler.on_event("startup")
 async def system_checks():
 
+    await db_instance.connect()
     # Should contain the node lookup.
     # Should check for the credentials.
     # Should check for the database. Create if it doesn't exists.

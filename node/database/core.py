@@ -11,16 +11,8 @@ you should have received a copy of the gnu general public license along with Fol
 """
 
 from typing import Final
-import sqlalchemy
-from fastapi import FastAPI
-from pydantic import BaseModel
-from pathlib import Path
-import databases
+from databases import Database
 
-# To be moved later.
-DBPath: str
+from node.utils.constants import DATABASE_URL_PATH
 
-DATABASE_NAME: Final[str] = "folioblocks-node.db"
-DATABASE_URL: DBPath = f"sqlite:///{Path(__file__).cwd()}/{DATABASE_NAME}"
-
-db_instance = databases.Database(DATABASE_URL)
+db_instance = Database(DATABASE_URL_PATH)

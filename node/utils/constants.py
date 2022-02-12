@@ -9,6 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from enum import Enum, IntEnum, auto
+from pathlib import Path
 
 # * Libraries
 from typing import Any, Final
@@ -43,7 +44,7 @@ DocumentProof = _N("DocumentProof", DocumentSet)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
 InternExperience = _N("InternExperience", DocumentSet)
-NodeRoles = _N("NodeRoles", str)
+NodeRole = _N("NodeRole", str)
 JWTToken = _N("JWTToken", str)
 ProgramMetadata = _N("ProgramMetadata", str)
 RegExp = _N("RegExp", str)
@@ -53,8 +54,12 @@ UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 
-# # Constants
+# # Constants, General
 ENUM_NAME_PATTERN: str = RegExp(r"[A-Z]")
+
+# # Constants, Database
+DATABASE_NAME: Final[str] = "folioblocks-node.db"
+DATABASE_URL_PATH: str = f"sqlite:///{Path(__file__).cwd()}/{DATABASE_NAME}"
 
 # # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[
@@ -141,6 +146,31 @@ class LoggerLevelCoverage(Enum):
 class NodeRoles(IntEnum):
     MASTER: int = auto()
     SIDE: int = auto()
+
+
+# # Enums, Database
+class Activity(Enum):
+    OFFLINE: str = "Offline"
+    ONLINE: str = "Online"
+
+class BlacklistDuration(Enum): # TODO: These may not be official.
+    INDEFINITE: str = "Indefine."
+    WARN_1: str = "Warn 1: 1 Day."
+    WARN_2: str = "Warn 2: 3 Days."
+    WARN_3: str = "Warn 3: 7 Days."
+    FINAL_WARNING: str = "Final Warning: 2 Weeks."
+
+
+class TokenType(IntEnum):
+    EXPIRED: int = auto()
+    RECENTLY_CREATED: int = auto()
+    ON_USE: int = auto()
+    TOKEN_RETAINED_WHILE_EXPIRED: int = auto()
+
+
+class UserType(Enum):
+    AS_NODE: str = "Node User"
+    AS_USER: str = "Dashboard User"
 
 
 # Program Metadata

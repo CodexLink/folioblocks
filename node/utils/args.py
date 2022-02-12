@@ -27,7 +27,7 @@ from utils.constants import (
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
-    NodeRoles,
+    NodeRole,
 )
 
 from re import Pattern, compile
@@ -43,7 +43,7 @@ args_handler = ArgumentParser(
 
 # Prep the RegExpr.
 compiled_pattern: Pattern[str] = compile(ENUM_NAME_PATTERN)
-for each_enum in [LoggerLevelCoverage, NodeRoles]:
+for each_enum in [LoggerLevelCoverage, NodeRole]:
     temp_choice: list[str] = []
     re_matched: list[str] = compiled_pattern.findall(
         each_enum.__name__,
