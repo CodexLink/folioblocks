@@ -285,3 +285,8 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Database Variant Extensions
+*.db
+*.sqlite3
+*.sqlite
