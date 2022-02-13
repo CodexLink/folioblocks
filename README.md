@@ -9,6 +9,12 @@ A non-standard consortium blockchain-based credential verification system for em
 
 **This project is incomplete and is on development. Come back after 3 months. (?) Thank you for taking interest.**
 
+### Why open-source
+
+I just want to showcase on how do I approach such big project and how I will be able to do it. Also I just want to show how those open-source projects have been applied from this type of project and how did I learn from it.
+
+Plus, all these knowledge is gathered through open source and I would want to contribute by showing their use case and application.
+
 ## Information
 
 The following contains information in different formats.
