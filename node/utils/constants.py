@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Final
 from typing import NewType as _N
 
+from sqlalchemy import Enum as SQLEnum
 
 # Priority Classification Types
 class DocToRequestTypes(IntEnum):
@@ -55,11 +56,12 @@ TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 
 # # Constants, General
-ENUM_NAME_PATTERN: str = RegExp(r"[A-Z]")
+ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
+ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 
 # # Constants, Database
 DATABASE_NAME: Final[str] = "folioblocks-node.db"
-DATABASE_URL_PATH: str = f"sqlite:///{Path(__file__).cwd()}/{DATABASE_NAME}"
+DATABASE_URL_PATH: str = f"sqlite+aiosqlite:///{Path(__file__).cwd()}/{DATABASE_NAME}"
 
 # # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[
@@ -149,11 +151,12 @@ class NodeRoles(IntEnum):
 
 
 # # Enums, Database
-class Activity(Enum):
+class Activity(SQLEnum):
     OFFLINE: str = "Offline"
     ONLINE: str = "Online"
 
-class BlacklistDuration(Enum): # TODO: These may not be official.
+
+class BlacklistDuration(SQLEnum):  # TODO: These may not be official.
     INDEFINITE: str = "Indefine."
     WARN_1: str = "Warn 1: 1 Day."
     WARN_2: str = "Warn 2: 3 Days."
@@ -161,14 +164,29 @@ class BlacklistDuration(Enum): # TODO: These may not be official.
     FINAL_WARNING: str = "Final Warning: 2 Weeks."
 
 
-class TokenType(IntEnum):
-    EXPIRED: int = auto()
-    RECENTLY_CREATED: int = auto()
-    ON_USE: int = auto()
-    TOKEN_RETAINED_WHILE_EXPIRED: int = auto()
+class GroupType(SQLEnum):
+    ORGANIZATION: str = (
+        "Organization"  # This covers Employer or any other organization.
+    )
+    COMPANY_EMPLOYER: str = "Company Employer"
+    APPLICANTS: str = "Applicants"
 
 
-class UserType(Enum):
+class TokenType(SQLEnum):
+    EXPIRED: str = "Token Expired"
+    RECENTLY_CREATED: str = "Token Recently Created"
+    ON_USE: str = "Token On Use"
+    TOKEN_RETAINED_WHILE_EXPIRED: str = "Token Expired but Retained"
+
+
+class TaskType(Enum):
+    NEGOTIATION_INITIAL = "Negotiation Phase: Initial"
+    NEGOTIATION_PROCESSING = "Negotiation: Processing"
+    NEGOTIATION_RECEIVE_RESULT = "Negotiation: End, Receive Result"
+    CONSENSUS_MODE = "Consensus Mode, Block Sync"
+
+
+class UserType(SQLEnum):
     AS_NODE: str = "Node User"
     AS_USER: str = "Dashboard User"
 

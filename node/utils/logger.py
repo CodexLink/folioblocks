@@ -14,6 +14,7 @@ if __name__ == "__main__":
         f"This {__file__} is not designed for main / entrypoint purposes! It only invokes modified ogging properties to the entrypoint code."
     )
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,8 @@ from pydantic import BaseModel
 class CustomInjectLoggerConfig(BaseModel):
     DEFAULT_LOG_FORMAT: str = "%(levelprefix)s %(module)s:%(lineno)d (%(funcName)s) | %(asctime)s | %(message)s"
     ACCESS_LOG_FORMAT: str = '%(levelprefix)s (%(funcName)s) | %(asctime)s | Client %(client_addr)s requests "%(request_line)s" | Returned %(status_code)s'
-    LOG_YEAR_FORMAT: str = "%H:%M:%S, %m-%d-%Y"
+    LOG_DATE_FORMAT: str = "%H:%M:%S, %m-%d-%Y"
+    LOG_DATE_FORMAT_IN_FILE: str = "%H%M%S_%m%d%Y"
 
 
 class LoggerHandler:
@@ -69,7 +71,7 @@ class LoggerHandler:
         ]
         base_config["formatters"]["default"]["use_colors"] = True
         base_config["formatters"]["default"]["datefmt"] = _custom_config[
-            "LOG_YEAR_FORMAT"
+            "LOG_DATE_FORMAT"
         ]
 
         if not disable_file_logging:
@@ -83,10 +85,8 @@ class LoggerHandler:
 
             # * Create a general file handler.
             base_config["handlers"]["file_logger"] = {
-                "class": "logging.handlers.TimedRotatingFileHandler",
-                "when": "S",
-                "interval": 30,
-                "filename": f"{Path(__file__).cwd()}/logs/node_reserved.log",  # ! TODO: Add Node ID on this one when we implement the node system.
+                "class": "logging.FileHandler",
+                "filename": f"{Path(__file__).cwd()}/logs/node_id_{datetime.now().strftime(_custom_config['LOG_DATE_FORMAT_IN_FILE'])}.log",  # ! TODO: Add Node ID on this one when we implement the node system.
                 "formatter": "default_no_colors",
             }
 

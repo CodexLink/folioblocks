@@ -27,3 +27,6 @@ with open(OUTPUT_DECRYPT_DB, "wb") as db_decrypted_encrypt_writer:  # w?
     db_decrypted_encrypt_writer.write(decrypted_context)
 
 print("Done.")
+
+
+BaseEc

@@ -17,6 +17,7 @@ if __name__ == "__main__":
 from argparse import (
     ArgumentParser,
 )
+from utils.constants import NodeRoles
 from utils.constants import ENUM_NAME_PATTERN
 from utils.constants import (
     LoggerLevelCoverage,
@@ -27,7 +28,6 @@ from utils.constants import (
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
-    NodeRole,
 )
 
 from re import Pattern, compile
@@ -43,7 +43,7 @@ args_handler = ArgumentParser(
 
 # Prep the RegExpr.
 compiled_pattern: Pattern[str] = compile(ENUM_NAME_PATTERN)
-for each_enum in [LoggerLevelCoverage, NodeRole]:
+for each_enum in [LoggerLevelCoverage, NodeRoles]:
     temp_choice: list[str] = []
     re_matched: list[str] = compiled_pattern.findall(
         each_enum.__name__,
