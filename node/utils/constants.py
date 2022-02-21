@@ -42,6 +42,7 @@ DocRequestType = _N("DocRequestType", DocToRequestTypes)
 Documents = _N("Documents", DocumentSet)
 DocumentMeta = _N("DocumentMeta", str)
 DocumentProof = _N("DocumentProof", DocumentSet)
+KeyContext = _N("KeyContext", str)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
 InternExperience = _N("InternExperience", DocumentSet)
@@ -49,19 +50,27 @@ NodeRole = _N("NodeRole", str)
 JWTToken = _N("JWTToken", str)
 ProgramMetadata = _N("ProgramMetadata", str)
 RegExp = _N("RegExp", str)
+RuntimeLoop = _N("RuntimeLoop", str)
 RequestContext = _N("RequestContext", str)
 URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 
+# # Constants, Auth
+
+FERNET_KEY_LENGTH: Final[int] = 44
+
 # # Constants, General
 ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 
+
 # # Constants, Database
-DATABASE_NAME: Final[str] = "folioblocks-node.db"
-DATABASE_URL_PATH: str = f"sqlite+aiosqlite:///{Path(__file__).cwd()}/{DATABASE_NAME}"
+# DATABASE_NAME: Final[str] = "folioblocks-node.db"
+DATABASE_NAME: Final[str] = "folioblocks-nodes.db"
+DATABASE_RAW_PATH: str = f"{Path(__file__).cwd()}/{DATABASE_NAME}"
+DATABASE_URL_PATH: str = f"sqlite:///{DATABASE_RAW_PATH}"
 
 # # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[
@@ -204,6 +213,9 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
     ArgumentParameter("DEBUG"): ArgumentDescription(
         "Enables some of the debug features."
+    ),
+    ArgumentParameter("KEY_AUTH"): ArgumentDescription(
+        "The base auth key or a file containing the key for encrypting and decrypting information for all transaction-related actions. This argument is ignored when a database currently exists."
     ),
     ArgumentParameter("LOCAL"): ArgumentDescription(
         "When specified, run the blockchain node system with hot reload and other elements that enables debug features."

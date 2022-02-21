@@ -17,6 +17,7 @@ if __name__ == "__main__":
 from argparse import (
     ArgumentParser,
 )
+from utils.validators import validate_key
 from utils.constants import NodeRoles
 from utils.constants import ENUM_NAME_PATTERN
 from utils.constants import (
@@ -58,6 +59,10 @@ for each_enum in [LoggerLevelCoverage, NodeRoles]:
 
 args_handler.add_argument(
     "-d", "--debug", action="store_true", help=FOLIOBLOCKS_HELP["DEBUG"], required=False
+)
+
+args_handler.add_argument(
+    "-k", "--key", action="store", help=FOLIOBLOCKS_HELP["KEY_AUTH"], type=validate_key
 )
 
 args_handler.add_argument(

@@ -12,6 +12,8 @@ You should have received a copy of the GNU General Public License along with Fol
 # Libraries
 from argparse import Namespace
 import logging
+from logging.config import dictConfig
+from databases import Database
 import uvicorn
 from fastapi import FastAPI
 
@@ -19,43 +21,62 @@ from fastapi import FastAPI
 from api.endpoints.dashboard import dashboard_router
 from api.endpoints.explorer import explorer_router
 from api.endpoints.node import node_router
+from database.core import close_db
 from utils.logger import LoggerHandler
 from utils.args import args_handler as ArgsHandler
 from utils.constants import ASYNC_TARGET_LOOP, NODE_IP_PORT_FLOOR, NodeRoles
 from fastapi_utils.tasks import repeat_every
+from database.core import init_db
 
+
+"""
+# # Startup Functions
+
+* A set of commands that runs before the fastpi.on_event("<events>").
+
+They are required to be instantiated outside of the async context due to the
+implementation not being a class-based. I don't want to have a bad time.
+
+"""
 parsed_args: Namespace = ArgsHandler.parse_args()
 
 logger_config = LoggerHandler.init(
     base_config=uvicorn.config.LOGGING_CONFIG,
     disable_file_logging=parsed_args.no_log_file,
-)
+)  # This only returns the logging_config that is loaded from the uvicorn instance.
 
-logger = logging.getLogger(ASYNC_TARGET_LOOP)
+# * Load the logger even when async scope is not yet initialized.
+# ! Note that, uvicorn will override this as the main thread is focused on the async loop!
+dictConfig(logger_config)
 
+logger: logging.Logger = logging.getLogger(ASYNC_TARGET_LOOP)
+database: Database = init_db(__name__, parsed_args.key)
+
+
+"""
+# # API Router Setup
+
+Several roles prohibits the use of other functionalities that is designed for the master nodes.
+
+"""
 api_handler: FastAPI = FastAPI(debug=parsed_args.debug)
 
-if parsed_args.prefer_role is NodeRoles.SIDE:
-    api_handler.include_router(node_router)
-
-else:
+if parsed_args.prefer_role is not NodeRoles.SIDE:
     api_handler.include_router(dashboard_router)
     api_handler.include_router(explorer_router)
-    api_handler.include_router(node_router)
+
+api_handler.include_router(node_router)
+
 
 # * Event Functions | I cannot find or hack a method that can run on the top-level from the low-level.
 # * They specify that I cannot do that.
 
 
 @api_handler.on_event("startup")
-async def initialize():
+async def initialize() -> None:
 
-    logger.info("Attempting to run tasks before starting completely.")
-
-    logger.info("Step 1 | Encrypting SQL database...")
-    from database import core
-
-    await core.db_instance.connect()
+    logger.info("Step 1 | Connecting to database...")
+    # await core.db_instance.connect()
 
     # Should check for the credentials.
     # Should contain the node lookup.
@@ -69,19 +90,17 @@ async def initialize():
 
 
 @api_handler.on_event("shutdown")
-async def terminate():
-    logger.info("The API backend has been shutdown.")
+async def terminate() -> None:
 
+    logger.warn("Waiting for other processes to finish.")  # TODO.
 
-@api_handler.on_event("shutdown")
-@repeat_every(seconds=3)
-async def tester():
-    logger.error("This is just a test.")
+    # ! Do other synchronous stuffs.
+    close_db(parsed_args.key)
 
 
 # A set of functions to run concurrently interval.
 @api_handler.on_event("startup")
-async def con_tasks():
+async def con_tasks() -> None:
     await test(), await test_a()
 
 

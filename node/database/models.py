@@ -13,8 +13,6 @@ you should have received a copy of the gnu general public license along with Fol
 if __name__ == "__main__":
     pass
 
-from enum import Enum
-from typing import Any
 from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -26,22 +24,24 @@ from utils.constants import (
     GroupType,
     TokenType,
     UserType,
-    SQLEnum,
 )
-from main import logger
 
-DeclarativeModel: DeclarativeMeta = declarative_base()
 
 # TODO: We might wanna create a key where it combines all of the certain fields
-# ! And when it was inserted for reset password, it show resulted to that!
+# ! And when it was inserted for reset password, it should resulted to that!
 
 """
     Notes:
     - SQLAlchemy doesn't use enum.Enum as their Enum.
     - Therefore, I have to subclass sqlalchemy.Enum as SQLEnum and subclass it to all classified enums that will be used in the database.
     - Their use-case on non-database is possible since their `dir()` shows that we can access items just like what we have in enum.Enum.
-
+    - # !! Creation of tables is in the core.py.
+    - # ! Unsupported: Running engine.all(engine=engine) is not possible as it is blocking when using sqlite+aiosqlite as protocol.
+    - The use case of DeclarativeModel (declarative_base()) is not possible and is not supported by encode/databases. An example of instantiating
+    - sqlalchemy.Metadata() is only possible. Though even we are going to use encode/databases with SQLAlchemy ORM, then I'm not sure why they didn't support it.
 """
+
+DeclarativeModel: DeclarativeMeta = declarative_base()
 
 
 class Association(DeclarativeModel):
@@ -111,6 +111,3 @@ class QueueTasks(DeclarativeModel):
     __tablename__ = "queued_tasks"
 
     id = Column(Integer, primary_key=True)
-
-
-DeclarativeModel.metadata.create_all(bind=sql_engine)
