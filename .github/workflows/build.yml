@@ -1,7 +1,9 @@
 name: SoundCloud Scan Build
+
 on:
   push:
-    - latest
+    branches:
+      - latest
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
