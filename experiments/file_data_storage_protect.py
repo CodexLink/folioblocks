@@ -76,3 +76,6 @@ like getting shot in the head but let's see.
 
 TODO: When I got VM, I will do this when I get back.
 """
+
+
+# # Optional Testing: Checking for an Error when an SQL file is invalid.
