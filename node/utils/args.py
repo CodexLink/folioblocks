@@ -14,24 +14,20 @@ if __name__ == "__main__":
         f"This {__file__} (module) should not be executed as an entrypoint code! It only contains handling for the arguments when the '__main__' module is launched."
     )
 
-from argparse import (
-    ArgumentParser,
-)
-from utils.validators import validate_key
-from utils.constants import NodeRoles
-from utils.constants import ENUM_NAME_PATTERN
-from utils.constants import (
-    LoggerLevelCoverage,
-)  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
+from argparse import ArgumentParser
+from re import Pattern, compile
 
-from utils.constants import (
+from utils.constants import (  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
+    AUTH_FILE_NAME,
+    ENUM_NAME_PATTERN,
     FOLIOBLOCKS_EPILOG,
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
+    LoggerLevelCoverage,
+    NodeRoles,
 )
-
-from re import Pattern, compile
+from utils.validators import validate_file_keys
 
 args_handler = ArgumentParser(
     prog=FOLIOBLOCKS_NODE_TITLE,
@@ -62,7 +58,12 @@ args_handler.add_argument(
 )
 
 args_handler.add_argument(
-    "-k", "--key", action="store", help=FOLIOBLOCKS_HELP["KEY_AUTH"], type=validate_key
+    "-k",
+    "--keys",
+    action="store",
+    default=AUTH_FILE_NAME,
+    help=FOLIOBLOCKS_HELP["KEY_FILE"],
+    type=validate_file_keys,
 )
 
 args_handler.add_argument(

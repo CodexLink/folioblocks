@@ -17,6 +17,7 @@ from typing import NewType as _N
 
 from sqlalchemy import Enum as SQLEnum
 
+
 # Priority Classification Types
 class DocToRequestTypes(IntEnum):
     # TODO: We need more information. Preferrable under
@@ -60,6 +61,9 @@ WorkExperience = _N("WorkExperience", DocumentSet)
 # # Constants, Auth
 
 FERNET_KEY_LENGTH: Final[int] = 44
+SECRET_KEY_LENGTH: Final[int] = 32
+AUTH_FILE_NAME: Final[str] = ".env"
+JWT_ALGORITHM: Final[str] = "HS256"
 
 # # Constants, General
 ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
@@ -67,8 +71,7 @@ ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 
 
 # # Constants, Database
-# DATABASE_NAME: Final[str] = "folioblocks-node.db"
-DATABASE_NAME: Final[str] = "folioblocks-nodes.db"
+DATABASE_NAME: Final[str] = "folioblocks-node.db"
 DATABASE_RAW_PATH: str = f"{Path(__file__).cwd()}/{DATABASE_NAME}"
 DATABASE_URL_PATH: str = f"sqlite:///{DATABASE_RAW_PATH}"
 
@@ -214,11 +217,11 @@ FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
     ArgumentParameter("DEBUG"): ArgumentDescription(
         "Enables some of the debug features."
     ),
-    ArgumentParameter("KEY_AUTH"): ArgumentDescription(
-        "The base auth key or a file containing the key for encrypting and decrypting information for all transaction-related actions. This argument is ignored when a database currently exists."
+    ArgumentParameter("KEY_FILE"): ArgumentDescription(
+        "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is not required unless the file has a different name."
     ),
     ArgumentParameter("LOCAL"): ArgumentDescription(
-        "When specified, run the blockchain node system with hot reload and other elements that enables debug features."
+        "When specified, run the blockchain node system with hot reload and other elements that enable debug features. Note that this is discouraged since database does not get into the state of locking since hot reload is messing it. I suggest using external hot reloaders."
     ),
     ArgumentParameter("LOG_LEVEL"): ArgumentDescription(
         "Specifies the level to log in both console and to the file (if enabled). Refer to the Logging Levels of Logging Documentation."

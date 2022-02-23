@@ -8,36 +8,51 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from utils.constants import ASYNC_TARGET_LOOP, KeyContext, FERNET_KEY_LENGTH
 from pathlib import Path
 
-from logging import getLogger
+from utils.constants import FERNET_KEY_LENGTH, SECRET_KEY_LENGTH, KeyContext
 
 
-def validate_key(context: KeyContext | None) -> KeyContext | None:
+def validate_file_keys(
+    context: KeyContext | None,
+) -> tuple[KeyContext, KeyContext] | None:
     file_ref = f"{Path(__file__).cwd()}/{context}"
 
     # Validate if the given context is a path first.
     if Path(file_ref).is_file():
-        from dotenv import find_dotenv, load_dotenv
+
         from os import environ as env
 
-        load_dotenv(find_dotenv(filename=file_ref))
+        from dotenv import find_dotenv, load_dotenv
 
-        key: str | None = env.get("AUTH_KEY", None)
-        if key is not None:
-            return key
+        try:
+            # Redundant, but ensure.
+            load_dotenv(
+                find_dotenv(filename=Path(file_ref), raise_error_if_not_found=True)
+            )
 
-        raise Exception("Error: The key supplied is invalid.")
+        except OSError:
+            exit(
+                f"The file {file_ref} may not be a valid .env file or is missing. Please check your arguments or the file."
+            )
 
-    # We are sure that this may be the key.
-    elif context is not None and context.__len__() == FERNET_KEY_LENGTH:
-        return context
+        a_key: str | None = env.get("AUTH_KEY", None)
+        s_key: str | None = env.get("SECRET_KEY", None)
 
-    elif context is not None and context.__len__() != FERNET_KEY_LENGTH:
-        exit(
-            "Error: Supplied value for the key is not a valid key or a filename containing a key.",
-        )
+        # Validate the AUTH_KEY and SECRET_KEY.
+        if (
+            a_key is not None
+            and a_key.__len__() == FERNET_KEY_LENGTH
+            or s_key is not None
+            and s_key.__len__() == SECRET_KEY_LENGTH
+        ):
+
+            return a_key, s_key
+
+        else:
+            exit(
+                f"Error: One of the keys either has an invalid value or is missing. Have you modified your {file_ref}? Please check and try again."
+            )
 
     else:
         return None
