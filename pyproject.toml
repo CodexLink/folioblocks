@@ -17,6 +17,8 @@ cryptography = "^36.0.1"
 databases = {extras = ["aiosqlite"], version = "^0.5.5"}
 aiosqlite = "^0.17.0"
 python-dotenv = "^0.19.2"
+PyJWT = "^2.3.0"
+aiofiles = "^0.8.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"
