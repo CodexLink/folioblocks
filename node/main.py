@@ -20,14 +20,17 @@ from databases import Database
 from fastapi import FastAPI
 from fastapi_utils.tasks import repeat_every
 
+from api.endpoints.admin import admin_router
+
 # Components
 from api.endpoints.dashboard import dashboard_router
 from api.endpoints.explorer import explorer_router
 from api.endpoints.node import node_router
-from database.core import close_db, init_db
+from database.core import close_db, initialize_db
 from utils.args import args_handler as ArgsHandler
-from utils.constants import ASYNC_TARGET_LOOP, NODE_IP_PORT_FLOOR, NodeRoles
+from utils.constants import ASGI_APP_TARGET, ASYNC_TARGET_LOOP, NodeRoles
 from utils.logger import LoggerHandler
+from utils.node import look_for_nodes
 
 """
 # # Startup Functions
@@ -50,10 +53,9 @@ logger_config = LoggerHandler.init(
 dictConfig(logger_config)
 
 logger: logging.Logger = logging.getLogger(ASYNC_TARGET_LOOP)
-database: Database = init_db(
+database: Database = initialize_db(
     __name__, parsed_args.keys[0] if parsed_args.keys is not None else None
 )
-
 
 """
 # # API Router Setup
@@ -63,49 +65,61 @@ Several roles prohibits the use of other functionalities that is designed for th
 """
 api_handler: FastAPI = FastAPI()
 
+api_handler.include_router(node_router)
+
 if parsed_args.prefer_role is not NodeRoles.SIDE:
+    api_handler.include_router(admin_router)
     api_handler.include_router(dashboard_router)
     api_handler.include_router(explorer_router)
 
-api_handler.include_router(node_router)
-
-
-# * Event Functions | I cannot find or hack a method that can run on the top-level from the low-level.
-# * They specify that I cannot do that.
+# * Event Functions.
 
 
 @api_handler.on_event("startup")
 async def initialize() -> None:
 
-    logger.info("Step 1 | Connecting to database...")
+    logger.info("Step 1 | Connecting to local database...")
     await database.connect()
+    logger.info("Step 1 | Local database connected...")
 
-    logger.warning("Step 1 | Database connected...")
+    # Should check for the credentials by checking through master node.
 
-    # Should check for the credentials.
-    # Should contain the node lookup.
-    # Should check for the database. Create if it doesn't exists.
-    # Ensure permissions of the file. Also note, that on shutdown it should be protected.
+    logger.info("Step 2 | Authenticating...")
+    # Do something here.
+    logger.info("Authenticated...")  # Require...
+
+    if parsed_args.prefer_role is NodeRoles.MASTER:
+        # Authenticate by local first.
+        # Should do the node lookup.
+        logger.info("Step 3 | Detected as MASTER Node, looking for node lookup.")
+        await look_for_nodes()
+        logger.info("Attempting to look at other nodes at ")
+
+    else:  # Asserts SIDE.
+        pass
 
     # ! NOTE: The idea for the available nodes is dangerous. But this is just the setbacks. Just use SSL for HTTPS.
-
     # Should check for the file of the JSON if still the same as before via database. Or should hash or rehash the file. Also set the permission to undeletable, IF POSSIBLE.
-    pass
 
 
 @api_handler.on_event("shutdown")
 async def terminate() -> None:
+    """
+    TODO:
+                - Shutdown SQL Session (DONE???)
+                - Remove or finish any request or finish the consensus.
+                - Put all other JWT on expiration or on blacklist.
+                - We may do the asyncio.gather sooner or later.
+    """
 
-    logger.warning("Waiting for other processes to finish.")  # TODO.
-
-    # ! Do other synchronous stuffs.
     await close_db(parsed_args.keys[0])
 
 
 # A set of functions to run concurrently interval.
-@api_handler.on_event("startup")
-async def con_tasks() -> None:
-    await test(), await test_a()
+# ! TO BE REMOVED LATER.
+# @api_handler.on_event("startup")
+# async def con_tasks() -> None:
+#     pass
 
 
 """
@@ -117,22 +131,22 @@ TODO
 """
 
 
-@repeat_every(seconds=2)
-async def test():
-    logger.critical("From every interval seconds of 2.")
+@repeat_every(seconds=60)
+async def jwt_invalidation() -> None:
+    pass
 
 
-@repeat_every(seconds=5)
-async def test_a():
-    logger.warning("From every interval seconds of 5.")
+@repeat_every(seconds=10)  # unconfirmed.
+async def consensus_with_side_nodes() -> None:
+    pass
 
 
 # ! We cannot encapsulate the whole (main.py) module as there's a subprocess usage wherein there's a custom __main__ that will run this script. Doing so may cause recursion.
 if __name__ == "__main__":
     uvicorn.run(
-        "__main__:api_handler",
-        host="localhost",
-        port=NODE_IP_PORT_FLOOR,
+        app=ASGI_APP_TARGET,
+        host=parsed_args.host,
+        port=parsed_args.port,
         reload=parsed_args.local,
         log_config=logger_config,
         log_level=parsed_args.log_level.lower(),

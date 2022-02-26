@@ -24,6 +24,8 @@ from utils.constants import (  # TODO: To be moved later. This will be used for 
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
+    NODE_IP_ADDR_FLOOR,
+    NODE_IP_PORT_FLOOR,
     LoggerLevelCoverage,
     NodeRoles,
 )
@@ -55,6 +57,10 @@ for each_enum in [LoggerLevelCoverage, NodeRoles]:
 
 args_handler.add_argument(
     "-d", "--debug", action="store_true", help=FOLIOBLOCKS_HELP["DEBUG"], required=False
+)
+
+args_handler.add_argument(
+    "-ho", "--host", default=NODE_IP_ADDR_FLOOR, help=FOLIOBLOCKS_HELP["HOST"]
 )
 
 args_handler.add_argument(
@@ -90,6 +96,7 @@ args_handler.add_argument(
     "-p",
     "--port",
     action="store",
+    default=NODE_IP_PORT_FLOOR,
     help=FOLIOBLOCKS_HELP["PORT"],
     type=int,
     required=False,

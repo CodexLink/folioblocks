@@ -15,14 +15,12 @@ if __name__ == "__main__":
         f"You cannot use the {__file__} as an entrypoint module! Please use the main module or import this module to the other modules."
     )
 
-from logging import getLogger
+from logging import Logger, getLogger
 from os import _exit
 from pathlib import Path
 from secrets import token_hex
 from sqlite3 import Connection, OperationalError, connect
 
-import aiofiles
-from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from sqlalchemy import create_engine
 from utils.constants import (
@@ -31,16 +29,20 @@ from utils.constants import (
     DATABASE_NAME,
     DATABASE_RAW_PATH,
     DATABASE_URL_PATH,
+    CryptFileAction,
     KeyContext,
     RuntimeLoop,
 )
+from utils.database import store_db_instance
+from utils.exceptions import NoKeySupplied
+from utils.files import acrypt_file, crypt_file
 
 from database.models import DeclarativeModel
 
-logger = getLogger(ASYNC_TARGET_LOOP)
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 
-def init_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Database:
+def initialize_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Database:
     """
     A non-async database initializer.
 
@@ -58,7 +60,7 @@ def init_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Databas
         DATABASE_URL_PATH, connect_args={"check_same_thread": False}
     )
 
-    db_file_ref: Path[str] = Path(f"{Path(__file__).cwd()}/{DATABASE_NAME}")
+    db_file_ref: Path = Path(f"{Path(__file__).cwd()}/{DATABASE_NAME}")
 
     logger.info(  # TODO: DEBUG in -ll doesn't work.
         f"SQL Engine Connector (Reference) and Async Instance for the {DATABASE_URL_PATH} has been instantiated."
@@ -70,27 +72,9 @@ def init_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Databas
         if db_file_ref.is_file() and auth_key is not None:
 
             con: Connection | None = None
-            out_db_contents: bytes = b""
 
             logger.info("Decrypting the database...")
-
-            with open(DATABASE_RAW_PATH, "rb") as _:
-                out_db_contents = _.read()
-
-            try:
-                to_decrypt_context: Fernet = Fernet(auth_key.encode("utf-8"))
-                decryptext_context = to_decrypt_context.decrypt(out_db_contents)
-
-                logger.info("Successfully decrypted, loading the database...")
-
-            except InvalidToken:  # No need to elaborate since its empty.
-                logger.critical(
-                    f"Decryption failed. The supplied key seems to be invalid! Please check your argument and try again."
-                )
-                _exit(1)
-
-            with open(DATABASE_RAW_PATH, "wb") as _:
-                _.write(decryptext_context)
+            crypt_file(DATABASE_RAW_PATH, auth_key, CryptFileAction.TO_DECRYPT)
 
             try:
                 con = connect(DATABASE_RAW_PATH)
@@ -105,6 +89,8 @@ def init_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Databas
                 logger.info("Database validation is finished.")
                 if con is not None:
                     con.close()
+
+            store_db_instance(db_instance)
 
             return db_instance
 
@@ -129,25 +115,21 @@ def init_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Databas
 
             DeclarativeModel.metadata.create_all(sql_engine)
 
-            logger.info("Encrypting the new database...")
-
-            in_memory_db_contents: bytes = b""
-
-            with open(DATABASE_RAW_PATH, "rb") as _:
-                in_memory_db_contents = _.read()
-
-            with open(DATABASE_RAW_PATH, "wb") as _:
-                key = Fernet.generate_key()
-                context = Fernet(key)
-                encrypted_context = context.encrypt(in_memory_db_contents)  # TODO: ???
-                _.write(encrypted_context)
-
-            in_memory_db_contents = b""  # Erase right after.
+            logger.info("Encrypting a new database...")
+            auth_key = crypt_file(
+                DATABASE_RAW_PATH, auth_key, CryptFileAction.TO_ENCRYPT, True
+            )
 
             # Override AUTH_FILE_NAME after encryption.
+            if auth_key is None:
+                raise NoKeySupplied(
+                    initialize_db,
+                    "This part of the function should have a returned new auth key. This was not intended! Please report this issue as soon as possible!",
+                )
+
             with open(AUTH_FILE_NAME, "w") as env_writer:
                 env_context: list[str] = [
-                    f"AUTH_KEY={key.decode('utf-8')}",
+                    f"AUTH_KEY={auth_key.decode('utf-8')}",
                     f"SECRET_KEY={token_hex(32)}",
                 ]
 
@@ -158,6 +140,8 @@ def init_db(runtime: RuntimeLoop, auth_key: KeyContext | None = None) -> Databas
                 f"Encryption is done and a new set of keys has been generated. Please check the file {AUTH_FILE_NAME}. DO NOT SHARE THOSE CREDENTIALS. | You need to relaunch this program so that the program will load the generated keys from the file."
             )
             _exit(1)
+
+    store_db_instance(db_instance)
 
     return db_instance
 
@@ -175,21 +159,9 @@ async def close_db(key: KeyContext) -> None:
     Args:
         key (KeyContext): The key that is recently used for decrypting the SQLite database.
 
-    Notes:
-        - Despite wanting to be less redundant, I will make exceptions since time is so hectic for me to deal it.
     """
     logger.warn("Closing database instance by encryption...")
 
-    async with aiofiles.open(DATABASE_RAW_PATH, "rb") as _:
-        logger.info("Reading last state of the database ...")
-        recent_db_contents = await _.read()
-
-    async with aiofiles.open(DATABASE_RAW_PATH, "wb") as _:
-        logger.info("Database encryption in progress ...")
-
-        context = Fernet(key)
-        encrypted_context = context.encrypt(recent_db_contents)
-
-        await _.write(encrypted_context)
+    await acrypt_file(DATABASE_RAW_PATH, key, CryptFileAction.TO_ENCRYPT)
 
     logger.info("Database successfully closed and encrypted.")

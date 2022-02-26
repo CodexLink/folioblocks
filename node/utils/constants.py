@@ -12,25 +12,25 @@ from enum import Enum, IntEnum, auto
 from pathlib import Path
 
 # * Libraries
-from typing import Any, Final
+from typing import Any, Final, TypeVar, Union
 from typing import NewType as _N
 
 from sqlalchemy import Enum as SQLEnum
+from asgiref.typing import ASGIApplication
 
-
-# Priority Classification Types
+# ! Priority Classification Types
 class DocToRequestTypes(IntEnum):
     # TODO: We need more information. Preferrable under
     TOR: int = auto()
     SPECIFIED: int = auto()
 
 
-# Custom Variable Types
+# # Custom Variable Types
 NotificationContext = list[dict[str, Any]]
 RoleContext = dict[str, Any]
 DocumentSet = list[dict[str, Any]]
 
-# Custom Assertable Types
+# # Custom Assertable Types
 # TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.
 AcademicExperience = _N("AcademicExperience", str)
 AddressUUID = _N("AddressUUID", str)
@@ -46,10 +46,14 @@ DocumentProof = _N("DocumentProof", DocumentSet)
 KeyContext = _N("KeyContext", str)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
+HashedData = _N("HashedData", str)
 InternExperience = _N("InternExperience", DocumentSet)
+IPAddress = _N("IPAddress", str)
+IPPort = _N("IPPort", int)
 NodeRole = _N("NodeRole", str)
 JWTToken = _N("JWTToken", str)
 ProgramMetadata = _N("ProgramMetadata", str)
+RawData = _N("RawData", str)
 RegExp = _N("RegExp", str)
 RuntimeLoop = _N("RuntimeLoop", str)
 RequestContext = _N("RequestContext", str)
@@ -58,8 +62,12 @@ UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 
-# # Constants, Auth
+# # Custom Typed Types
+# * For the exceptions.
+Expects = TypeVar("Expects")
+Has = TypeVar("Has")
 
+# # Constants, Auth
 FERNET_KEY_LENGTH: Final[int] = 44
 SECRET_KEY_LENGTH: Final[int] = 32
 AUTH_FILE_NAME: Final[str] = ".env"
@@ -68,7 +76,7 @@ JWT_ALGORITHM: Final[str] = "HS256"
 # # Constants, General
 ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
-
+ASGI_APP_TARGET: Union[ASGIApplication, str] = "__main__:api_handler"
 
 # # Constants, Database
 DATABASE_NAME: Final[str] = "folioblocks-node.db"
@@ -82,13 +90,26 @@ NODE_LIMIT_NETWORK: Final[
 NODE_IP_URL_TARGET: Final[
     str
 ] = "localhost"  # The IP address that any instance of the program will check for any existing nodes.
-NODE_IP_PORT_FLOOR: int = 5001  # Contains the floor port to be used for generating usable and allowable ports.
+NODE_IP_ADDR_FLOOR: IPAddress = IPAddress("127.0.0.1")
+NODE_IP_PORT_FLOOR: IPPort = IPPort(
+    5001
+)  # Contains the floor port to be used for generating usable and allowable ports.
 
 # # Enums - API Models
 class BaseAPI(Enum):
+    ADMIN: str = "Admin API"
     DASHBOARD: str = "Dashboard API"
     EXPLORER: str = "Explorer API"
     NODE: str = "Node API"
+
+    """
+    Note that, we only need to govern the user for becoming as a Node User or as an organization representative.
+    """
+
+
+class AdminAPI(Enum):
+    REQUEST_TO_ACCESS: str = f"{BaseAPI.ADMIN.value}: Access Generators"
+    # REQUEST_AS_ORG: str = ""
 
 
 class DashboardAPI(Enum):
@@ -199,8 +220,22 @@ class TaskType(Enum):
 
 
 class UserType(SQLEnum):
+    AS_ADMIN: str = "Admin User"
     AS_NODE: str = "Node User"
     AS_USER: str = "Dashboard User"
+
+
+# # Enums, Generic
+class CryptFileAction(IntEnum):
+    TO_DECRYPT: int = auto()
+    TO_ENCRYPT: int = auto()
+
+
+class FuncProcessState(IntEnum):
+    SUCCESS: int = auto()
+    FAILED: int = auto()
+    SUCCESS_WITH_WARNING: int = auto()
+    FAILED_WITH_WARNING: int = auto()
 
 
 # Program Metadata
@@ -216,6 +251,9 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
     ArgumentParameter("DEBUG"): ArgumentDescription(
         "Enables some of the debug features."
+    ),
+    ArgumentParameter("HOST"): ArgumentDescription(
+        "The IP address that this instance is going to allocate from a machine. This should be the base IP address that other nodes should use in order to communicate from each other."
     ),
     ArgumentParameter("KEY_FILE"): ArgumentDescription(
         "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is not required unless the file has a different name."

@@ -9,7 +9,8 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 # Libraries
-from fastapi import APIRouter
+from typing import Any
+
 from api.core.models import (
     NodeInfoContext,
     NodeLoginContext,
@@ -17,15 +18,24 @@ from api.core.models import (
     NodeNegotiation,
     NodeNegotiationProcess,
     NodeRegisterCredentials,
+    NodeRegisterResult,
 )
-from utils.constants import NodeAPI
-
-# from secrets import token_hex
+from databases import Database
+from fastapi import APIRouter, Depends
+from utils.constants import BaseAPI, NodeAPI, UserType
+from utils.database import (
+    ensure_authorized,
+    ensure_past_negotiations,
+    get_db_instance,
+    verify_user_hash,
+)
 
 node_router = APIRouter(
     prefix="/node",
-    tags=["Node API"],
-    responses={404: {"description": "Not Found."}},  # TODO: Handle more than Not Found.
+    tags=[BaseAPI.NODE.value],
+    responses={
+        404: {"description": "Not Found."}
+    },  # TODO: Handle more than Not Found. ADD METADATA here or something.
 )
 
 
@@ -36,19 +46,36 @@ node_router = APIRouter(
     summary="Registers a node from the blockchain network.",
     description="An API endpoint that allows a node to be introduced to the blockchain network.",
 )
-async def register_node():
-    pass
+async def register_node(
+    credentials: NodeRegisterCredentials,
+) -> NodeRegisterResult:
+
+    # hash_user_password(credentials.password)
+    print(dir(node_router), node_router)
+    node_router.dependencies[0]
+
+    # Save something from the database here.
+
+    return
 
 
-@node_router.get(
+@node_router.post(
     "/login",
     tags=[NodeAPI.GENERAL_NODE_API.value],
     response_model=NodeLoginContext,
     summary="Logs a node from the blockchain network.",
     description="An API endpoint that logs the node to the blockchain network.",
 )
-async def login_node(credentials: NodeLoginCredentials):
-    pass
+async def login_node(
+    credentials: NodeLoginCredentials, db: Database = Depends(get_db_instance)
+) -> dict[str, Any]:  # TODO
+
+    # Validate the user first.
+    # Check if they are unlocked or not.
+    # Check if their password matches from the hashed password.
+
+    if verify_user_hash():
+        return
 
 
 @node_router.get(
@@ -62,7 +89,9 @@ async def login_node(credentials: NodeLoginCredentials):
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
 )
-async def get_chain_info():  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
+async def get_chain_info(
+    auth: Database = Depends(ensure_authorized(UserType.AS_NODE)),
+) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
 
@@ -77,7 +106,8 @@ async def get_chain_info():  # Includes, time_estimates, mining_status, consensu
 )
 async def pre_post_negotiate(
     phase_state: str | None = None,
-):  # Argument is TODO. Actions should be, receive_block, send_hash_block (During this, one of the assert processes will be executed.)
+    role = Depends(ensure_authorized(UserType.AS_NODE)), # TODO: # ! No TYPE!
+):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 
 
@@ -88,7 +118,9 @@ async def pre_post_negotiate(
     summary="Execute and acknowledge payloads given from this endpoint.",
     description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation.",
 )
-async def process_negotiate():  # Actions should be updating data for the master node to communicate.
+async def process_negotiate(
+    deps: bool = Depends(ensure_past_negotiations),
+):  # Actions should be updating data for the master node to communicate.
     pass
 
 

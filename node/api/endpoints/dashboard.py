@@ -30,14 +30,20 @@ from api.core.models import (
     UserLoginResult,
     UserLogoutIn,
 )
+from utils.constants import BaseAPI
 from utils.constants import AddressUUID, DashboardAPI, ItemReturnCount
 
 dashboard_router = APIRouter(
     prefix="/dashboard",
-    tags=["Dashboard API"],
+    tags=[BaseAPI.DASHBOARD.value],
     responses={404: {"description": "Not Found."}},  # TODO: Handle more than Not Found.
 )
 
+"""
+# Note regarding on this endpoint
+
+Will work on this one when I was able to finish the explorer and node API functionalities.
+"""
 
 @dashboard_router.get(
     "/dashboard",

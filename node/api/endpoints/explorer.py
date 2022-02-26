@@ -18,7 +18,6 @@ if __name__ == "__main__":
         "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
     )
 
-from fastapi import APIRouter, Depends, Query
 from api.core.models import (
     Address,
     Addresses,
@@ -29,14 +28,35 @@ from api.core.models import (
     Transaction,
     Transactions,
 )
-from utils.constants import BlockID, ExplorerAPI, ItemReturnCount
-from utils.constants import AddressUUID, TxID
+from fastapi import APIRouter, Depends, Query
+from utils.constants import (
+    AddressUUID,
+    BaseAPI,
+    BlockID,
+    ExplorerAPI,
+    ItemReturnCount,
+    TxID,
+)
 
 # from api.core.models import Blockchain
 
+"""
+# Regarding Dependency Injection on this endpoint.
+
+Note that we are iterating through JSON and we might need the folowing:
+- AsyncIterator
+- AIOFiles-related JSON Reader and Writer
+
+But before we deal with this matter, we need to ensure that we can first do the following:
+- Blockchain File and Block Finalization.
+
+Since this endpoint is just returning by reading through file, we can make this one good to go or a little bit easy but not underestimated.
+
+"""
+
 explorer_router = APIRouter(
     prefix="/explorer",
-    tags=["Explorer API"],
+    tags=[BaseAPI.EXPLORER.value],
     responses={404: {"description": "Not Found."}},  # TODO: Handle more than Not Found.
 )
 
@@ -44,7 +64,7 @@ explorer_router = APIRouter(
 
 
 @explorer_router.get(
-    "/",
+    "explorer/",
     tags=[
         ExplorerAPI.GENERAL_FETCH.value,
         ExplorerAPI.LIST_FETCH.value,

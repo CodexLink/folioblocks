@@ -8,11 +8,10 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import Any, List
-from pydantic import BaseModel, EmailStr, FilePath
 from datetime import datetime
-from utils.constants import HashUUID, TransactionActions, TransactionStatus
+from typing import Any, List
 
+from pydantic import BaseModel, EmailStr, FilePath
 from utils.constants import (
     AcademicExperience,
     AddressUUID,
@@ -23,11 +22,16 @@ from utils.constants import (
     DocumentProof,
     Documents,
     GenericUUID,
+    HashUUID,
     InternExperience,
     JWTToken,
+    KeyContext,
+    NodeRoles,
     NotificationContext,
     RequestContext,
     RoleContext,
+    TransactionActions,
+    TransactionStatus,
     UserRole,
     WorkExperience,
 )
@@ -242,7 +246,13 @@ class SearchContext(
 class NodeRegisterCredentials(BaseModel):
     username: CredentialContext
     password: CredentialContext
+    auth_code: KeyContext
+
+
+class NodeRegisterResult(BaseModel):
     user_address: AddressUUID
+    date_registered: datetime
+    role: NodeRoles
 
 
 class NodeLoginContext(BaseModel):
