@@ -14,6 +14,15 @@
       "args": ["--local", "--prefer-role", "MASTER", "-d"] // TODO: Reflect final arguments from the args.py.
     },
     {
+      "name": "Folioblocks Node Backend: No Local Param, Debug as MASTER (Top-Level Code Check)",
+      "type": "python",
+      "request": "launch",
+      "program": "node/main.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "args": ["--local", "--prefer-role", "MASTER", "-d"] // TODO: Reflect final arguments from the args.py.
+    },
+    {
       "name": "Folioblocks Node Backend: Debug as SIDE",
       "type": "python",
       "request": "launch",

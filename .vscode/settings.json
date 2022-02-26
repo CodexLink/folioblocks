@@ -4,12 +4,7 @@
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.codeActionsOnSave": ["source.fixAll.eslint"],
-  "eslint.validate": [
-    "javascript",
-    "javascriptreact",
-    "typescript",
-    "vue"
-  ],
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "vue"],
   "python.linting.flake8Enabled": false,
   "python.linting.mypyEnabled": true,
   "python.linting.enabled": true,
