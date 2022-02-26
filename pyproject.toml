@@ -19,6 +19,8 @@ aiosqlite = "^0.17.0"
 python-dotenv = "^0.19.2"
 PyJWT = "^2.3.0"
 aiofiles = "^0.8.0"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+aiohttp = "^3.8.1"
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"
