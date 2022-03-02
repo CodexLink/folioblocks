@@ -8,8 +8,11 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from datetime import datetime
+
 # Libraries
 from typing import Any
+from uuid import uuid4
 
 from api.core.schemas import (
     NodeInfoContext,
@@ -20,13 +23,23 @@ from api.core.schemas import (
     NodeRegisterCredentials,
     NodeRegisterResult,
 )
-from databases import Database
+from database.models import users
 from fastapi import APIRouter, Depends
-from utils.constants import BaseAPI, NodeAPI, UserType
+
+# from database.models import Association
+from utils.constants import (
+    AddressUUID,
+    BaseAPI,
+    NodeAPI,
+    RawData,
+    SQLUserEntity,
+    UserEntity,
+)
 from utils.database import (
     ensure_authorized,
     ensure_past_negotiations,
     get_db_instance,
+    hash_user_password,
     verify_user_hash,
 )
 
@@ -42,21 +55,61 @@ node_router = APIRouter(
 @node_router.post(
     "/register",
     tags=[NodeAPI.GENERAL_NODE_API.value],
-    response_model=NodeRegisterCredentials,
+    response_model=NodeRegisterResult,
     summary="Registers a node from the blockchain network.",
     description="An API endpoint that allows a node to be introduced to the blockchain network.",
 )
-async def register_node(
+
+# TODO: Add the auth_code generation when endpoint is done.
+async def register_entity(
     credentials: NodeRegisterCredentials,
+    db: Any = Depends(
+        get_db_instance
+    ),  # Soon??? on this context? existing_auth: Any = Depends(validate_auth_code)
 ) -> NodeRegisterResult:
 
-    # hash_user_password(credentials.password)
-    print(dir(node_router), node_router)
-    node_router.dependencies[0]
+    # If there are no association then push that first.
+    # db.execute(Association(name="Test"))
 
+    uaddr_ref: AddressUUID = AddressUUID("fl:" + uuid4().hex)
+    dict_credentials: dict[str, Any] = credentials.dict()
+    is_node: bool = False
     # Save something from the database here.
 
-    return
+    # TODO
+    # Our auth code should contain the information if that is applicable at certain role.
+    # Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
+
+    if not credentials.first_name or not credentials.last_name:
+        # Asserted that this entity must be NODE_USER.
+        del dict_credentials["first_name"], dict_credentials["last_name"]
+        is_node = True  # This is just a temporary.
+
+    dict_credentials["user_type"] = (
+        SQLUserEntity.NODE if is_node else SQLUserEntity.DASHBOARD
+    )  #  else SQLEntityUser.ADMIN_USER
+
+    del (
+        dict_credentials["password"],
+        dict_credentials["auth_code"],
+    )  # Remove other fields so that we can do the double starred expression for unpacking.
+
+    data = users.insert().values(
+        **dict_credentials,
+        uaddr=uaddr_ref,
+        password=hash_user_password(RawData(credentials.password))
+        # association=,
+    )
+
+    await db.execute(data)
+
+    data = NodeRegisterResult(
+        user_address=uaddr_ref,
+        date_registered=datetime.now(),
+        role=UserEntity.NODE if is_node else UserEntity.DASHBOARD,
+    )
+
+    return data
 
 
 @node_router.post(
@@ -90,7 +143,7 @@ async def login_node(
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
 )
 async def get_chain_info(
-    auth: Any = Depends(ensure_authorized(UserType.AS_NODE)),
+    auth: Any = Depends(ensure_authorized(UserEntity.NODE)),
 ) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
@@ -106,7 +159,7 @@ async def get_chain_info(
 )
 async def pre_post_negotiate(
     phase_state: str | None = None,
-    role: Any = Depends(ensure_authorized(UserType.AS_NODE)),  # TODO: # ! No TYPE!
+    role: Any = Depends(ensure_authorized(UserEntity.NODE)),  # TODO: # ! No TYPE!
 ):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 
@@ -119,7 +172,7 @@ async def pre_post_negotiate(
     description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation.",
 )
 async def process_negotiate(
-    # deps: bool = Depends(ensure_past_negotiations),
+    deps: Any = Depends(ensure_past_negotiations),
 ):  # Actions should be updating data for the master node to communicate.
     pass
 

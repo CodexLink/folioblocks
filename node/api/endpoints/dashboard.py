@@ -45,6 +45,7 @@ dashboard_router = APIRouter(
 Will work on this one when I was able to finish the explorer and node API functionalities.
 """
 
+
 @dashboard_router.get(
     "/dashboard",
     tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],

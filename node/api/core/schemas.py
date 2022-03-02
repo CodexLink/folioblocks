@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with Fol
 from datetime import datetime
 from typing import Any, List
 
-from pydantic import BaseModel, EmailStr, FilePath
+from pydantic import BaseModel, EmailStr, Field, FilePath
 from utils.constants import (
     AcademicExperience,
     AddressUUID,
@@ -26,12 +26,12 @@ from utils.constants import (
     InternExperience,
     JWTToken,
     KeyContext,
-    NodeRoles,
     NotificationContext,
     RequestContext,
     RoleContext,
     TransactionActions,
     TransactionStatus,
+    UserEntity,
     UserRole,
     WorkExperience,
 )
@@ -245,15 +245,39 @@ class SearchContext(
 
 # Model for the Block Details
 class NodeRegisterCredentials(BaseModel):
-    username: CredentialContext
-    password: CredentialContext
-    auth_code: KeyContext
+    username: CredentialContext = Field(
+        ..., description="Unique-readable indicator of the entity."
+    )
+    password: CredentialContext = Field(
+        ..., description="Text-entry for authorizing the entity."
+    )
+    email: EmailStr = Field(
+        ..., description="The email address to contact for notifications."
+    )
+    first_name: str = Field(
+        None, description="The initial name of the entity", max_length=32
+    )
+    last_name: str = Field(
+        None,
+        description="The last name of the entity, completing their identity.",
+        max_length=32,
+    )
+
+    auth_code: KeyContext | None
 
 
 class NodeRegisterResult(BaseModel):
-    user_address: AddressUUID
-    date_registered: datetime
-    role: NodeRoles
+    user_address: AddressUUID = Field(
+        ...,
+        description="The unique identifier of the entity. This was generated when the entity has been acknowledged for registration.",
+    )
+    date_registered: datetime = Field(
+        ...,
+        description="The date and time from where this entity has been introduced from the system.",
+    )
+    role: UserEntity = Field(
+        ..., description="The role of this entity from the system."
+    )
 
 
 class NodeLoginContext(BaseModel):

@@ -13,7 +13,7 @@ from typing import Any, Callable
 from databases import Database
 from passlib.context import CryptContext
 
-from utils.constants import HashedData, RawData, UserType
+from utils.constants import HashedData, RawData, UserEntity
 
 pwd_handler = CryptContext(schemes=["bcrypt"])
 db_instance: Database
@@ -51,21 +51,21 @@ def get_db(fn: Callable) -> Callable:
 
 @get_db
 def ensure_authorized(
-    role: UserType, id: int | None = None  # TODO.
+    role: UserEntity, id: int | None = None  # TODO.
 ) -> None:  # Use session ID for authentication.
 
-    if role is UserType.AS_ADMIN:
+    if role is UserEntity.ADMIN:
         pass
 
-    elif role is UserType.AS_NODE:
+    elif role is UserEntity.NODE:
         pass
 
     else:
         pass
 
+    print("This ensures that the person is authorized.")
     return
 
-    print("This ensures that the person is authorized.")
     # Ensure that someone that access this should be under the role of ... and should be authorized to its local.
 
 

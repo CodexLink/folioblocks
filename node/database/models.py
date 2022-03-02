@@ -13,19 +13,27 @@ you should have received a copy of the gnu general public license along with Fol
 if __name__ == "__main__":
     pass
 
-from sqlalchemy.ext.declarative import declarative_base, DeclarativeMeta
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    func,
+)
+
 from sqlalchemy.orm import relationship
-from uuid import uuid4
-from datetime import datetime
+from utils.constants import SQLUserEntity
 from utils.constants import (
     Activity,
     BlacklistDuration,
     GroupType,
     TokenType,
-    UserType,
 )
-
 
 # TODO: We might wanna create a key where it combines all of the certain fields
 # ! And when it was inserted for reset password, it should resulted to that!
@@ -41,73 +49,76 @@ from utils.constants import (
     - sqlalchemy.Metadata() is only possible. Though even we are going to use encode/databases with SQLAlchemy ORM, then I'm not sure why they didn't support it.
 """
 
-DeclarativeModel: DeclarativeMeta = declarative_base()
+# DeclarativeModel: DeclarativeMeta = declarative_base()
 
+model_metadata: MetaData = MetaData()
 
-class Association(DeclarativeModel):
-    __tablename__ = "associations"
+associations = Table(
+    "associations",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String(64), nullable=False),
+    Column("group", GroupType, default=GroupType.ORGANIZATION, nullable=False),
+    Column("date_added", DateTime, default=func.now())
+    # TODO
+    # "associates" = relationship("User", back_populates="association")
+)
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(64), nullable=False)
-    group = Column(GroupType, default=GroupType.ORGANIZATION, nullable=False)
-    date_added = Column(DateTime, default=datetime.now())
+users = Table(
+    "users",
+    model_metadata,
+    Column(
+        "uaddr",
+        String(64),
+        nullable=False,
+        primary_key=True,
+        autoincrement=False,
+    ),
+    Column("first_name", String(32), nullable=True),
+    Column("last_name", String(32), nullable=True),
+    # TODO: I'm not sure if ths would work.
+    # association = relationship(
+    #     Association, back_populates="associates"
+    # )
+    Column("username", String(24), unique=True, nullable=False),
+    Column("password", String(64), nullable=False),  # ! Expects hashed.
+    Column("email", String(128), unique=True, nullable=False),
+    Column("user_type", SQLUserEntity, server_default=SQLUserEntity.DASHBOARD),
+    Column("user_activity", Activity, server_default=Activity.OFFLINE),
+    Column("date_registered", DateTime, server_default=func.now()),
+)
 
-    associates = relationship("User", back_populates="association")
+blacklisted_users = Table(
+    "blacklisted_users",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column("user", String(38), ForeignKey("users.uaddr"), nullable=False),
+    # relationship("user_ref", User, foreign_keys=[user]),
+    Column("reason", Text, nullable=False),
+    Column("duration", BlacklistDuration, server_default=BlacklistDuration.WARN_1),
+    Column("expiration", DateTime, nullable=True),
+    Column("issued_on", DateTime, server_default=func.now()),
+)
 
-
-class User(DeclarativeModel):
-    __tablename__ = "users"
-
-    uaddr = Column(
-        String(38), default=lambda: ("fl:" + uuid4().hex), unique=True, primary_key=True
-    )
-    first_name = Column(String(32), nullable=False)
-    last_name = Column(String(32), nullable=False)
-    association = relationship(
-        Association, back_populates="associates"
-    )  # TODO: I'm not sure if ths would work.
-
-    username = Column(String(24), nullable=False)
-    password = Column(String(64), nullable=False)  # TODO: Should be hashed.
-
-    email = Column(String(128), unique=True, nullable=False)
-
-    user_type = Column(UserType, default=UserType.AS_USER)
-    user_activity = Column(Activity, default=Activity.OFFLINE)
-
-    date_registered = Column(DateTime, default=datetime.now())
-    date_updated = Column(DateTime, onupdate=datetime.now())
-
-
-class BlacklistedUser(DeclarativeModel):
-    __tablename__ = "blacklisted_users"
-
-    id = Column(Integer, primary_key=True)
-    user = Column(String(38), ForeignKey("users.uaddr"), nullable=False)
-    user_ref = relationship(User, foreign_keys=[user])
-    reason = Column(Text, nullable=False)
-    classified_duration = Column(BlacklistDuration, default=BlacklistDuration.WARN_1)
-    expiration = Column(DateTime, nullable=True)
-    issued = Column(DateTime, default=datetime.now())
-
-
-class Tokens(DeclarativeModel):
-    __tablename__ = "tokens"
-
-    id = Column(Integer, primary_key=True)
-    from_user = Column(String(38), ForeignKey("users.uaddr"), nullable=False)
-    user_ref = relationship(User, foreign_keys=[from_user])
-    token = Column(
-        Text, nullable=False
-    )  # TODO: I don't know how many characters are there in JWT token.
-    state = Column(TokenType, default=TokenType.RECENTLY_CREATED, nullable=False)
-    expiration = Column(DateTime, nullable=True)
-    issued = Column(DateTime, default=datetime.now())
-
+tokens = Table(
+    "tokens",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    # from_user = Column(String(38), ForeignKey("users.uaddr"), nullable=False)
+    # user_ref = relationship(User, foreign_keys=[from_user])
+    Column(
+        "token", Text, nullable=False
+    ),  # TODO: I don't know how many characters are there in JWT token.
+    Column(
+        "state", TokenType, server_default=TokenType.RECENTLY_CREATED, nullable=False
+    ),
+    Column("expiration", DateTime, nullable=True),
+    Column("issued", DateTime, server_default=func.now()),
+)
 
 # TODO: Need checker function for asserting if the user is a Node Type.
 # ! This is just a preparation for the blockchain system approach.
-class QueueTasks(DeclarativeModel):
-    __tablename__ = "queued_tasks"
+# class QueueTasks(DeclarativeModel):
+#     __tablename__ = "queued_tasks"
 
-    id = Column(Integer, primary_key=True)
+#     id = Column(Integer, primary_key=True)

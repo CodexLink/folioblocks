@@ -39,7 +39,7 @@ from utils.database import store_db_instance
 from utils.exceptions import NoKeySupplied
 from utils.files import acrypt_file, crypt_file
 
-from database.models import DeclarativeModel
+from database.models import model_metadata
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -127,7 +127,7 @@ def initialize_resources(
                 f"Database and blockchain file does not exists. Creating a new database with a file name {DATABASE_NAME} and blockchain file named as {BLOCKCHAIN_NAME}"
             )
 
-            DeclarativeModel.metadata.create_all(sql_engine)
+            model_metadata.create_all(sql_engine)
             logger.info("Database context inserted ...")
 
             logger.info("Encrypting a new database ...")

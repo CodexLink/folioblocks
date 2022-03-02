@@ -17,6 +17,7 @@ from typing import NewType as _N
 
 from sqlalchemy import Enum as SQLEnum
 from asgiref.typing import ASGIApplication
+
 # from api.core.schemas import Block
 
 # ! Priority Classification Types
@@ -190,9 +191,9 @@ class LoggerLevelCoverage(Enum):
     TRACE: Final[str] = "trace"
 
 
-class NodeRoles(IntEnum):
-    MASTER: int = auto()
-    SIDE: int = auto()
+class NodeRoles(Enum):
+    MASTER = "MASTER_ROLE"
+    SIDE = "SIDE_ROLE"
 
 
 # # Enums, Database
@@ -231,10 +232,16 @@ class TaskType(Enum):
     CONSENSUS_MODE = "Consensus Mode, Block Sync"
 
 
-class UserType(SQLEnum):
-    AS_ADMIN: str = "Admin User"
-    AS_NODE: str = "Node User"
-    AS_USER: str = "Dashboard User"
+class UserEntity(Enum):
+    NODE = "Node User"
+    DASHBOARD = "Dashboard User"
+    ADMIN = "Administrator"
+
+class SQLUserEntity(SQLEnum):
+
+    NODE = "Node User"
+    DASHBOARD = "Dashboard User"
+    ADMIN = "Administrator"
 
 
 # # Enums, Generic
