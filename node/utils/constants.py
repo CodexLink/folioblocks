@@ -17,6 +17,7 @@ from typing import NewType as _N
 
 from sqlalchemy import Enum as SQLEnum
 from asgiref.typing import ASGIApplication
+# from api.core.schemas import Block
 
 # ! Priority Classification Types
 class DocToRequestTypes(IntEnum):
@@ -78,10 +79,21 @@ ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 ASGI_APP_TARGET: Union[ASGIApplication, str] = "__main__:api_handler"
 
-# # Constants, Database
+# # Constants, Resources
 DATABASE_NAME: Final[str] = "folioblocks-node.db"
 DATABASE_RAW_PATH: str = f"{Path(__file__).cwd()}/{DATABASE_NAME}"
 DATABASE_URL_PATH: str = f"sqlite:///{DATABASE_RAW_PATH}"
+
+BLOCKCHAIN_NAME: Final[str] = "folioblocks-chain.json"
+BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
+
+# # Constants, Template Models with Pydantic
+# ! These are used when initializing new resources.
+
+BLOCKCHAIN_BLOCK_TEMPLATE = {}
+BLOCKCHAIN_TRANSACTION_TEMPLATE = {}
+
+# BLOCKCHAIN_
 
 # # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[

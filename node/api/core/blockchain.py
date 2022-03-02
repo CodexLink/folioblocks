@@ -1,4 +1,4 @@
-
+class Blockchain:
 
 	async def __ainit__(self):
 		pass

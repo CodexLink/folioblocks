@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with Fol
 from http import HTTPStatus
 from fastapi import Query, APIRouter
 from typing import List
-from api.core.models import (
+from api.core.schemas import (
     Applicant,
     Applicants,
     DashboardContext,

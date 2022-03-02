@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with Fol
 # Libraries
 from typing import Any
 
-from api.core.models import (
+from api.core.schemas import (
     NodeInfoContext,
     NodeLoginContext,
     NodeLoginCredentials,
@@ -67,7 +67,7 @@ async def register_node(
     description="An API endpoint that logs the node to the blockchain network.",
 )
 async def login_node(
-    credentials: NodeLoginCredentials, db: Database = Depends(get_db_instance)
+    credentials: NodeLoginCredentials, db: Any = Depends(get_db_instance)
 ) -> dict[str, Any]:  # TODO
 
     # Validate the user first.
@@ -90,7 +90,7 @@ async def login_node(
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
 )
 async def get_chain_info(
-    auth: Database = Depends(ensure_authorized(UserType.AS_NODE)),
+    auth: Any = Depends(ensure_authorized(UserType.AS_NODE)),
 ) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
@@ -106,7 +106,7 @@ async def get_chain_info(
 )
 async def pre_post_negotiate(
     phase_state: str | None = None,
-    role = Depends(ensure_authorized(UserType.AS_NODE)), # TODO: # ! No TYPE!
+    role: Any = Depends(ensure_authorized(UserType.AS_NODE)),  # TODO: # ! No TYPE!
 ):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 
@@ -119,7 +119,7 @@ async def pre_post_negotiate(
     description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation.",
 )
 async def process_negotiate(
-    deps: bool = Depends(ensure_past_negotiations),
+    # deps: bool = Depends(ensure_past_negotiations),
 ):  # Actions should be updating data for the master node to communicate.
     pass
 

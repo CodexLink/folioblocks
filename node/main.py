@@ -26,7 +26,7 @@ from api.endpoints.admin import admin_router
 from api.endpoints.dashboard import dashboard_router
 from api.endpoints.explorer import explorer_router
 from api.endpoints.node import node_router
-from database.core import close_db, initialize_db
+from database.core import close_resources, initialize_resources
 from utils.args import args_handler as ArgsHandler
 from utils.constants import ASGI_APP_TARGET, ASYNC_TARGET_LOOP, NodeRoles
 from utils.logger import LoggerHandler
@@ -53,14 +53,19 @@ logger_config = LoggerHandler.init(
 dictConfig(logger_config)
 
 logger: logging.Logger = logging.getLogger(ASYNC_TARGET_LOOP)
-database: Database = initialize_db(
+database: Database = initialize_resources(
     __name__, parsed_args.keys[0] if parsed_args.keys is not None else None
 )
 
 """
-# # API Router Setup
+# # API Router Setup and Initialization
 
 Several roles prohibits the use of other functionalities that is designed for the master nodes.
+
+About design:
+FastAPI doesn't seem to support class-based views by nature. Even when fastapi-utils provides that capability, I dont trust its functionality anymore due to the nature of FastAPI being too far than fastapi-utils can keep up.
+Meaning, that tool may be outdated. Hacking it like what I did in `CodexLink/discord-activity-badge` would take
+my time more than making other features, which I still haven't done.
 
 """
 api_handler: FastAPI = FastAPI()
@@ -73,8 +78,6 @@ if parsed_args.prefer_role is not NodeRoles.SIDE:
     api_handler.include_router(explorer_router)
 
 # * Event Functions.
-
-
 @api_handler.on_event("startup")
 async def initialize() -> None:
 
@@ -93,7 +96,13 @@ async def initialize() -> None:
         # Should do the node lookup.
         logger.info("Step 3 | Detected as MASTER Node, looking for node lookup.")
         await look_for_nodes()
-        logger.info("Attempting to look at other nodes at ")
+        logger.info(
+            f"Attempting to look at other nodes at Port {parsed_args.port} (inside {parsed_args.host})..."
+        )
+
+        logger.info("Step 4 | Initializing Email Service...")
+
+        logger.info("Step 4 | Email service instantiated.")
 
     else:  # Asserts SIDE.
         pass
@@ -112,7 +121,7 @@ async def terminate() -> None:
                 - We may do the asyncio.gather sooner or later.
     """
 
-    await close_db(parsed_args.keys[0])
+    await close_resources(parsed_args.keys[0])
 
 
 # A set of functions to run concurrently interval.

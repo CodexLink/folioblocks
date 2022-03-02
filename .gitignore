@@ -291,6 +291,9 @@ dist
 *.sqlite3
 *.sqlite
 
-# Some vscode files
+# Vscode files
 .vscode/extensions.json
 .vscode/settings.json
+
+# Custom files
+folioblocks-chain.json

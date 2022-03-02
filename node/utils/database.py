@@ -51,7 +51,7 @@ def get_db(fn: Callable) -> Callable:
 
 @get_db
 def ensure_authorized(
-    role: UserType, id: int | None = None # TODO.
+    role: UserType, id: int | None = None  # TODO.
 ) -> None:  # Use session ID for authentication.
 
     if role is UserType.AS_ADMIN:

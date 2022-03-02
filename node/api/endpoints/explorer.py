@@ -18,7 +18,7 @@ if __name__ == "__main__":
         "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
     )
 
-from api.core.models import (
+from api.core.schemas import (
     Address,
     Addresses,
     Block,

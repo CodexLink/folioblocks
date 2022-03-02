@@ -1,0 +1,29 @@
+name: Sonarcloud Build Analysis
+on:
+  push:
+
+  pull_request:
+    types: [opened, review_requested, ready_for_review, synchronize]
+    paths-ignore:
+      # These paths are optional and is restricted to minimize redundant scanning. Please consult if you want to include some extensions to trigger the build scan.
+      - "**.md"
+      - "**.json"
+      - "**.toml"
+      - "**.lock"
+      - "**.gitignore"
+      - "**.firebaserc"
+
+jobs:
+  sonarcloud-analyze:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

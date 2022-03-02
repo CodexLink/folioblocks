@@ -198,7 +198,7 @@ class Transaction(BaseModel):
 class Block(BaseModel):
     id: int
     nonce: int
-    validator: AddressUUID
+    validator: AddressUUID  # ! TODO: We need the database before being able to implement self-reference from producing the genesis block.
     prer_block: HashUUID
     next_block: HashUUID | None
     transactions: List[Transaction]
@@ -206,6 +206,7 @@ class Block(BaseModel):
     timestamp: datetime
 
 
+# This was dissected.
 class Blockchain(BaseModel):
     block: List[Block]
     transactions: List[Transaction]
