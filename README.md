@@ -1,5 +1,9 @@
-# FolioBlocks
+# FolioBlocks `Node` and `Web` Repository
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
+[![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/2a71cf953cf14f97beae8fa4d614b1c0)](https://www.codacy.com/gh/CodexLink/folioblocks/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=CodexLink/folioblocks&amp;utm_campign=Badge_Grade)
 [![CodeFactor](https://www.codefactor.io/repository/github/codexlink/folioblocks/badge)](https://www.codefactor.io/repository/github/codexlink/folioblocks)
 
