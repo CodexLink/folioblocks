@@ -27,13 +27,14 @@ from sqlalchemy import (
 )
 
 from sqlalchemy.orm import relationship
-from utils.constants import SQLUserEntity
+from utils.constants import UserEntity
 from utils.constants import (
-    Activity,
+    UserActivityState,
     BlacklistDuration,
     GroupType,
     TokenType,
 )
+from sqlalchemy import Enum as SQLEnum
 
 # TODO: We might wanna create a key where it combines all of the certain fields
 # ! And when it was inserted for reset password, it should resulted to that!
@@ -58,7 +59,7 @@ associations = Table(
     model_metadata,
     Column("id", Integer, primary_key=True),
     Column("name", String(64), nullable=False),
-    Column("group", GroupType, default=GroupType.ORGANIZATION, nullable=False),
+    Column("group", SQLEnum(GroupType), default=GroupType.ORGANIZATION, nullable=False),
     Column("date_added", DateTime, default=func.now())
     # TODO
     # "associates" = relationship("User", back_populates="association")
@@ -83,8 +84,14 @@ users = Table(
     Column("username", String(24), unique=True, nullable=False),
     Column("password", String(64), nullable=False),  # ! Expects hashed.
     Column("email", String(128), unique=True, nullable=False),
-    Column("user_type", SQLUserEntity, server_default=SQLUserEntity.DASHBOARD),
-    Column("user_activity", Activity, server_default=Activity.OFFLINE),
+    Column(
+        "user_type", SQLEnum(UserEntity), server_default=UserEntity.DASHBOARD_USER.name
+    ),
+    Column(
+        "user_activity",
+        SQLEnum(UserActivityState),
+        server_default=UserActivityState.OFFLINE.name,
+    ),
     Column("date_registered", DateTime, server_default=func.now()),
 )
 
@@ -95,7 +102,7 @@ blacklisted_users = Table(
     Column("user", String(38), ForeignKey("users.uaddr"), nullable=False),
     # relationship("user_ref", User, foreign_keys=[user]),
     Column("reason", Text, nullable=False),
-    Column("duration", BlacklistDuration, server_default=BlacklistDuration.WARN_1),
+    Column("duration", SQLEnum(BlacklistDuration), default=BlacklistDuration.WARN_1),
     Column("expiration", DateTime, nullable=True),
     Column("issued_on", DateTime, server_default=func.now()),
 )
@@ -110,7 +117,7 @@ tokens = Table(
         "token", Text, nullable=False
     ),  # TODO: I don't know how many characters are there in JWT token.
     Column(
-        "state", TokenType, server_default=TokenType.RECENTLY_CREATED, nullable=False
+        "state", SQLEnum(TokenType), default=TokenType.RECENTLY_CREATED, nullable=False
     ),
     Column("expiration", DateTime, nullable=True),
     Column("issued", DateTime, server_default=func.now()),

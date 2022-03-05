@@ -14,14 +14,14 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import DateTime
 
 from database.models import Associations
-from ..utils.constants import Activity, UserEntity
+from ..utils.constants import UserActivityState, UserEntity
 
 
 class UserBase(BaseModel):
     uaddr: str
     association: Associations | None  # Would this work?
     user_type: UserEntity
-    user_activity: Activity
+    user_activity: UserActivityState
     date_registered: DateTime  # We may use the datetime.datetime here.
     date_updated: DateTime
 

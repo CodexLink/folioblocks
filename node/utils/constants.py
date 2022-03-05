@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any, Final, TypeVar, Union
 from typing import NewType as _N
 
-from sqlalchemy import Enum as SQLEnum
 from asgiref.typing import ASGIApplication
 
 # from api.core.schemas import Block
@@ -23,8 +22,8 @@ from asgiref.typing import ASGIApplication
 # ! Priority Classification Types
 class DocToRequestTypes(IntEnum):
     # TODO: We need more information. Preferrable under
-    TOR: int = auto()
-    SPECIFIED: int = auto()
+    TOR = auto()
+    SPECIFIED = auto()
 
 
 # # Custom Variable Types
@@ -70,9 +69,13 @@ Expects = TypeVar("Expects")
 Has = TypeVar("Has")
 
 # # Constants, Auth
-FERNET_KEY_LENGTH: Final[int] = 44
-SECRET_KEY_LENGTH: Final[int] = 32
+FERNET_KEY_LENGTH: Final[int] = 44  # TODO: ???
+SECRET_KEY_LENGTH: Final[int] = 32  # TODO: ???
 AUTH_FILE_NAME: Final[str] = ".env"
+
+# # Constants, Auth: JWT
+JWT_DAY_EXPIRATION: Final[int] = 7
+
 JWT_ALGORITHM: Final[str] = "HS256"
 
 # # Constants, General
@@ -91,8 +94,8 @@ BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 # # Constants, Template Models with Pydantic
 # ! These are used when initializing new resources.
 
-BLOCKCHAIN_BLOCK_TEMPLATE = {}
-BLOCKCHAIN_TRANSACTION_TEMPLATE = {}
+# BLOCKCHAIN_BLOCK_TEMPLATE = {}
+# BLOCKCHAIN_TRANSACTION_TEMPLATE = {}
 
 # BLOCKCHAIN_
 
@@ -110,10 +113,10 @@ NODE_IP_PORT_FLOOR: IPPort = IPPort(
 
 # # Enums - API Models
 class BaseAPI(Enum):
-    ADMIN: str = "Admin API"
-    DASHBOARD: str = "Dashboard API"
-    EXPLORER: str = "Explorer API"
-    NODE: str = "Node API"
+    ADMIN = "Admin API"
+    DASHBOARD = "Dashboard API"
+    EXPLORER = "Explorer API"
+    NODE = "Node API"
 
     """
     Note that, we only need to govern the user for becoming as a Node User or as an organization representative.
@@ -121,49 +124,49 @@ class BaseAPI(Enum):
 
 
 class AdminAPI(Enum):
-    REQUEST_TO_ACCESS: str = f"{BaseAPI.ADMIN.value}: Access Generators"
-    # REQUEST_AS_ORG: str = ""
+    REQUEST_TO_ACCESS = f"{BaseAPI.ADMIN.value}: Access Generators"
+    # REQUEST_AS_ORG = ""
 
 
 class DashboardAPI(Enum):
-    DASHBOARD_GENERAL_API: str = f"{BaseAPI.DASHBOARD.value}: General"
-    APPLICANT_API: str = f"{BaseAPI.DASHBOARD.value}: Applicant"
-    EMPLOYER_API: str = f"{BaseAPI.DASHBOARD.value}: Employer"
-    INSTITUTION_API: str = f"{BaseAPI.DASHBOARD.value}: Institution"
+    DASHBOARD_GENERAL_API = f"{BaseAPI.DASHBOARD.value}: General"
+    APPLICANT_API = f"{BaseAPI.DASHBOARD.value}: Applicant"
+    EMPLOYER_API = f"{BaseAPI.DASHBOARD.value}: Employer"
+    INSTITUTION_API = f"{BaseAPI.DASHBOARD.value}: Institution"
 
 
 class ExplorerAPI(Enum):
-    GENERAL_FETCH: str = f"{BaseAPI.EXPLORER.value}: General Fetch"
-    LIST_FETCH: str = f"{BaseAPI.EXPLORER.value}: List Fetch"
-    SPECIFIC_FETCH: str = f"{BaseAPI.EXPLORER.value}: Specific Fetch"
-    BLOCK_FETCH: str = f"{BaseAPI.EXPLORER.value}: Block Fetch"
-    TRANSACTION_FETCH: str = f"{BaseAPI.EXPLORER.value}: Transaction Fetch"
-    ADDRESS_FETCH: str = f"{BaseAPI.EXPLORER.value}: Address Fetch"
+    GENERAL_FETCH = f"{BaseAPI.EXPLORER.value}: General Fetch"
+    LIST_FETCH = f"{BaseAPI.EXPLORER.value}: List Fetch"
+    SPECIFIC_FETCH = f"{BaseAPI.EXPLORER.value}: Specific Fetch"
+    BLOCK_FETCH = f"{BaseAPI.EXPLORER.value}: Block Fetch"
+    TRANSACTION_FETCH = f"{BaseAPI.EXPLORER.value}: Transaction Fetch"
+    ADDRESS_FETCH = f"{BaseAPI.EXPLORER.value}: Address Fetch"
 
 
 class NodeAPI(Enum):
-    GENERAL_NODE_API: str = f"{BaseAPI.NODE.value}: Overview"
-    MASTER_NODE_API: str = f"{BaseAPI.NODE.value}: Master Node"
-    SIDE_NODE_API: str = f"{BaseAPI.NODE.value}: Side Node"
-    NODE_TO_NODE_API: str = f"{BaseAPI.NODE.value}: Node-to-Node"
+    GENERAL_NODE_API = f"{BaseAPI.NODE.value}: Overview"
+    MASTER_NODE_API = f"{BaseAPI.NODE.value}: Master Node"
+    SIDE_NODE_API = f"{BaseAPI.NODE.value}: Side Node"
+    NODE_TO_NODE_API = f"{BaseAPI.NODE.value}: Node-to-Node"
 
 
 class TransactionStatus(IntEnum):
-    PENDING: int = auto()
-    SUCCESS: int = auto()
-    FAILED: int = auto()
+    PENDING = auto()
+    SUCCESS = auto()
+    FAILED = auto()
 
 
 class TransactionActions(IntEnum):  # TODO: This will be expanded later on.
-    ACCOUNT_GENERATED: int = auto()
-    DATA_UPDATED: int = auto()
-    DATA_DISREGARDED: int = auto()
-    DATA_BATCH_MINTING: int = auto()
-    DOCUMENT_INSUANCE: int = auto()
-    REQUEST_INITIATION: int = auto()
-    REQUEST_PROCESSING: int = auto()
-    REQUEST_MARKED_ENDED: int = auto()
-    REQUEST_SPECIFIC_DOC: int = auto()
+    ACCOUNT_GENERATED = auto()
+    DATA_UPDATED = auto()
+    DATA_DISREGARDED = auto()
+    DATA_BATCH_MINTING = auto()
+    DOCUMENT_INSUANCE = auto()
+    REQUEST_INITIATION = auto()
+    REQUEST_PROCESSING = auto()
+    REQUEST_MARKED_ENDED = auto()
+    REQUEST_SPECIFIC_DOC = auto()
 
 
 class TransactionActionString(Enum):
@@ -174,21 +177,21 @@ class TransactionActionString(Enum):
 # ! Blockchain (Explorer) Query
 # These are the min and max constraint for querying blockchain data.
 class ItemReturnCount(IntEnum):
-    LOW: Final[int] = 5
-    MIN: Final[int] = 25
-    MID: Final[int] = 50
-    HIGH: Final[int] = 75
-    MAX: Final[int] = 100
+    LOW = 5
+    MIN = 25
+    MID = 50
+    HIGH = 75
+    MAX = 100
 
 
 # ! Logger Level
 class LoggerLevelCoverage(Enum):
-    DEBUG: Final[str] = "debug"
-    INFO: Final[str] = "info"
-    WARNING: Final[str] = "warning"
-    ERROR: Final[str] = "error"
-    CRITICAL: Final[str] = "critical"
-    TRACE: Final[str] = "trace"
+    DEBUG = "debug"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+    TRACE = "trace"
 
 
 class NodeRoles(Enum):
@@ -197,32 +200,25 @@ class NodeRoles(Enum):
 
 
 # # Enums, Database
-class Activity(SQLEnum):
-    OFFLINE: str = "Offline"
-    ONLINE: str = "Online"
+class BlacklistDuration(Enum):  # TODO: These may not be official.
+    INDEFINITE = "Indefine."
+    WARN_1 = "Warn 1: 1 Day."
+    WARN_2 = "Warn 2: 3 Days."
+    WARN_3 = "Warn 3: 7 Days."
+    FINAL_WARNING = "Final Warning: 2 Weeks."
 
 
-class BlacklistDuration(SQLEnum):  # TODO: These may not be official.
-    INDEFINITE: str = "Indefine."
-    WARN_1: str = "Warn 1: 1 Day."
-    WARN_2: str = "Warn 2: 3 Days."
-    WARN_3: str = "Warn 3: 7 Days."
-    FINAL_WARNING: str = "Final Warning: 2 Weeks."
+class GroupType(Enum):
+    ORGANIZATION = "Organization"  # This covers Employer or any other organization.
+    COMPANY_EMPLOYER = "Company Employer"
+    APPLICANTS = "Applicants"
 
 
-class GroupType(SQLEnum):
-    ORGANIZATION: str = (
-        "Organization"  # This covers Employer or any other organization.
-    )
-    COMPANY_EMPLOYER: str = "Company Employer"
-    APPLICANTS: str = "Applicants"
-
-
-class TokenType(SQLEnum):
-    EXPIRED: str = "Token Expired"
-    RECENTLY_CREATED: str = "Token Recently Created"
-    ON_USE: str = "Token On Use"
-    TOKEN_RETAINED_WHILE_EXPIRED: str = "Token Expired but Retained"
+class TokenType(Enum):
+    EXPIRED = "Token Expired"
+    RECENTLY_CREATED = "Token Recently Created"
+    ON_USE = "Token On Use"
+    TOKEN_RETAINED_WHILE_EXPIRED = "Token Expired but Retained"
 
 
 class TaskType(Enum):
@@ -232,29 +228,28 @@ class TaskType(Enum):
     CONSENSUS_MODE = "Consensus Mode, Block Sync"
 
 
+class UserActivityState(Enum):
+    OFFLINE = "Offline"
+    ONLINE = "Online"
+
+
 class UserEntity(Enum):
-    NODE = "Node User"
-    DASHBOARD = "Dashboard User"
-    ADMIN = "Administrator"
-
-class SQLUserEntity(SQLEnum):
-
-    NODE = "Node User"
-    DASHBOARD = "Dashboard User"
-    ADMIN = "Administrator"
+    NODE_USER = "Node User"
+    DASHBOARD_USER = "Dashboard User"
+    ADMIN_USER = "Administrator"
 
 
 # # Enums, Generic
 class CryptFileAction(IntEnum):
-    TO_DECRYPT: int = auto()
-    TO_ENCRYPT: int = auto()
+    TO_DECRYPT = auto()
+    TO_ENCRYPT = auto()
 
 
 class FuncProcessState(IntEnum):
-    SUCCESS: int = auto()
-    FAILED: int = auto()
-    SUCCESS_WITH_WARNING: int = auto()
-    FAILED_WITH_WARNING: int = auto()
+    SUCCESS = auto()
+    FAILED = auto()
+    SUCCESS_WITH_WARNING = auto()
+    FAILED_WITH_WARNING = auto()
 
 
 # Program Metadata

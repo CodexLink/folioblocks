@@ -8,12 +8,15 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from enum import EnumMeta
+from os import environ as env
 
 # Libraries
 from typing import Any
 from uuid import uuid4
 
+import jwt
 from api.core.schemas import (
     NodeInfoContext,
     NodeLoginContext,
@@ -24,15 +27,17 @@ from api.core.schemas import (
     NodeRegisterResult,
 )
 from database.models import users
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 # from database.models import Association
 from utils.constants import (
+    JWT_ALGORITHM,
+    JWT_DAY_EXPIRATION,
     AddressUUID,
     BaseAPI,
+    HashedData,
     NodeAPI,
     RawData,
-    SQLUserEntity,
     UserEntity,
 )
 from utils.database import (
@@ -86,7 +91,7 @@ async def register_entity(
         is_node = True  # This is just a temporary.
 
     dict_credentials["user_type"] = (
-        SQLUserEntity.NODE if is_node else SQLUserEntity.DASHBOARD
+        UserEntity.NODE_USER if is_node else UserEntity.DASHBOARD_USER
     )  #  else SQLEntityUser.ADMIN_USER
 
     del (
@@ -98,15 +103,16 @@ async def register_entity(
         **dict_credentials,
         uaddr=uaddr_ref,
         password=hash_user_password(RawData(credentials.password))
-        # association=,
+        # association=, # I'm not sure on what to do with this one, as of now.
     )
 
     await db.execute(data)
 
     data = NodeRegisterResult(
         user_address=uaddr_ref,
+        username=credentials.username,
         date_registered=datetime.now(),
-        role=UserEntity.NODE if is_node else UserEntity.DASHBOARD,
+        role=dict_credentials["user_type"],
     )
 
     return data
@@ -121,14 +127,45 @@ async def register_entity(
 )
 async def login_node(
     credentials: NodeLoginCredentials, db: Any = Depends(get_db_instance)
-) -> dict[str, Any]:  # TODO
+) -> NodeLoginContext:
 
-    # Validate the user first.
-    # Check if they are unlocked or not.
-    # Check if their password matches from the hashed password.
+    # Query the user first.
+    credential_to_look = users.select().where(users.c.uaddr == credentials.user_address)
 
-    if verify_user_hash():
-        return
+    fetched_data = await db.fetch_one(credential_to_look)
+
+    # TODO: This is implementable when we have the capability to lock out users due to suspicious activities.
+    # * Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
+    if fetched_data is not None:
+        payload: dict[str, Any] = dict(zip(fetched_data._fields, fetched_data))
+
+        # Adjust the payload to be compatible with JWT encoding.
+
+        # Since there are several enum.Enum, we need to convert them to literal values for the JWT to encode it. Objects are not possible to encode.
+        for each_item in payload:
+            if isinstance(type(payload[each_item]), EnumMeta):
+                payload[each_item] = payload["user_activity"].name
+
+        payload["date_registered"] = payload["date_registered"].isoformat()
+
+        if verify_user_hash(
+            RawData(credentials.password), HashedData(fetched_data["password"])
+        ):
+
+            # Create the JWT token.
+            token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
+
+            return NodeLoginContext(
+                username=fetched_data.username,
+                user_address=fetched_data.uaddr,
+                jwt_token=token,
+                expiration=datetime.now() + timedelta(days=JWT_DAY_EXPIRATION),
+            )
+
+    raise HTTPException(
+        status_code=404,
+        detail="User is not found. Please check your credentials and try again.",
+    )
 
 
 @node_router.get(
@@ -143,7 +180,7 @@ async def login_node(
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
 )
 async def get_chain_info(
-    auth: Any = Depends(ensure_authorized(UserEntity.NODE)),
+    auth: Any = Depends(ensure_authorized(UserEntity.NODE_USER)),
 ) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
@@ -159,7 +196,7 @@ async def get_chain_info(
 )
 async def pre_post_negotiate(
     phase_state: str | None = None,
-    role: Any = Depends(ensure_authorized(UserEntity.NODE)),  # TODO: # ! No TYPE!
+    role: Any = Depends(ensure_authorized(UserEntity.NODE_USER)),  # TODO: # ! No TYPE!
 ):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 

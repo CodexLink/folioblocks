@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any, List
 
 from pydantic import BaseModel, EmailStr, Field, FilePath
+from utils.constants import UserEntity
 from utils.constants import (
     AcademicExperience,
     AddressUUID,
@@ -31,7 +32,6 @@ from utils.constants import (
     RoleContext,
     TransactionActions,
     TransactionStatus,
-    UserEntity,
     UserRole,
     WorkExperience,
 )
@@ -269,27 +269,30 @@ class NodeRegisterCredentials(BaseModel):
 class NodeRegisterResult(BaseModel):
     user_address: AddressUUID = Field(
         ...,
-        description="The unique identifier of the entity. This was generated when the entity has been acknowledged for registration.",
+        description="The unique identifier of the entity. This was generated when the entity has been acknowledged for registration, and was return for reference.",
+    )
+    username: CredentialContext = Field(
+        ..., description="Your chosen identity to register from the blockchain network."
     )
     date_registered: datetime = Field(
         ...,
         description="The date and time from where this entity has been introduced from the system.",
     )
-    role: UserEntity = Field(
+    role: UserEntity = Field(  # TODO.
         ..., description="The role of this entity from the system."
-    )
+    )  # ! What?
 
 
 class NodeLoginContext(BaseModel):
+    user_address: AddressUUID
     jwt_token: JWTToken
     expiration: datetime
-    time_elapsed: datetime  # This indicates the time before you can participate in the blockchain network, as per consensus condition.
+    # time_elapsed: datetime # !!! This indicates the time before you can participate in the blockchain network, as per consensus condition.
 
 
 class NodeLoginCredentials(BaseModel):
     user_address: AddressUUID
     password: CredentialContext
-    auth_code: str  # TODO: This functionality is not official. As this may be the same as the Google Authenticator or any other time based authorization.
 
 
 # # AT THIS POINT, I CANNOT ADD THE FIELDS SINCE I STILL HAVE NO IDEA ON HOW TO IMPLEMENT THEM.

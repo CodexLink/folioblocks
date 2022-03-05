@@ -4,6 +4,7 @@ from typing import Any, Final
 class DocToRequestTypes(IntEnum):
     TOR: int
     SPECIFIED: int
+
 NotificationContext = list[dict[str, Any]]
 RoleContext = dict[str, Any]
 DocumentSet = list[dict[str, Any]]

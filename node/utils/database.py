@@ -54,10 +54,10 @@ def ensure_authorized(
     role: UserEntity, id: int | None = None  # TODO.
 ) -> None:  # Use session ID for authentication.
 
-    if role is UserEntity.ADMIN:
+    if role is UserEntity.ADMIN_USER:
         pass
 
-    elif role is UserEntity.NODE:
+    elif role is UserEntity.NODE_USER:
         pass
 
     else:
