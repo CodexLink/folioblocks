@@ -22,21 +22,26 @@ from blueprint.schemas import (
     EntityLoginResult,
     EntityRegisterCredentials,
     EntityRegisterResult,
+    Users,
 )
 from core.constants import (
     JWT_ALGORITHM,
     JWT_DAY_EXPIRATION,
+    MAX_JWT_HOLD_TOKEN,
     UUID_KEY_PREFIX,
     AddressUUID,
     BaseAPI,
+    CredentialContext,
     EntityAPI,
     HashedData,
     JWTToken,
     RawData,
+    TokenStatus,
     UserEntity,
 )
 from core.dependencies import get_db_instance
 from fastapi import APIRouter, Depends, HTTPException
+from utils.exceptions import MaxJWTOnHold
 from utils.processors import hash_user_password, verify_user_hash
 
 entity_router = APIRouter(
@@ -101,6 +106,7 @@ async def register_entity(
 
     try:
         await db.execute(data)
+
     except IntegrityError:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT,
@@ -128,23 +134,20 @@ async def login_entity(
     credentials: EntityLoginCredentials, db: Any = Depends(get_db_instance)
 ) -> EntityLoginResult:
 
-    # Query the user first.
     credential_to_look = users.select().where(users.c.username == credentials.username)
-
     fetched_data = await db.fetch_one(credential_to_look)
 
     # TODO: This is implementable when we have the capability to lock out users due to suspicious activities.
     # * Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
 
-    print(dir(fetched_data), fetched_data)
-
     if fetched_data is not None:
-        # payload = Users
+
+        # We cannot use pydantic model because we need to do some modification that violates use-case of pydantic.
         payload: dict[str, Any] = dict(zip(fetched_data._fields, fetched_data))
 
         # Adjust the payload to be compatible with JWT encoding.
+        # Since there are several enum.Enum, we need to convert them to literal values for the JWT to encode it.
 
-        # Since there are several enum.Enum, we need to convert them to literal values for the JWT to encode it. Objects are not possible to encode.
         for each_item in payload:
             if isinstance(type(payload[each_item]), EnumMeta):
                 payload[each_item] = payload["user_activity"].name
@@ -154,8 +157,24 @@ async def login_entity(
         if verify_user_hash(
             RawData(credentials.password), HashedData(fetched_data["password"])
         ):
+            other_tokens_stmt = tokens.select().where(
+                (tokens.c.from_user == fetched_data.unique_address) & tokens.c.state
+                != TokenStatus.EXPIRED.name
+            )
 
-            # Create the JWT token.
+            other_tokens = await db.fetch_all(other_tokens_stmt)
+
+            # Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
+            if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
+                raise MaxJWTOnHold(
+                    (
+                        fetched_data.unique_address,
+                        CredentialContext(fetched_data.username),
+                    ),
+                    len(other_tokens),
+                )
+
+            # If all other conditions are clear, then create the JWT token.
             jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
             payload[
@@ -165,6 +184,7 @@ async def login_entity(
             token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
 
             # Put a new token to the database.
+
             new_token = tokens.insert().values(
                 from_user=fetched_data.unique_address,
                 token=token,

@@ -69,6 +69,7 @@ Has = TypeVar("Has")
 # # Constants, Auth
 FERNET_KEY_LENGTH: Final[int] = 44  # TODO: ???
 SECRET_KEY_LENGTH: Final[int] = 32  # TODO: ???
+MAX_JWT_HOLD_TOKEN: Final[int] = 5
 
 UUID_KEY_PREFIX: Final[str] = "fl"
 UUID_KEY_LENGTH: Final[int] = 35
@@ -221,7 +222,7 @@ class GroupType(Enum):
     APPLICANTS = "Applicants"
 
 
-class TokenType(Enum):
+class TokenStatus(Enum):
     EXPIRED = "Token Expired"
     RECENTLY_CREATED = "Token Recently Created"
     ON_USE = "Token On Use"

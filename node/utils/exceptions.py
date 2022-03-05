@@ -9,13 +9,42 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from typing import Callable, Final, Type
-from core.constants import Expects, Has
+
+from core.constants import (
+    MAX_JWT_HOLD_TOKEN,
+    AddressUUID,
+    CredentialContext,
+    Expects,
+    Has,
+)
+
+# TODO: Integrate the logger here soon.
 
 
-class UnsatisfiedClassType(ValueError):
-    def __init__(self, has: Type[Expects], expected: Type[Has]) -> None:
+class ConversionUnequalLength(AssertionError):
+    def __init__(
+        self, left_size: int, right_size: int, context: str | None = None
+    ) -> None:
 
-        message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
+        message: Final[str] = (
+            f"The left-hand item has a size of {left_size} while right-hand item has a size of {right_size}, thurs unequal.%s"
+            % (f"| Additional Info: {context}" if context else "")
+        )
+
+        super().__init__(message)
+
+
+class MaxJWTOnHold(AssertionError):
+    def __init__(
+        self,
+        uuids: tuple[AddressUUID, CredentialContext],
+        currently_has: int,
+        max_hold: int = MAX_JWT_HOLD_TOKEN,
+    ) -> None:
+
+        message: Final[
+            str
+        ] = f"This user {uuids[0]} ({uuids[1]}) currently witholds {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
 
         super().__init__(message)
 
@@ -30,14 +59,9 @@ class NoKeySupplied(ValueError):
         super().__init__(message)
 
 
-class ConversionUnequalLength(AssertionError):
-    def __init__(
-        self, left_size: int, right_size: int, context: str | None = None
-    ) -> None:
+class UnsatisfiedClassType(ValueError):
+    def __init__(self, has: Type[Expects], expected: Type[Has]) -> None:
 
-        message: Final[str] = (
-            f"The left-hand item has a size of {left_size} while right-hand item has a size of {right_size}, thurs unequal.%s"
-            % (f"| Additional Info: {context}" if context else "")
-        )
+        message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
 
         super().__init__(message)

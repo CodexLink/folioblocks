@@ -31,13 +31,14 @@ from core.constants import (
     NotificationContext,
     RequestContext,
     RoleContext,
-    TokenType,
+    TokenStatus,
     TransactionActions,
     TransactionStatus,
     UserEntity,
     UserRole,
     WorkExperience,
 )
+from core.constants import UserActivityState
 
 # ! Note that we can use one the exclude or include functionality upon returning the context of these models.
 
@@ -237,11 +238,11 @@ class SearchContext(
 
 # Model for the Block Details
 class EntityRegisterCredentials(BaseModel):
-    username: CredentialContext = Field(
-        ..., description="Unique-readable indicator of the entity."
+    username: CredentialContext | str = Field(
+        ..., description="Unique-readable indicator of the entity.", max_length=24
     )
-    password: CredentialContext = Field(
-        ..., description="Text-entry for authorizing the entity."
+    password: CredentialContext | str = Field(
+        ..., description="Text-entry for authorizing the entity.", max_length=64
     )
     email: EmailStr = Field(
         ..., description="The email address to contact for notifications."
@@ -319,7 +320,7 @@ class Tokens(BaseModel):
         max_length=UUID_KEY_LENGTH,
     )
     token: JWTToken = Field(..., description="The token generated from this row.")
-    state: TokenType = Field(..., description="The current status of this token.")
+    state: TokenStatus = Field(..., description="The current status of this token.")
     expiration: datetime = Field(
         ...,
         description="The date and time from where this token will expire.",
@@ -336,13 +337,33 @@ class Users(BaseModel):
         description="The unique address of the user in the blockchain network.",
         max_length=UUID_KEY_LENGTH,
     )
-    # first_name
-    # last_name
-    # password
-    # username
-    # email
-    # user_type
-    # user_activity_date_registered
+    first_name: str = Field(
+        None, description="The initial name of the entity", max_length=32
+    )
+    last_name: str = Field(
+        None,
+        description="The last name of the entity, completing their identity.",
+        max_length=32,
+    )
+    username: CredentialContext | str = Field(
+        ..., description="Unique-readable indicator of the entity.", max_length=24
+    )
+    password: CredentialContext | str = Field(
+        ..., description="Text-entry for authorizing the entity.", max_length=64
+    )
+    email: EmailStr = Field(
+        ..., description="The email address to contact for notifications."
+    )
+    user_type: UserEntity = Field(
+        ..., description="A classifier that represents the entity of this data."
+    )
+    user_activity: UserActivityState = Field(
+        ..., description="Describes the current state of this entity."
+    )
+    date_registered: datetime = Field(
+        ...,
+        description="The date and time from where this entity has been registed from the system.",
+    )
 
 
 # # Entity API — END

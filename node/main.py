@@ -31,7 +31,7 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     LoggerLevelCoverage,
     NodeRoles,
-    TokenType,
+    TokenStatus,
 )
 from core.logger import LoggerHandler
 from utils.processors import close_resources, initialize_resources
@@ -149,7 +149,7 @@ TODO
 @repeat_every(seconds=120, wait_first=True)
 async def jwt_invalidation() -> None:
 
-    token_query = tokens.select().where(tokens.c.state != TokenType.EXPIRED)
+    token_query = tokens.select().where(tokens.c.state != TokenStatus.EXPIRED)
     tokens_available = await database.fetch_all(token_query)
 
     if not tokens_available:
@@ -165,11 +165,16 @@ async def jwt_invalidation() -> None:
         )
 
         if current_datetime >= token.expiration:
-            token_to_del = tokens.delete().where(
-                tokens.c.expiration == token.expiration
+            token_to_del = (
+                tokens.update()
+                .where(tokens.c.expiration == token.expiration)
+                .values(state=TokenStatus.EXPIRED)
             )
 
-            await database.execute(token_to_del)
+            this_token = await database.fetch_one(token_to_del)
+
+            # Instead of deletion, change the state instead.
+            this_token
 
             # Character beyond 25th will be truncated. This is just a pure random though.
             logger.info(

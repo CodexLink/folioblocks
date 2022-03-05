@@ -32,7 +32,7 @@ from core.constants import (
     UserActivityState,
     BlacklistDuration,
     GroupType,
-    TokenType,
+    TokenStatus,
 )
 from sqlalchemy import Enum as SQLEnum
 
@@ -124,8 +124,8 @@ tokens = Table(
     Column("token", Text, nullable=False),
     Column(
         "state",
-        SQLEnum(TokenType),
-        server_default=TokenType.RECENTLY_CREATED.name,
+        SQLEnum(TokenStatus),
+        server_default=TokenStatus.RECENTLY_CREATED.name,
         nullable=False,
     ),
     Column("expiration", DateTime, nullable=True),

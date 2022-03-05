@@ -16,6 +16,8 @@ from core.constants import BaseAPI, NodeAPI
 from core.dependencies import ensure_authorized, ensure_past_negotiations
 from fastapi import APIRouter, Depends
 
+from core.constants import UserEntity
+
 node_router = APIRouter(
     prefix="/node",
     tags=[BaseAPI.NODE.value],

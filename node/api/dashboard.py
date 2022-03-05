@@ -57,28 +57,6 @@ async def get_data_to_dashboard(context: DashboardContext):
     pass
 
 
-@dashboard_router.post(
-    "/login",
-    tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
-    # response_model=UserLoginResult,
-    summary="Logs the user from the dashboard.",
-    description="An API endpoint that logs the user based on their credentials.",
-)
-async def login_user(credentials):
-    return None  # For now.
-
-
-@dashboard_router.post(
-    "/logout",
-    tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
-    summary="Invalidates user's session.",
-    description="An API endpoint that logouts the user by invalidating the JWT token.",
-    status_code=HTTPStatus.OK,
-)
-async def logout_user(to_invalidate):
-    pass
-
-
 @dashboard_router.get(
     "/applicants",
     tags=[DashboardAPI.EMPLOYER_API.value],

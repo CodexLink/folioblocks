@@ -51,7 +51,7 @@ pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
 @assert_instance
 async def acrypt_file(
     afilename: str,
-    akey: KeyContext | bytes,
+    akey: KeyContext | bytes | None,
     aprocess: CryptFileAction,
     return_new_key: bool = False,
 ) -> bytes | None:
@@ -80,7 +80,8 @@ async def acrypt_file(
             acrypt_context: Fernet = Fernet(akey.encode("utf-8"))
 
         else:
-            akey = Fernet.generate_key()
+            if akey is None:
+                akey = Fernet.generate_key()
             acrypt_context = Fernet(akey)
 
         aprocessed_content = getattr(
@@ -109,7 +110,7 @@ async def acrypt_file(
 @assert_instance
 def crypt_file(
     filename: str,
-    key: KeyContext | bytes,
+    key: KeyContext | bytes | None,
     process: CryptFileAction,
     return_new_key: bool = False,
 ) -> bytes | None:
@@ -125,7 +126,7 @@ def crypt_file(
         file_content = content_buffer.read()
 
     try:
-        logger.info(
+        logger.debug(
             f"{'Decrypting' if process is CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
         )
         if process is CryptFileAction.TO_DECRYPT:
@@ -136,7 +137,8 @@ def crypt_file(
             crypt_context: Fernet = Fernet(key.encode("utf-8"))
 
         else:
-            key = Fernet.generate_key()
+            if key is None:
+                key = Fernet.generate_key()
             crypt_context = Fernet(key)
 
         processed_content = getattr(
@@ -191,7 +193,7 @@ def initialize_resources(
     db_file_ref: Path = Path(DATABASE_RAW_PATH)
     bc_file_ref: Path = Path(BLOCKCHAIN_RAW_PATH)
 
-    logger.info(  # TODO: DEBUG in -ll doesn't work.
+    logger.debug(
         f"SQL Engine Connector (Reference) and Async Instance for the {DATABASE_URL_PATH} has been instantiated."
     )
 
@@ -220,7 +222,7 @@ def initialize_resources(
                     con.close()
 
             store_db_instance(db_instance)
-            logger.info("Database instance has been saved for access later.")
+            logger.debug("Database instance has been saved for access later.")
 
             logger.info("Decrypting a blockchain file ...")
             crypt_file(BLOCKCHAIN_RAW_PATH, auth_key, CryptFileAction.TO_DECRYPT)

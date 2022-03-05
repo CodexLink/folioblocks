@@ -28,11 +28,18 @@ def get_db_instance() -> Database:
     return db_instance
 
 
+# ! Note that we may need multiple roles on one argument. Explore the | flag soon.
+
+# We can make this one as a decorator and use it from one of the functions that validates if the token or the user who holds it has a respective role.
+
+
 async def ensure_authorized(
-    required_role: UserEntity | None = None,
+    role: UserEntity | None = None,
     x_token: JWTToken = Header(...),
     db: Database = Depends(get_db_instance),
 ) -> None:
+
+    # print(role)
 
     if x_token:
         req_ref_token = tokens.select().where(tokens.c.token == x_token)
