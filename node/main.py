@@ -8,11 +8,9 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
-
 import logging
-
-# Libraries
 from argparse import Namespace
+from datetime import datetime
 from logging.config import dictConfig
 
 import uvicorn
@@ -20,15 +18,23 @@ from databases import Database
 from fastapi import FastAPI
 from fastapi_utils.tasks import repeat_every
 
+from api.core.schemas import Tokens
 from api.endpoints.admin import admin_router
-
-# Components
 from api.endpoints.dashboard import dashboard_router
+from api.endpoints.entity import entity_router
 from api.endpoints.explorer import explorer_router
 from api.endpoints.node import node_router
 from database.core import close_resources, initialize_resources
+from database.models import tokens
 from utils.args import args_handler as ArgsHandler
-from utils.constants import ASGI_APP_TARGET, ASYNC_TARGET_LOOP, NodeRoles
+from utils.constants import (
+    ASGI_APP_TARGET,
+    ASYNC_TARGET_LOOP,
+    LoggerLevelCoverage,
+    NodeRoles,
+    TokenType,
+)
+from utils.conversion import list_to_dict
 from utils.logger import LoggerHandler
 from utils.node import look_for_nodes
 
@@ -42,10 +48,10 @@ implementation not being a class-based. I don't want to have a bad time.
 
 """
 parsed_args: Namespace = ArgsHandler.parse_args()
-
 logger_config = LoggerHandler.init(
     base_config=uvicorn.config.LOGGING_CONFIG,
     disable_file_logging=parsed_args.no_log_file,
+    logger_level=LoggerLevelCoverage(parsed_args.log_level),
 )  # This only returns the logging_config that is loaded from the uvicorn instance.
 
 # * Load the logger even when async scope is not yet initialized.
@@ -70,6 +76,7 @@ my time more than making other features, which I still haven't done.
 """
 api_handler: FastAPI = FastAPI()
 
+api_handler.include_router(entity_router)  # # WARNING REGARDING SIDE NODE.
 api_handler.include_router(node_router)
 
 if parsed_args.prefer_role is not NodeRoles.SIDE:
@@ -140,9 +147,36 @@ TODO
 """
 
 
-@repeat_every(seconds=60)
+@api_handler.on_event("startup")
+@repeat_every(seconds=4)
 async def jwt_invalidation() -> None:
-    pass
+
+    token_query = tokens.select().where(tokens.c.state != TokenType.EXPIRED)
+    tokens_available = await database.fetch_all(token_query)
+
+    if not tokens_available:
+        logger.warning("There are no tokens available to iterate as of the moment.")
+
+    current_datetime: datetime = datetime.now()
+
+    for each_tokens in tokens_available:
+        token = Tokens.parse_obj(each_tokens)
+
+        logger.debug(
+            f"@ Token {token.id} | JWT Invalidation Condition | '(Should be) >' {current_datetime > token.expiration} | '(Should be) ==' {current_datetime == token.expiration} | `<' {current_datetime < token.expiration}"
+        )
+
+        if current_datetime >= token.expiration:
+            token_to_del = tokens.delete().where(
+                tokens.c.expiration == token.expiration
+            )
+
+            await database.execute(token_to_del)
+
+            # Character beyond 25th will be truncated. This is just a pure random though.
+            logger.info(
+                f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."
+            )
 
 
 @repeat_every(seconds=10)  # unconfirmed.
@@ -158,5 +192,5 @@ if __name__ == "__main__":
         port=parsed_args.port,
         reload=parsed_args.local,
         log_config=logger_config,
-        log_level=parsed_args.log_level.lower(),
+        log_level=LoggerLevelCoverage(parsed_args.log_level).value.lower(),
     )

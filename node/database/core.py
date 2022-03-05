@@ -45,7 +45,7 @@ logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 
 def initialize_resources(
-    runtime: RuntimeLoop, auth_key: KeyContext | None = None
+    runtime: RuntimeLoop, auth_key: KeyContext | str | None = None
 ) -> Database:
     """
     A non-async initializer for both database and blockchain files.

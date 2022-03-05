@@ -59,18 +59,22 @@ associations = Table(
     model_metadata,
     Column("id", Integer, primary_key=True),
     Column("name", String(64), nullable=False),
-    Column("group", SQLEnum(GroupType), default=GroupType.ORGANIZATION, nullable=False),
+    Column(
+        "group",
+        SQLEnum(GroupType),
+        server_default=GroupType.ORGANIZATION.name,
+        nullable=False,
+    ),
     Column("date_added", DateTime, default=func.now())
     # TODO
-    # "associates" = relationship("User", back_populates="association")
 )
-
+associations.associates = relationship("users", back_populates="association")  # type: ignore
 users = Table(
     "users",
     model_metadata,
     Column(
         "uaddr",
-        String(64),
+        String(35),
         nullable=False,
         primary_key=True,
         autoincrement=False,
@@ -78,9 +82,7 @@ users = Table(
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
     # TODO: I'm not sure if ths would work.
-    # association = relationship(
-    #     Association, back_populates="associates"
-    # )
+    # association =
     Column("username", String(24), unique=True, nullable=False),
     Column("password", String(64), nullable=False),  # ! Expects hashed.
     Column("email", String(128), unique=True, nullable=False),
@@ -95,34 +97,43 @@ users = Table(
     Column("date_registered", DateTime, server_default=func.now()),
 )
 
+users.association = relationship(associations, back_populates="associates")  # type: ignore
+
 blacklisted_users = Table(
     "blacklisted_users",
     model_metadata,
     Column("id", Integer, primary_key=True),
     Column("user", String(38), ForeignKey("users.uaddr"), nullable=False),
-    # relationship("user_ref", User, foreign_keys=[user]),
     Column("reason", Text, nullable=False),
-    Column("duration", SQLEnum(BlacklistDuration), default=BlacklistDuration.WARN_1),
+    Column(
+        "duration",
+        SQLEnum(BlacklistDuration),
+        server_default=BlacklistDuration.WARN_1.name,
+    ),
     Column("expiration", DateTime, nullable=True),
     Column("issued_on", DateTime, server_default=func.now()),
 )
 
+blacklisted_users.user_ref = relationship(users, foreign_keys=["user"])  # type: ignore
+
+# TODO: Implement this token table as well as the logout then we go implement the info for the header testing and then we go to the blockchain.
 tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    # from_user = Column(String(38), ForeignKey("users.uaddr"), nullable=False)
-    # user_ref = relationship(User, foreign_keys=[from_user])
+    Column("from_user", String(38), ForeignKey("users.uaddr"), nullable=False),
+    Column("token", Text, nullable=False),
     Column(
-        "token", Text, nullable=False
-    ),  # TODO: I don't know how many characters are there in JWT token.
-    Column(
-        "state", SQLEnum(TokenType), default=TokenType.RECENTLY_CREATED, nullable=False
+        "state",
+        SQLEnum(TokenType),
+        server_default=TokenType.RECENTLY_CREATED.name,
+        nullable=False,
     ),
     Column("expiration", DateTime, nullable=True),
     Column("issued", DateTime, server_default=func.now()),
 )
 
+tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 # TODO: Need checker function for asserting if the user is a Node Type.
 # ! This is just a preparation for the blockchain system approach.
 # class QueueTasks(DeclarativeModel):

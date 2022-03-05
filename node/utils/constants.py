@@ -71,11 +71,13 @@ Has = TypeVar("Has")
 # # Constants, Auth
 FERNET_KEY_LENGTH: Final[int] = 44  # TODO: ???
 SECRET_KEY_LENGTH: Final[int] = 32  # TODO: ???
+
+UUID_KEY_PREFIX: Final[str] = "fl"
+UUID_KEY_LENGTH: Final[int] = 35
 AUTH_FILE_NAME: Final[str] = ".env"
 
 # # Constants, Auth: JWT
 JWT_DAY_EXPIRATION: Final[int] = 7
-
 JWT_ALGORITHM: Final[str] = "HS256"
 
 # # Constants, General
@@ -115,6 +117,7 @@ NODE_IP_PORT_FLOOR: IPPort = IPPort(
 class BaseAPI(Enum):
     ADMIN = "Admin API"
     DASHBOARD = "Dashboard API"
+    ENTITY = "Entity API"
     EXPLORER = "Explorer API"
     NODE = "Node API"
 
@@ -133,6 +136,12 @@ class DashboardAPI(Enum):
     APPLICANT_API = f"{BaseAPI.DASHBOARD.value}: Applicant"
     EMPLOYER_API = f"{BaseAPI.DASHBOARD.value}: Employer"
     INSTITUTION_API = f"{BaseAPI.DASHBOARD.value}: Institution"
+
+
+class EntityAPI(Enum):
+    ENTITY_GENERAL_API = f"{BaseAPI.ENTITY.value}: General"
+    LOGIN_API = f"{BaseAPI.ENTITY.value}: Login"
+    REGISTRATION_API = f"{BaseAPI.ENTITY.value}: Registration"
 
 
 class ExplorerAPI(Enum):
@@ -186,12 +195,12 @@ class ItemReturnCount(IntEnum):
 
 # ! Logger Level
 class LoggerLevelCoverage(Enum):
-    DEBUG = "debug"
-    INFO = "info"
-    WARNING = "warning"
-    ERROR = "error"
-    CRITICAL = "critical"
-    TRACE = "trace"
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+    TRACE = "TRACE"
 
 
 class NodeRoles(Enum):

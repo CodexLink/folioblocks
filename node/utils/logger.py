@@ -20,6 +20,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from utils.constants import LoggerLevelCoverage
+
 
 class CustomInjectLoggerConfig(BaseModel):
     DEFAULT_LOG_FORMAT: str = "%(levelprefix)s %(module)s:%(lineno)d (%(funcName)s) | %(asctime)s | %(message)s"
@@ -34,6 +36,7 @@ class LoggerHandler:
         cls,
         base_config: dict[str, Any],
         disable_file_logging: bool = False,
+        logger_level: LoggerLevelCoverage = LoggerLevelCoverage.INFO,
     ) -> dict[str, Any]:
         """
         A class method that modifies some of the properties of the uvicorn.config.LOGGING_CONFIG to allow colorized-output on the console while saving the output with the stripped colored in a log file.
@@ -91,14 +94,17 @@ class LoggerHandler:
             }
 
             # * For all loggers, set the general file handler as another handler (if there's one existing) or a new handler.
+            # * Note that the log level is set here as well.
             for each_loggers in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
                 if each_loggers == "uvicorn.error":
                     base_config["loggers"]["uvicorn.error"] = {
                         "handlers": ["file_logger"]
                     }
+                    base_config["loggers"]["uvicorn.error"]["level"] = logger_level.name
                 else:
                     base_config["loggers"][each_loggers]["handlers"].append(
                         "file_logger"
                     )
+                    base_config["loggers"][each_loggers]["level"] = logger_level.name
 
         return base_config

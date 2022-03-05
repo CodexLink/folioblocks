@@ -12,8 +12,8 @@ from datetime import datetime
 from typing import Any, List
 
 from pydantic import BaseModel, EmailStr, Field, FilePath
-from utils.constants import UserEntity
 from utils.constants import (
+    UUID_KEY_LENGTH,
     AcademicExperience,
     AddressUUID,
     Certificates,
@@ -30,8 +30,10 @@ from utils.constants import (
     NotificationContext,
     RequestContext,
     RoleContext,
+    TokenType,
     TransactionActions,
     TransactionStatus,
+    UserEntity,
     UserRole,
     WorkExperience,
 )
@@ -46,17 +48,6 @@ class DashboardContext(BaseModel):
     role: UserRole
     notifications: NotificationContext
     role_context: RoleContext
-
-
-class UserLoginResult(BaseModel):
-    address: AddressUUID
-    hash_session: JWTToken
-    role: UserRole
-
-
-class UserLoginIn(BaseModel):
-    username: CredentialContext
-    password: CredentialContext
 
 
 class UserLogoutIn(BaseModel):
@@ -244,7 +235,7 @@ class SearchContext(
 # # Node API — START
 
 # Model for the Block Details
-class NodeRegisterCredentials(BaseModel):
+class EntityRegisterCredentials(BaseModel):
     username: CredentialContext = Field(
         ..., description="Unique-readable indicator of the entity."
     )
@@ -266,13 +257,16 @@ class NodeRegisterCredentials(BaseModel):
     auth_code: KeyContext | None
 
 
-class NodeRegisterResult(BaseModel):
-    user_address: AddressUUID = Field(
+class EntityRegisterResult(BaseModel):
+    user_address: AddressUUID | str = Field(
         ...,
         description="The unique identifier of the entity. This was generated when the entity has been acknowledged for registration, and was return for reference.",
+        max_length=UUID_KEY_LENGTH,
     )
-    username: CredentialContext = Field(
-        ..., description="Your chosen identity to register from the blockchain network."
+    username: CredentialContext | str = Field(
+        ...,
+        description="Your chosen identity to register from the blockchain network.",
+        max_length=24,
     )
     date_registered: datetime = Field(
         ...,
@@ -283,17 +277,59 @@ class NodeRegisterResult(BaseModel):
     )  # ! What?
 
 
-class NodeLoginContext(BaseModel):
-    user_address: AddressUUID
-    jwt_token: JWTToken
-    expiration: datetime
-    # time_elapsed: datetime # !!! This indicates the time before you can participate in the blockchain network, as per consensus condition.
+class EntityLoginResult(BaseModel):
+    user_address: AddressUUID | str = Field(
+        ...,
+        description="The unique identifier of the user in the blockchain space. This can be used to reference yourself for every transaction done in the network.",
+        max_length=UUID_KEY_LENGTH,
+    )
+    jwt_token: JWTToken = Field(
+        ...,
+        description="The JWT token for authenticating your session in the blockchain network. Invoke this in the header to authorize yourself.",
+    )
+    expiration: datetime = Field(
+        ...,
+        description="The date and time from where this token will expire. When expired, you need to fetch by re-login.",
+    )
+    # time_elapsed: datetime # !!! This indicates the time before you can participate in the blockchain network, as per consensus condition. # NOT SURE for this one.
 
 
-class NodeLoginCredentials(BaseModel):
-    user_address: AddressUUID
-    password: CredentialContext
+class EntityLoginCredentials(BaseModel):
+    username: CredentialContext | str = Field(
+        ...,
+        description="The username of the entity. This will be used primarily for identifying yourself, aside from the unique address given when registered.",
+        max_length=24,
+    )
+    password: CredentialContext | str = Field(
+        ...,
+        description="The unhashed password of your account. This will be checked compared to your hashed version of your password to authenticate you.",
+        max_length=64,
+    )
 
+
+# # Entity API — START
+
+# This is used inside! Not from the API system itself.
+class Tokens(BaseModel):
+    id: int = Field(..., description="Reference ID for the token generated.")
+    from_user: AddressUUID | str = Field(
+        ...,
+        description="The reference to the unique ID of the user who generated this token.",
+        max_length=UUID_KEY_LENGTH,
+    )
+    token: JWTToken = Field(..., description="The token generated from this row.")
+    state: TokenType = Field(..., description="The current status of this token.")
+    expiration: datetime = Field(
+        ...,
+        description="The date and time from where this token will expire.",
+    )
+    issued: datetime = Field(
+        ...,
+        description="The date and time from where this token was generated.",
+    )
+
+
+# # Entity API — END
 
 # # AT THIS POINT, I CANNOT ADD THE FIELDS SINCE I STILL HAVE NO IDEA ON HOW TO IMPLEMENT THEM.
 # * There are other fields were I don't know if they are helpful or not.

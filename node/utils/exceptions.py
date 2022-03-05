@@ -21,10 +21,23 @@ class UnsatisfiedClassType(ValueError):
 
 
 class NoKeySupplied(ValueError):
-    def __init__(self, fn_ref: Callable, extra_info: str) -> None:
+    def __init__(self, fn_ref: Callable, extra_info: str | None = None) -> None:
 
         message: Final[
             str
         ] = f"This function {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
+
+        super().__init__(message)
+
+
+class ConversionUnequalLength(AssertionError):
+    def __init__(
+        self, left_size: int, right_size: int, context: str | None = None
+    ) -> None:
+
+        message: Final[str] = (
+            f"The left-hand item has a size of {left_size} while right-hand item has a size of {right_size}, thurs unequal.%s"
+            % (f"| Additional Info: {context}" if context else "")
+        )
 
         super().__init__(message)

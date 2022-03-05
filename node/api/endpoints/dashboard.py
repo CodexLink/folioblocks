@@ -26,8 +26,8 @@ from api.core.schemas import (
     Requests,
     Student,
     Students,
-    UserLoginIn,
-    UserLoginResult,
+    # UserLoginIn,
+    # UserLoginResult,
     UserLogoutIn,
 )
 from utils.constants import BaseAPI
@@ -60,11 +60,11 @@ async def get_data_to_dashboard(context: DashboardContext):
 @dashboard_router.post(
     "/login",
     tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
-    response_model=UserLoginResult,
+    # response_model=UserLoginResult,
     summary="Logs the user from the dashboard.",
     description="An API endpoint that logs the user based on their credentials.",
 )
-async def login_user(credentials: UserLoginIn):
+async def login_user(credentials):
     return None  # For now.
 
 
@@ -75,7 +75,7 @@ async def login_user(credentials: UserLoginIn):
     description="An API endpoint that logouts the user by invalidating the JWT token.",
     status_code=HTTPStatus.OK,
 )
-async def logout_user(to_invalidate: UserLogoutIn):
+async def logout_user(to_invalidate):
     pass
 
 
