@@ -17,7 +17,7 @@ if __name__ == "__main__":
 from argparse import ArgumentParser
 from re import Pattern, compile
 
-from utils.constants import (  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
+from core.constants import (  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
     AUTH_FILE_NAME,
     ENUM_NAME_PATTERN,
     FOLIOBLOCKS_EPILOG,
@@ -29,7 +29,7 @@ from utils.constants import (  # TODO: To be moved later. This will be used for 
     LoggerLevelCoverage,
     NodeRoles,
 )
-from utils.validators import validate_file_keys
+from utils.processors import validate_file_keys
 
 args_handler = ArgumentParser(
     prog=FOLIOBLOCKS_NODE_TITLE,

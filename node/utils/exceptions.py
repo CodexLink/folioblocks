@@ -1,5 +1,5 @@
 """
-Custom Exceptions for the Components, specifically for API.
+Custom Exceptions (exceptions.py) | A set of custom reference for all processes (functions) to raise at.
 
 This file is part of FolioBlocks.
 
@@ -9,7 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from typing import Callable, Final, Type
-from utils.constants import Expects, Has
+from core.constants import Expects, Has
 
 
 class UnsatisfiedClassType(ValueError):

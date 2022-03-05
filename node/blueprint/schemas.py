@@ -9,10 +9,11 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from datetime import datetime
+import email
 from typing import Any, List
 
 from pydantic import BaseModel, EmailStr, Field, FilePath
-from utils.constants import (
+from core.constants import (
     UUID_KEY_LENGTH,
     AcademicExperience,
     AddressUUID,
@@ -327,6 +328,21 @@ class Tokens(BaseModel):
         ...,
         description="The date and time from where this token was generated.",
     )
+
+
+class Users(BaseModel):
+    unique_address: AddressUUID | str = Field(
+        ...,
+        description="The unique address of the user in the blockchain network.",
+        max_length=UUID_KEY_LENGTH,
+    )
+    # first_name
+    # last_name
+    # password
+    # username
+    # email
+    # user_type
+    # user_activity_date_registered
 
 
 # # Entity API — END

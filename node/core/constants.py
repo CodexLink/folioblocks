@@ -1,5 +1,5 @@
 """
-Constants for the Blockchain (Node) System.
+Literal Constants (constants.py) | A set of variables for references for the components that needs it.
 
 This file is part of FolioBlocks.
 
@@ -10,14 +10,12 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from enum import Enum, IntEnum, auto
 from pathlib import Path
-
-# * Libraries
-from typing import Any, Final, TypeVar, Union
+from typing import Any, Final
 from typing import NewType as _N
+from typing import TypeVar, Union
 
 from asgiref.typing import ASGIApplication
 
-# from api.core.schemas import Block
 
 # ! Priority Classification Types
 class DocToRequestTypes(IntEnum):

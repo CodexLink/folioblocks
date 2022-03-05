@@ -18,25 +18,23 @@ from databases import Database
 from fastapi import FastAPI
 from fastapi_utils.tasks import repeat_every
 
-from api.core.schemas import Tokens
-from api.endpoints.admin import admin_router
-from api.endpoints.dashboard import dashboard_router
-from api.endpoints.entity import entity_router
-from api.endpoints.explorer import explorer_router
-from api.endpoints.node import node_router
-from database.core import close_resources, initialize_resources
-from database.models import tokens
-from utils.args import args_handler as ArgsHandler
-from utils.constants import (
+from api.admin import admin_router
+from api.dashboard import dashboard_router
+from api.entity import entity_router
+from api.explorer import explorer_router
+from api.node import node_router
+from blueprint.models import tokens
+from blueprint.schemas import Tokens
+from core.args import args_handler as ArgsHandler
+from core.constants import (
     ASGI_APP_TARGET,
     ASYNC_TARGET_LOOP,
     LoggerLevelCoverage,
     NodeRoles,
     TokenType,
 )
-from utils.conversion import list_to_dict
-from utils.logger import LoggerHandler
-from utils.node import look_for_nodes
+from core.logger import LoggerHandler
+from utils.processors import close_resources, initialize_resources
 
 """
 # # Startup Functions
@@ -102,7 +100,7 @@ async def initialize() -> None:
         # Authenticate by local first.
         # Should do the node lookup.
         logger.info("Step 3 | Detected as MASTER Node, looking for node lookup.")
-        await look_for_nodes()
+        # TODO: look_for_nodes() function has been deleted.
         logger.info(
             f"Attempting to look at other nodes at Port {parsed_args.port} (inside {parsed_args.host})..."
         )
@@ -122,10 +120,10 @@ async def initialize() -> None:
 async def terminate() -> None:
     """
     TODO:
-                - Shutdown SQL Session (DONE???)
-                - Remove or finish any request or finish the consensus.
-                - Put all other JWT on expiration or on blacklist.
-                - We may do the asyncio.gather sooner or later.
+        - Shutdown SQL Session (DONE???)
+        - Remove or finish any request or finish the consensus.
+        - Put all other JWT on expiration or on blacklist.
+        - We may do the asyncio.gather sooner or later.
     """
 
     await close_resources(parsed_args.keys[0])
@@ -148,7 +146,7 @@ TODO
 
 
 @api_handler.on_event("startup")
-@repeat_every(seconds=4)
+@repeat_every(seconds=120, wait_first=True)
 async def jwt_invalidation() -> None:
 
     token_query = tokens.select().where(tokens.c.state != TokenType.EXPIRED)

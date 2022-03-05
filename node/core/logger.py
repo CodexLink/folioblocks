@@ -1,6 +1,7 @@
 """
-Logger — A customized logger that makes the uvicorn logger and the top-level logger co-exist from one another.
-The logging for both may be seperate but their formatting should be consistent.
+Custom Logger (logger.py) — A customized logger that makes uvicorn logger and the top-level logger co-exist from one another.
+
+Please note that their logging reference were seperated but their formatting should be consistent.
 
 This file is part of FolioBlocks.
 
@@ -20,7 +21,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from utils.constants import LoggerLevelCoverage
+from core.constants import LoggerLevelCoverage
 
 
 class CustomInjectLoggerConfig(BaseModel):

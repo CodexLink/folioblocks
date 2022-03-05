@@ -11,10 +11,10 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from typing import Any
 
-from api.core.schemas import NodeInfoContext, NodeNegotiation, NodeNegotiationProcess
+from blueprint.schemas import NodeInfoContext, NodeNegotiation, NodeNegotiationProcess
+from core.constants import BaseAPI, NodeAPI
+from core.dependencies import ensure_authorized, ensure_past_negotiations
 from fastapi import APIRouter, Depends
-from utils.constants import BaseAPI, NodeAPI, UserEntity
-from utils.database import ensure_authorized, ensure_past_negotiations
 
 node_router = APIRouter(
     prefix="/node",
@@ -37,7 +37,7 @@ node_router = APIRouter(
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
 )
 async def get_chain_info(
-    auth: Any = Depends(ensure_authorized(UserEntity.NODE_USER)),
+    auth: Any = Depends(ensure_authorized),
 ) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
@@ -53,7 +53,7 @@ async def get_chain_info(
 )
 async def pre_post_negotiate(
     phase_state: str | None = None,
-    role: Any = Depends(ensure_authorized(UserEntity.NODE_USER)),  # TODO: # ! No TYPE!
+    role: Any = Depends(ensure_authorized),  # TODO: # ! No TYPE!
 ):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 

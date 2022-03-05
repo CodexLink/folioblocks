@@ -15,9 +15,9 @@ This endpoint should be used for generating users as a organization or as a node
 
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 
-from utils.constants import BaseAPI
+from core.constants import BaseAPI
 
 admin_router = APIRouter(
     prefix="/admin",

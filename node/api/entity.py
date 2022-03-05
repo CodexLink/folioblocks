@@ -9,23 +9,21 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 from datetime import datetime, timedelta
 from enum import EnumMeta
+from http import HTTPStatus
 from os import environ as env
 from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
 
 import jwt
-from api.core.schemas import (
+from blueprint.models import tokens, users
+from blueprint.schemas import (
     EntityLoginCredentials,
     EntityLoginResult,
     EntityRegisterCredentials,
     EntityRegisterResult,
 )
-from database.models import users, tokens
-from fastapi import APIRouter, Depends, HTTPException
-
-# from database.models import Association
-from utils.constants import (
+from core.constants import (
     JWT_ALGORITHM,
     JWT_DAY_EXPIRATION,
     UUID_KEY_PREFIX,
@@ -37,7 +35,9 @@ from utils.constants import (
     RawData,
     UserEntity,
 )
-from utils.database import get_db_instance, hash_user_password, verify_user_hash
+from core.dependencies import get_db_instance
+from fastapi import APIRouter, Depends, HTTPException
+from utils.processors import hash_user_password, verify_user_hash
 
 entity_router = APIRouter(
     prefix="/entity",
@@ -69,7 +69,7 @@ async def register_entity(
     # If there are no association then push that first.
     # db.execute(Association(name="Test"))
 
-    uaddr_ref: AddressUUID = AddressUUID(f"{UUID_KEY_PREFIX}:{uuid4().hex}")
+    unique_address_ref: AddressUUID = AddressUUID(f"{UUID_KEY_PREFIX}:{uuid4().hex}")
     dict_credentials: dict[str, Any] = credentials.dict()
     is_node: bool = False
     # Save something from the database here.
@@ -94,7 +94,7 @@ async def register_entity(
 
     data = users.insert().values(
         **dict_credentials,
-        uaddr=uaddr_ref,
+        unique_address=unique_address_ref,
         password=hash_user_password(RawData(credentials.password))
         # association=, # I'm not sure on what to do with this one, as of now.
     )
@@ -103,12 +103,12 @@ async def register_entity(
         await db.execute(data)
     except IntegrityError:
         raise HTTPException(
-            status_code=409,
+            status_code=HTTPStatus.CONFLICT,
             detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
         )
 
     data = EntityRegisterResult(
-        user_address=uaddr_ref,
+        user_address=unique_address_ref,
         username=credentials.username,
         date_registered=datetime.now(),
         role=dict_credentials["user_type"],
@@ -136,7 +136,10 @@ async def login_entity(
     # TODO: This is implementable when we have the capability to lock out users due to suspicious activities.
     # * Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
 
+    print(dir(fetched_data), fetched_data)
+
     if fetched_data is not None:
+        # payload = Users
         payload: dict[str, Any] = dict(zip(fetched_data._fields, fetched_data))
 
         # Adjust the payload to be compatible with JWT encoding.
@@ -163,25 +166,27 @@ async def login_entity(
 
             # Put a new token to the database.
             new_token = tokens.insert().values(
-                from_user=fetched_data.uaddr, token=token, expiration=jwt_expire_at
+                from_user=fetched_data.unique_address,
+                token=token,
+                expiration=jwt_expire_at,
             )
 
             try:
                 await db.execute(new_token)
 
                 return EntityLoginResult(
-                    user_address=fetched_data.uaddr,
+                    user_address=fetched_data.unique_address,
                     jwt_token=JWTToken(token),
                     expiration=jwt_expire_at,
                 )
             except IntegrityError:
                 raise HTTPException(
-                    status_code=400,
+                    status_code=HTTPStatus.BAD_REQUEST,
                     detail="For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible.",
                 )
 
     raise HTTPException(
-        status_code=404,
+        status_code=HTTPStatus.NOT_FOUND,
         detail="User is not found. Please check your credentials and try again.",
     )
 
@@ -192,7 +197,10 @@ async def login_entity(
     summary="Logs out the entity from the blockchain network.",
     description="An API endpoint that logs out any entity to the blockchain network.",
 )
+
+# TODO: Implement logout then we go implement the info for the header testing and then we go to the blockchain.
 async def logout_entity(
+    key: Any = Depends(),  # make ensure authorized compatible for with-return and non-return context.
     db: Any = Depends(get_db_instance),  # Probably another dependency injection.
 ) -> EntityLoginResult:
     return EntityLoginResult()
@@ -205,4 +213,4 @@ async def logout_entity(
     description="An API endpoint that obtains information of the user. This is useful when browsed in the website.",
 )
 async def get_entity():  # * This requires custom pydantic model.
-    raise HTTPException(status_code=403, detail="Not yet implemented.")
+    raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Not yet implemented.")

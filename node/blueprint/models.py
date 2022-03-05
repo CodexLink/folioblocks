@@ -10,7 +10,7 @@ FolioBlocks is distributed in the hope that it will be useful, but without any w
 you should have received a copy of the gnu general public license along with FolioBlocks. if not, see <https://www.gnu.org/licenses/>.
 """
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # TODO: ???
     pass
 
 
@@ -27,8 +27,8 @@ from sqlalchemy import (
 )
 
 from sqlalchemy.orm import relationship
-from utils.constants import UserEntity
-from utils.constants import (
+from core.constants import UserEntity
+from core.constants import (
     UserActivityState,
     BlacklistDuration,
     GroupType,
@@ -73,7 +73,7 @@ users = Table(
     "users",
     model_metadata,
     Column(
-        "uaddr",
+        "unique_address",
         String(35),
         nullable=False,
         primary_key=True,
@@ -103,7 +103,7 @@ blacklisted_users = Table(
     "blacklisted_users",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("user", String(38), ForeignKey("users.uaddr"), nullable=False),
+    Column("user", String(38), ForeignKey("users.unique_address"), nullable=False),
     Column("reason", Text, nullable=False),
     Column(
         "duration",
@@ -116,12 +116,11 @@ blacklisted_users = Table(
 
 blacklisted_users.user_ref = relationship(users, foreign_keys=["user"])  # type: ignore
 
-# TODO: Implement this token table as well as the logout then we go implement the info for the header testing and then we go to the blockchain.
 tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("from_user", String(38), ForeignKey("users.uaddr"), nullable=False),
+    Column("from_user", String(38), ForeignKey("users.unique_address"), nullable=False),
     Column("token", Text, nullable=False),
     Column(
         "state",

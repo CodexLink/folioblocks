@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with Fol
 from http import HTTPStatus
 from fastapi import Query, APIRouter
 from typing import List
-from api.core.schemas import (
+from blueprint.schemas import (
     Applicant,
     Applicants,
     DashboardContext,
@@ -30,8 +30,8 @@ from api.core.schemas import (
     # UserLoginResult,
     UserLogoutIn,
 )
-from utils.constants import BaseAPI
-from utils.constants import AddressUUID, DashboardAPI, ItemReturnCount
+from core.constants import BaseAPI
+from core.constants import AddressUUID, DashboardAPI, ItemReturnCount
 
 dashboard_router = APIRouter(
     prefix="/dashboard",

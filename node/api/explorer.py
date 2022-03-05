@@ -18,7 +18,7 @@ if __name__ == "__main__":
         "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
     )
 
-from api.core.schemas import (
+from blueprint.schemas import (
     Address,
     Addresses,
     Block,
@@ -29,7 +29,7 @@ from api.core.schemas import (
     Transactions,
 )
 from fastapi import APIRouter, Depends, Query
-from utils.constants import (
+from core.constants import (
     AddressUUID,
     BaseAPI,
     BlockID,
@@ -38,7 +38,7 @@ from utils.constants import (
     TxID,
 )
 
-# from api.core.models import Blockchain
+# from core.models import Blockchain
 
 """
 # Regarding Dependency Injection on this endpoint.

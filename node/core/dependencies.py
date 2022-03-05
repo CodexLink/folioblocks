@@ -1,5 +1,5 @@
 """
-Utility Functions for the Database
+Dependencies (dependencies.py) | Contains a set of functions that is classified to run under fastapi.Depends and a sub-dependencies of `depends`.
 
 This file is part of FolioBlocks.
 
@@ -8,25 +8,14 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import Any, Callable
-
 from databases import Database
-from passlib.context import CryptContext
+from core.constants import UserEntity, JWTToken
+from fastapi import Header, Depends, HTTPException
+from http import HTTPStatus
+from blueprint.models import tokens
+from blueprint.schemas import Tokens
 
-from utils.constants import HashedData, RawData, UserEntity
-
-pwd_handler = CryptContext(schemes=["bcrypt"])
 db_instance: Database
-
-# Initialize.
-
-
-def hash_user_password(pwd: RawData) -> HashedData:
-    return pwd_handler.hash(pwd)
-
-
-def verify_user_hash(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
-    return pwd_handler.verify(real_pwd, hashed_pwd)
 
 
 def store_db_instance(instance: Database) -> None:
@@ -39,37 +28,30 @@ def get_db_instance() -> Database:
     return db_instance
 
 
-def get_db(fn: Callable) -> Callable:
-    global db_instance
-    # db_instance: Database = get_db_instance()  # This is incomplete.
+async def ensure_authorized(
+    required_role: UserEntity | None = None,
+    x_token: JWTToken = Header(...),
+    db: Database = Depends(get_db_instance),
+) -> None:
 
-    def decorator(*args: list[Any], **kwargs: dict[Any, Any]) -> Database:
-        return fn(*args, **kwargs)
+    if x_token:
+        req_ref_token = tokens.select().where(tokens.c.token == x_token)
 
-    return decorator
+        ref_token = Tokens.parse_obj(await db.fetch_one(req_ref_token))
 
+        if ref_token:
+            print(dir(ref_token))
+            print("Has x_token ref:", ref_token)
+            # user_ref = users.select().where(users.c.unique_address == token_ref.from_user)
 
-@get_db
-def ensure_authorized(
-    role: UserEntity, id: int | None = None  # TODO.
-) -> None:  # Use session ID for authentication.
-
-    if role is UserEntity.ADMIN_USER:
-        pass
-
-    elif role is UserEntity.NODE_USER:
-        pass
-
-    else:
-        pass
-
-    print("This ensures that the person is authorized.")
-    return
+    raise HTTPException(
+        status_code=HTTPStatus.UNAUTHORIZED,
+        detail="You are unauthorized to access this endpoint. Please login first.",
+    )
 
     # Ensure that someone that access this should be under the role of ... and should be authorized to its local.
 
 
-@get_db
 def ensure_past_negotiations() -> bool:
     # Maybe query or use the current session or the Node ID.
     # We need to contact the other part to ensure that there is negotiations.
