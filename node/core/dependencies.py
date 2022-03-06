@@ -14,6 +14,7 @@ from fastapi import Header, Depends, HTTPException
 from http import HTTPStatus
 from blueprint.models import tokens
 from blueprint.schemas import Tokens
+from blueprint.models import users
 
 db_instance: Database
 
@@ -32,9 +33,16 @@ def get_db_instance() -> Database:
 
 # We can make this one as a decorator and use it from one of the functions that validates if the token or the user who holds it has a respective role.
 
+# * Cl
+# async def ensure_authorized_as_admin
+
+# async def ensure_authorized_as_node
+
+# async def ensure_authorized
+
 
 async def ensure_authorized(
-    role: UserEntity | None = None,
+    # role: UserEntity | None = None,
     x_token: JWTToken = Header(...),
     db: Database = Depends(get_db_instance),
 ) -> None:
@@ -43,13 +51,16 @@ async def ensure_authorized(
 
     if x_token:
         req_ref_token = tokens.select().where(tokens.c.token == x_token)
-
         ref_token = Tokens.parse_obj(await db.fetch_one(req_ref_token))
 
         if ref_token:
-            print(dir(ref_token))
-            print("Has x_token ref:", ref_token)
-            # user_ref = users.select().where(users.c.unique_address == token_ref.from_user)
+            user_ref = users.select().where(
+                users.c.unique_address == ref_token.from_user
+            )
+            user = await db.fetch_one(user_ref)
+
+            if user:
+                return
 
     raise HTTPException(
         status_code=HTTPStatus.UNAUTHORIZED,
