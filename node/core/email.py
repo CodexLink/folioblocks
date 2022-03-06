@@ -11,17 +11,14 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
-from asyncio import get_event_loop
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from logging import Logger, getLogger
 from os import environ as env
-from typing import Callable, Generator
 
 from aiosmtplib import SMTP, SMTPConnectError, SMTPServerDisconnected
 from pydantic import EmailStr
 from utils.exceptions import InsufficientCredentials
-from utils.processors import verify_hash_context
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
@@ -54,7 +51,7 @@ class EmailService:
 
     async def connect(self) -> None:
 
-        retries_count: int = 1  # Protect the constant.
+        retries_count: int = 1  # Protect the constant for iteration purposes.
 
         while retries_count <= self.max_retries:
             try:
@@ -130,12 +127,6 @@ class EmailService:
     def close(self) -> None:
         return self._service.close()
 
-    # @classmethod
-
-
-# * Note that this assumes python-dotenv initializes the .env.
-
-email_service: EmailService | None = None
 
 """
 # Kudos to Helios for the logic: https://stackoverflow.com/questions/63189935/is-it-possible-to-use-the-same-object-in-multiple-files
@@ -143,11 +134,13 @@ email_service: EmailService | None = None
 * By the time I code this, I can't comprehend basic logic anymore because I'm tired. But I do have knowledge about global variables, it's just that for this case we are actually sharing this instance across the whole system.
 
 """
+email_service: EmailService | None = None
 
 
 def get_email_instance_or_initialize() -> EmailService:
     global email_service
 
+    # * Note that this assumes python-dotenv initializes the .env.
     address: str | None = env.get("EMAIL_ADDRESS", None)
     pwd: str | None = env.get("EMAIL_PWD", None)
 
