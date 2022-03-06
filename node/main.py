@@ -35,6 +35,7 @@ from core.constants import (
 )
 from core.logger import LoggerHandler
 from utils.processors import close_resources, initialize_resources
+from asyncio import create_task, sleep
 
 """
 # # Startup Functions
@@ -46,6 +47,7 @@ implementation not being a class-based. I don't want to have a bad time.
 
 """
 parsed_args: Namespace = ArgsHandler.parse_args()
+
 logger_config = LoggerHandler.init(
     base_config=uvicorn.config.LOGGING_CONFIG,
     disable_file_logging=parsed_args.no_log_file,
@@ -58,8 +60,13 @@ dictConfig(logger_config)
 
 logger: logging.Logger = logging.getLogger(ASYNC_TARGET_LOOP)
 database: Database = initialize_resources(
-    __name__, parsed_args.keys[0] if parsed_args.keys is not None else None
+    __name__,
+    NodeRoles(parsed_args.prefer_role),
+    parsed_args.keys[0] if parsed_args.keys is not None else None,
 )
+
+# We need to delay this email instance, otherwise it will look for potentially non-existing .env file if this system was initially instantiated for the first time.
+from core.email import get_email_instance_or_initialize
 
 """
 # # API Router Setup and Initialization
@@ -75,11 +82,11 @@ my time more than making other features, which I still haven't done.
 api_handler: FastAPI = FastAPI()
 
 api_handler.include_router(entity_router)  # # WARNING REGARDING SIDE NODE.
-api_handler.include_router(node_router)
+api_handler.include_router(node_router)  # * Email can be used here.
 
 if parsed_args.prefer_role is not NodeRoles.SIDE:
     api_handler.include_router(admin_router)
-    api_handler.include_router(dashboard_router)
+    api_handler.include_router(dashboard_router)  # * Email can be used here.
     api_handler.include_router(explorer_router)
 
 # * Event Functions.
@@ -96,7 +103,7 @@ async def initialize() -> None:
     # Do something here.
     logger.info("Authenticated...")  # Require...
 
-    if parsed_args.prefer_role is NodeRoles.MASTER:
+    if parsed_args.prefer_role == NodeRoles.MASTER.name:
         # Authenticate by local first.
         # Should do the node lookup.
         logger.info("Step 3 | Detected as MASTER Node, looking for node lookup.")
@@ -106,6 +113,8 @@ async def initialize() -> None:
         )
 
         logger.info("Step 4 | Initializing Email Service...")
+
+        create_task(get_email_instance_or_initialize().connect())
 
         logger.info("Step 4 | Email service instantiated.")
 
@@ -120,13 +129,17 @@ async def initialize() -> None:
 async def terminate() -> None:
     """
     TODO:
-        - Shutdown SQL Session (DONE???)
-        - Remove or finish any request or finish the consensus.
-        - Put all other JWT on expiration or on blacklist.
-        - We may do the asyncio.gather sooner or later.
+                    - Shutdown SQL Session (DONE???)
+                    - Remove or finish any request or finish the consensus.
+                    - Put all other JWT on expiration or on blacklist.
+                    - We may do the asyncio.gather sooner or later.
     """
+    get_email_instance_or_initialize().close()
     await database.disconnect()
     await close_resources(parsed_args.keys[0])
+
+    logger.info("Ensuring all processes closed down...")
+    await sleep(3)
 
 
 # A set of functions to run concurrently interval.
@@ -161,20 +174,18 @@ async def jwt_invalidation() -> None:
         token = Tokens.parse_obj(each_tokens)
 
         logger.debug(
-            f"@ Token {token.id} | JWT Invalidation Condition | '(Should be) >' {current_datetime > token.expiration} | '(Should be) ==' {current_datetime == token.expiration} | `<' {current_datetime < token.expiration}"
+            f"@ Token {token.id} | JWT Invalidation Condition (of {current_datetime.isoformat()} vs. {token.expiration.isoformat()}) | '(Should be) >' {current_datetime > token.expiration} | '(Should be) ==' {current_datetime == token.expiration} | `<' {current_datetime < token.expiration}"
         )
 
         if current_datetime >= token.expiration:
+            # Instead of deletion, change the state instead.
             token_to_del = (
                 tokens.update()
                 .where(tokens.c.expiration == token.expiration)
                 .values(state=TokenStatus.EXPIRED)
             )
 
-            this_token = await database.fetch_one(token_to_del)
-
-            # Instead of deletion, change the state instead.
-            this_token
+            await database.fetch_one(token_to_del)
 
             # Character beyond 25th will be truncated. This is just a pure random though.
             logger.info(

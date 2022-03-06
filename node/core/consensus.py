@@ -1,0 +1,2 @@
+class Consensus:
+    pass

@@ -40,9 +40,11 @@ from core.dependencies import store_db_instance
 from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from passlib.context import CryptContext
+from core.constants import NodeRoles
 
 from utils.decorators import assert_instance
 from utils.exceptions import NoKeySupplied
+from getpass import getpass
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -67,7 +69,7 @@ async def acrypt_file(
         afile_content = await acontent_buffer.read()
 
     try:
-        logger.info(
+        logger.debug(
             f"Async: {'Decrypting' if aprocess is CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
         )
         if aprocess.TO_DECRYPT:
@@ -93,7 +95,7 @@ async def acrypt_file(
         async with aiofiles.open(afilename, "wb") as content_buffer:
             await content_buffer.write(aprocessed_content)
 
-        logger.info(
+        logger.debug(
             f"Async: Successfully {'decrypted' if aprocess is CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
         )
 
@@ -168,7 +170,7 @@ def crypt_file(
 
 # # File Resource Initializers and Validators, Blockchain and Database — START
 def initialize_resources(
-    runtime: RuntimeLoop, auth_key: KeyContext | str | None = None
+    runtime: RuntimeLoop, role: NodeRoles, auth_key: KeyContext | str | None = None
 ) -> Database:
     """
     A non-async initializer for both database and blockchain files.
@@ -275,12 +277,45 @@ def initialize_resources(
 
             logger.info("Encrypting resources done.")
 
+            if role is NodeRoles.MASTER:
+                logger.warning(
+                    "The system detects the invocation of role as a MASTER. Please insert email address and password for the email services."
+                )
+                logger.warning(
+                    "Please ENSURE that credentials are correct. Don't worry, it will be hashed along with the `auth_key` that is generated here."
+                )
+
+            while True:
+                email: RawData = RawData(input("Email Address > "))
+                pwd: RawData = RawData(getpass("Email Password > "))
+
+                if not email or not pwd:
+                    logger.warning(
+                        "The inputs from email address or password is missing! Please try again."
+                    )
+                    continue
+
+                logger.critical(
+                    "Are you sure your credentials are correct? There's no going back once proceed."
+                )
+
+                ensure: str = input(
+                    "[Press any key to continue / N or n to re-type credentials] >  "
+                )
+
+                if ensure == "n" or ensure == "N":
+                    continue
+
+                break
+
             # Override AUTH_FILE_NAME after encryption.
             logger.info("Generating a new key environment file ...")
             with open(AUTH_FILE_NAME, "w") as env_writer:
                 env_context: list[str] = [
                     f"AUTH_KEY={auth_key.decode('utf-8')}",
                     f"SECRET_KEY={token_hex(32)}",
+                    f"EMAIL_ADDRESS={email}",
+                    f"EMAIL_PWD={pwd}",
                 ]
 
                 for each_context in env_context:
@@ -368,11 +403,11 @@ def validate_file_keys(
 # # File Resource Initializers and Validators, Blockchain and Database — END
 
 # # Variable Password Crypt Handlers — START
-def hash_user_password(pwd: RawData) -> HashedData:
+def hash_context(pwd: RawData) -> HashedData:
     return pwd_handler.hash(pwd)
 
 
-def verify_user_hash(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
+def verify_hash_context(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
     return pwd_handler.verify(real_pwd, hashed_pwd)
 
 

@@ -79,6 +79,12 @@ AUTH_FILE_NAME: Final[str] = ".env"
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"
 
+# # Constants, Auth: SMTP Email
+
+DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
+DEFAULT_SMTP_PORT: Final[int] = 465
+DEFAULT_SMTP_CONNECT_MAX_RETRIES: Final[int] = 10
+
 # # Constants, General
 ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
@@ -203,8 +209,8 @@ class LoggerLevelCoverage(Enum):
 
 
 class NodeRoles(Enum):
-    MASTER = "MASTER_ROLE"
-    SIDE = "SIDE_ROLE"
+    MASTER = "MASTER"
+    SIDE = "SIDE"
 
 
 # # Enums, Database

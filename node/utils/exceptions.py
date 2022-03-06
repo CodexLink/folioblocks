@@ -42,9 +42,7 @@ class MaxJWTOnHold(AssertionError):
         max_hold: int = MAX_JWT_HOLD_TOKEN,
     ) -> None:
 
-        message: Final[
-            str
-        ] = f"This user {uuids[0]} ({uuids[1]}) currently witholds {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
+        message: str = f"This user {uuids[0]} ({uuids[1]}) currently witholds {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
 
         super().__init__(message)
 
@@ -52,9 +50,7 @@ class MaxJWTOnHold(AssertionError):
 class NoKeySupplied(ValueError):
     def __init__(self, fn_ref: Callable, extra_info: str | None = None) -> None:
 
-        message: Final[
-            str
-        ] = f"This function {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
+        message: str = f"This function {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
 
         super().__init__(message)
 
@@ -63,5 +59,14 @@ class UnsatisfiedClassType(ValueError):
     def __init__(self, has: Type[Expects], expected: Type[Has]) -> None:
 
         message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
+
+        super().__init__(message)
+
+
+class InsufficientCredentials(ValueError):
+    def __init__(
+        self, what_service: Callable | object, fields_require: list[str] | str
+    ) -> None:
+        message: str = f"This entity {what_service} requires the following credentals: {fields_require}."
 
         super().__init__(message)

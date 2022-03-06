@@ -7,6 +7,7 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
+from asyncio import create_task
 from datetime import datetime, timedelta
 from enum import EnumMeta
 from http import HTTPStatus
@@ -22,7 +23,6 @@ from blueprint.schemas import (
     EntityLoginResult,
     EntityRegisterCredentials,
     EntityRegisterResult,
-    Users,
 )
 from core.constants import (
     JWT_ALGORITHM,
@@ -42,7 +42,10 @@ from core.constants import (
 from core.dependencies import get_db_instance
 from fastapi import APIRouter, Depends, HTTPException
 from utils.exceptions import MaxJWTOnHold
-from utils.processors import hash_user_password, verify_user_hash
+from utils.processors import hash_context, verify_hash_context
+
+# from main import email_instance_service
+from core.email import get_email_instance_or_initialize
 
 entity_router = APIRouter(
     prefix="/entity",
@@ -100,12 +103,19 @@ async def register_entity(
     data = users.insert().values(
         **dict_credentials,
         unique_address=unique_address_ref,
-        password=hash_user_password(RawData(credentials.password))
+        password=hash_context(RawData(credentials.password))
         # association=, # I'm not sure on what to do with this one, as of now.
     )
 
     try:
         await db.execute(data)
+        create_task(
+            get_email_instance_or_initialize().send(
+                content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                subject="Welcome to Folioblocks!",
+                to=credentials.email,
+            )
+        )
 
     except IntegrityError:
         raise HTTPException(
@@ -154,7 +164,7 @@ async def login_entity(
 
         payload["date_registered"] = payload["date_registered"].isoformat()
 
-        if verify_user_hash(
+        if verify_hash_context(
             RawData(credentials.password), HashedData(fetched_data["password"])
         ):
             other_tokens_stmt = tokens.select().where(
