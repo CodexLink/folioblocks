@@ -12,7 +12,7 @@ class Blockchain(Consensus):
     async def get_last_block(self) -> None:
         pass
 
-    async def search_for(self, type, uid: AddressUUID | str) -> None:
+    async def search_for(self, type: str, uid: AddressUUID | str) -> None:
         pass
 
     async def initiate_consensus(self) -> None:

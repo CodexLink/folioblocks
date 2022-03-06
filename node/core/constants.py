@@ -232,7 +232,9 @@ class TokenStatus(Enum):
     EXPIRED = "Token Expired"
     RECENTLY_CREATED = "Token Recently Created"
     ON_USE = "Token On Use"
-    TOKEN_RETAINED_WHILE_EXPIRED = "Token Expired but Retained"
+    TOKEN_RETAINED_WHILE_EXPIRED = (
+        "Token Expired but Retained"  # TODO: Not sure on this one.
+    )
 
 
 class TaskType(Enum):

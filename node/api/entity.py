@@ -40,7 +40,7 @@ from core.constants import (
     UserEntity,
 )
 from core.dependencies import get_db_instance
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from utils.exceptions import MaxJWTOnHold
 from utils.processors import hash_context, verify_hash_context
 
@@ -123,14 +123,12 @@ async def register_entity(
             detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
         )
 
-    data = EntityRegisterResult(
+    return EntityRegisterResult(
         user_address=unique_address_ref,
         username=credentials.username,
         date_registered=datetime.now(),
         role=dict_credentials["user_type"],
     )
-
-    return data
 
 
 @entity_router.post(
@@ -226,14 +224,33 @@ async def login_entity(
     tags=[EntityAPI.ENTITY_GENERAL_API.value],
     summary="Logs out the entity from the blockchain network.",
     description="An API endpoint that logs out any entity to the blockchain network.",
+    status_code=HTTPStatus.ACCEPTED,
 )
 
 # TODO: Implement logout then we go implement the info for the header testing and then we go to the blockchain.
 async def logout_entity(
-    key: Any = Depends(),  # make ensure authorized compatible for with-return and non-return context.
-    db: Any = Depends(get_db_instance),  # Probably another dependency injection.
-) -> EntityLoginResult:
-    return EntityLoginResult()
+    x_token: JWTToken = Header(..., description="The acquired token to invalidate."),
+    db: Any = Depends(get_db_instance),
+) -> None:
+
+    fetched_token = tokens.select().where(
+        (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
+    )
+
+    if await db.fetch_one(fetched_token):
+        token_ref = (
+            tokens.update()
+            .where(tokens.c.token == x_token)
+            .values(state=TokenStatus.EXPIRED)
+        )
+
+        if await db.execute(token_ref):
+            return
+
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_FOUND,
+        detail="The inferred token does not exist or is already labelled as expired!",
+    )
 
 
 # TODO: USER INFORMATION ENDPOINT

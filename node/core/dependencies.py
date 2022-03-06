@@ -14,9 +14,9 @@ from blueprint.models import tokens, users
 from blueprint.schemas import Tokens
 from databases import Database
 from fastapi import Depends, Header, HTTPException
-
-from core.constants import JWTToken, UserEntity
 from sqlalchemy import select
+
+from core.constants import JWTToken, TokenStatus, UserEntity
 
 db_instance: Database
 
@@ -31,25 +31,27 @@ def get_db_instance() -> Database:
     return db_instance
 
 
-# ! Note that we may need multiple roles on one argument. Explore the | flag soon.
-
-# We can make this one as a decorator and use it from one of the functions that validates if the token or the user who holds it has a respective role.
-
-
 class EnsureAuthorized:
     def __init__(self, _as: UserEntity | list[UserEntity]) -> None:
         self._as: UserEntity | list[UserEntity] = _as
 
     async def __call__(
-        self, x_token: JWTToken = Header(...), db: Database = Depends(get_db_instance)
+        self,
+        x_token: JWTToken = Header(
+            ..., description="The token that is inferred for validation."
+        ),
+        db: Database = Depends(get_db_instance),
     ) -> None:
 
         if x_token:
-            req_ref_token = tokens.select().where(tokens.c.token == x_token)
+            req_ref_token = tokens.select().where(
+                (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
+            )
 
-            ref_token = Tokens.parse_obj(await db.fetch_one(req_ref_token))
+            req_token = await db.fetch_one(req_ref_token)
 
-            if ref_token:
+            if req_token:
+                ref_token = Tokens.parse_obj(req_token)
 
                 # ! I didn't use the Metadata().select() because its parameter whereclause blocks selective column to return.
                 # * Therefore use the general purpose sqlalchemy.select instead.
@@ -74,10 +76,8 @@ class EnsureAuthorized:
         )
 
 
+# TODO: Class version of this oen soon.
 def ensure_past_negotiations() -> bool:
     # Maybe query or use the current session or the Node ID.
     # We need to contact the other part to ensure that there is negotiations.
     return False
-
-
-# TODO: Verify custom key of something.

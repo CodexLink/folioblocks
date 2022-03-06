@@ -59,7 +59,7 @@ class EmailService:
                     f"Attempt #{retries_count} | Attempting to connect to email service ({self.url}) at port {self.port}."
                 )
 
-                self._service: SMTP = SMTP(
+                self._email_service: SMTP = SMTP(
                     hostname=self.url,
                     port=self.port,
                     username=self.username,
@@ -67,10 +67,10 @@ class EmailService:
                     use_tls=True,
                 )
 
-                await self._service.connect()
+                await self._email_service.connect()
                 logger.info("SMTP email service connected ...")
 
-                await self._service.ehlo()
+                await self._email_service.ehlo()
                 logger.debug(
                     f"SMTP send EHLO packets to {self.url} to initiate service."
                 )
@@ -103,7 +103,7 @@ class EmailService:
         subject: str,
         to: EmailStr,
     ) -> None:  # This should require a pydantic class for the message??????
-        if not self._service.is_connected:
+        if not self._email_service.is_connected:
             logger.debug(
                 "Email service is not available after multiple tries, ignoring this request..."
             )
@@ -118,14 +118,14 @@ class EmailService:
         message_context: MIMEText = MIMEText(content, "html", "utf-8")
 
         message_instance.attach(message_context)
-        await self._service.send_message(message_instance)
+        await self._email_service.send_message(message_instance)
 
         logger.info(
             f"Message has been sent. (Subject: {subject} | From: {message_instance['From']} | To: {to[:5]} ...)"
         )
 
     def close(self) -> None:
-        return self._service.close()
+        return self._email_service.close()
 
 
 """
