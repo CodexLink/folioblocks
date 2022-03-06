@@ -13,7 +13,7 @@ from typing import Any
 
 from blueprint.schemas import NodeInfoContext, NodeNegotiation, NodeNegotiationProcess
 from core.constants import BaseAPI, NodeAPI
-from core.dependencies import ensure_authorized, ensure_past_negotiations
+from core.dependencies import EnsureAuthorized, ensure_past_negotiations
 from fastapi import APIRouter, Depends
 
 from core.constants import UserEntity
@@ -39,7 +39,9 @@ node_router = APIRouter(
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
 )
 async def get_chain_info(
-    auth: Any = Depends(ensure_authorized),
+    auth: Any = Depends(
+        EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
+    ),
 ) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
     pass
 
@@ -50,12 +52,14 @@ async def get_chain_info(
         NodeAPI.NODE_TO_NODE_API.value,
     ],
     response_model=NodeNegotiation,
-    summary="Initiates and finishes negotiation from master node to side node and vice versa.",
+    summary="Initiates and finishes negotiation from mafster node to side node and vice versa.",
     description="An API endpoint that handles the negotiations from node-to-node.",  # TODO: Add some test cases. This was intended to ensure that we really know wtf are we doing.
 )
 async def pre_post_negotiate(
     phase_state: str | None = None,
-    role: Any = Depends(ensure_authorized),  # TODO: # ! No TYPE!
+    role: Any = Depends(
+        EnsureAuthorized(_as=UserEntity.NODE_USER)
+    ),  # TODO: # ! No TYPE!
 ):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 

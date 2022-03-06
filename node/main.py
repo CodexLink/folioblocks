@@ -125,7 +125,7 @@ async def terminate() -> None:
         - Put all other JWT on expiration or on blacklist.
         - We may do the asyncio.gather sooner or later.
     """
-
+    await database.disconnect()
     await close_resources(parsed_args.keys[0])
 
 

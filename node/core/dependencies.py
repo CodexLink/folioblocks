@@ -8,13 +8,15 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from databases import Database
-from core.constants import UserEntity, JWTToken
-from fastapi import Header, Depends, HTTPException
 from http import HTTPStatus
-from blueprint.models import tokens
+
+from blueprint.models import tokens, users
 from blueprint.schemas import Tokens
-from blueprint.models import users
+from databases import Database
+from fastapi import Depends, Header, HTTPException
+
+from core.constants import JWTToken, UserEntity
+from sqlalchemy import select
 
 db_instance: Database
 
@@ -33,41 +35,43 @@ def get_db_instance() -> Database:
 
 # We can make this one as a decorator and use it from one of the functions that validates if the token or the user who holds it has a respective role.
 
-# * Cl
-# async def ensure_authorized_as_admin
 
-# async def ensure_authorized_as_node
+class EnsureAuthorized:
+    def __init__(self, _as: UserEntity | list[UserEntity]) -> None:
+        self._as: UserEntity | list[UserEntity] = _as
 
-# async def ensure_authorized
+    async def __call__(
+        self, x_token: JWTToken = Header(...), db: Database = Depends(get_db_instance)
+    ) -> None:
 
+        if x_token:
+            req_ref_token = tokens.select().where(tokens.c.token == x_token)
 
-async def ensure_authorized(
-    # role: UserEntity | None = None,
-    x_token: JWTToken = Header(...),
-    db: Database = Depends(get_db_instance),
-) -> None:
+            ref_token = Tokens.parse_obj(await db.fetch_one(req_ref_token))
 
-    # print(role)
+            if ref_token:
 
-    if x_token:
-        req_ref_token = tokens.select().where(tokens.c.token == x_token)
-        ref_token = Tokens.parse_obj(await db.fetch_one(req_ref_token))
+                # ! I didn't use the Metadata().select() because its parameter whereclause blocks selective column to return.
+                # * Therefore use the general purpose sqlalchemy.select instead.
+                user_role_ref = select([users.c.user_type]).where(
+                    users.c.unique_address == ref_token.from_user
+                )
 
-        if ref_token:
-            user_ref = users.select().where(
-                users.c.unique_address == ref_token.from_user
-            )
-            user = await db.fetch_one(user_ref)
+                user_role = await db.fetch_val(user_role_ref)
 
-            if user:
-                return
+                if isinstance(self._as, list):
+                    for each_role in self._as:
+                        if user_role is not each_role:
+                            continue
+                        return
+                else:
+                    if user_role is self._as:
+                        return
 
-    raise HTTPException(
-        status_code=HTTPStatus.UNAUTHORIZED,
-        detail="You are unauthorized to access this endpoint. Please login first.",
-    )
-
-    # Ensure that someone that access this should be under the role of ... and should be authorized to its local.
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="You are unauthorized to access this endpoint. Please login first.",
+        )
 
 
 def ensure_past_negotiations() -> bool:

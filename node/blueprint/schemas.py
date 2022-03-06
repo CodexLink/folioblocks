@@ -331,16 +331,19 @@ class Tokens(BaseModel):
     )
 
 
+# TODO
+# This pydantic model should be flexible for other type of operations.
+# ! But this is not finalize because we can just do db.fetch_val().
 class Users(BaseModel):
     unique_address: AddressUUID | str = Field(
         ...,
         description="The unique address of the user in the blockchain network.",
         max_length=UUID_KEY_LENGTH,
     )
-    first_name: str = Field(
+    first_name: str | None = Field(
         None, description="The initial name of the entity", max_length=32
     )
-    last_name: str = Field(
+    last_name: str | None = Field(
         None,
         description="The last name of the entity, completing their identity.",
         max_length=32,
@@ -348,10 +351,10 @@ class Users(BaseModel):
     username: CredentialContext | str = Field(
         ..., description="Unique-readable indicator of the entity.", max_length=24
     )
-    password: CredentialContext | str = Field(
+    password: CredentialContext | str | None = Field(
         ..., description="Text-entry for authorizing the entity.", max_length=64
     )
-    email: EmailStr = Field(
+    email: EmailStr | None = Field(
         ..., description="The email address to contact for notifications."
     )
     user_type: UserEntity = Field(
