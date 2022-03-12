@@ -9,18 +9,18 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
-from typing import Callable
 from utils.exceptions import UnsatisfiedClassType
-from core.constants import CryptFileAction
+from core.constants import CryptFileAction, fn
+from typing import cast
 
-# ! I cannot resolve this one as of now.
-def assert_instance(f: Callable) -> Callable:
-    def deco(*args: list[str]) -> Callable:  # TODO
+# * Ref for the typing a decorator: https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped
+def assert_instance(f: fn) -> fn:  #
+    def deco(*args):
+
         # Assert 'to' have CryptFileAction. I prefer isinstance instead of enum.Enum.__members__.
-
         if not isinstance(args[2], CryptFileAction):  # Can be better.
             raise UnsatisfiedClassType(args[2], CryptFileAction)
 
         return f(*args)
 
-    return deco
+    return cast(fn, deco)

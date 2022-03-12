@@ -111,7 +111,7 @@ class EmailService:
 
         message_instance = MIMEMultipart("alternative")
 
-        message_instance["From"] = env.get("EMAIL_ADDRESS")
+        message_instance["From"] = env.get("EMAIL_SERVER_ADDRESS")
         message_instance["To"] = to
         message_instance["Subject"] = subject
 
@@ -127,6 +127,10 @@ class EmailService:
     def close(self) -> None:
         return self._email_service.close()
 
+    @property
+    def is_connected(self) -> bool:
+        return self._email_service.is_connected
+
 
 """
 # Kudos to Helios for the logic: https://stackoverflow.com/questions/63189935/is-it-possible-to-use-the-same-object-in-multiple-files
@@ -141,8 +145,8 @@ def get_email_instance_or_initialize() -> EmailService:
     global email_service
 
     # * Note that this assumes python-dotenv initializes the .env.
-    address: str | None = env.get("EMAIL_ADDRESS", None)
-    pwd: str | None = env.get("EMAIL_PWD", None)
+    address: str | None = env.get("EMAIL_SERVER_ADDRESS", None)
+    pwd: str | None = env.get("EMAIL_SERVER_PWD", None)
 
     if address is not None and pwd is not None:
 

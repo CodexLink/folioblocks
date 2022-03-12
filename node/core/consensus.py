@@ -26,13 +26,14 @@ class AdaptedPoETConsensus:
     async def echo(self) -> None:
         pass
 
+    # This function is just an API endpoin
     async def acknowledge(self) -> None:  # Of what???
         pass
 
-    async def initiate_consensus(self) -> None:
+    async def initiate(self) -> None:
         pass
 
-    async def resolve_consensus(self) -> None:
+    async def resolve(self) -> None:
         pass
 
     async def close(self) -> Coroutine:

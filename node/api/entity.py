@@ -68,10 +68,7 @@ entity_router = APIRouter(
 
 # TODO: Add the auth_code generation when endpoint is done.
 async def register_entity(
-    credentials: EntityRegisterCredentials,
-    db: Any = Depends(
-        get_db_instance
-    ),  # Soon??? on this context? existing_auth: Any = Depends(validate_auth_code)
+    credentials: EntityRegisterCredentials, db: Any = Depends(get_db_instance)
 ) -> EntityRegisterResult:
 
     # If there are no association then push that first.
@@ -91,7 +88,7 @@ async def register_entity(
         del dict_credentials["first_name"], dict_credentials["last_name"]
         is_node = True  # This is just a temporary.
 
-    dict_credentials["user_type"] = (
+    dict_credentials["type"] = (
         UserEntity.NODE_USER if is_node else UserEntity.DASHBOARD_USER
     )  #  else SQLEntityUser.ADMIN_USER
 
@@ -127,7 +124,7 @@ async def register_entity(
         user_address=unique_address_ref,
         username=credentials.username,
         date_registered=datetime.now(),
-        role=dict_credentials["user_type"],
+        role=dict_credentials["type"],
     )
 
 
@@ -207,6 +204,7 @@ async def login_entity(
                     jwt_token=JWTToken(token),
                     expiration=jwt_expire_at,
                 )
+
             except IntegrityError:
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
@@ -259,5 +257,5 @@ async def logout_entity(
     summary="Obtains the information of the entity.",
     description="An API endpoint that obtains information of the user. This is useful when browsed in the website.",
 )
-async def get_entity():  # * This requires custom pydantic model.
+async def get_entity() -> None:  # * This requires custom pydantic model.
     raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Not yet implemented.")

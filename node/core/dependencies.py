@@ -1,5 +1,5 @@
 """
-Dependencies (dependencies.py) | Contains a set of functions that is classified to run under fastapi.Depends and a sub-dependencies of `depends`.
+Dependencies (dependencies.py) | Contains a set of functions and attributes that is classified to run under FastAPI.Depends and a sub-dependencies of `depends`. Some attributes are required for the sake of authenticating the client for operation.
 
 This file is part of FolioBlocks.
 
@@ -8,17 +8,40 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from argparse import Namespace
+from asyncio import sleep
+from datetime import timedelta
 from http import HTTPStatus
+from logging import Logger, getLogger
+from os import environ as env
+from random import randint
+from secrets import token_hex
 
-from blueprint.models import tokens, users
-from blueprint.schemas import Tokens
+from aiohttp import ClientSession
+from blueprint.models import auth_codes, tokens, users
+from blueprint.schemas import EntityLoginResult, Tokens
 from databases import Database
 from fastapi import Depends, Header, HTTPException
+from pydantic import EmailStr
 from sqlalchemy import select
+from utils.processors import ensure_input_prompt, hash_context
 
-from core.constants import JWTToken, TokenStatus, UserEntity
+from core.constants import (
+    ASYNC_TARGET_LOOP,
+    AUTH_ENV_FILE_NAME,
+    CredentialContext,
+    HashedData,
+    JWTToken,
+    NodeRoles,
+    RawData,
+    TokenStatus,
+    UserEntity,
+)
+from core.email import get_email_instance_or_initialize
 
+auth_token: JWTToken
 db_instance: Database
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 
 def store_db_instance(instance: Database) -> None:
@@ -29,6 +52,131 @@ def store_db_instance(instance: Database) -> None:
 def get_db_instance() -> Database:
     global db_instance
     return db_instance
+
+
+def store_auth_token(token: JWTToken) -> None:
+    global auth_token
+    auth_token = token
+
+
+def get_auth_token() -> JWTToken:
+    global auth_token
+    return JWTToken(auth_token)
+
+
+def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
+    # To identify who the heck did it, we need to ensure fetch its token or otherwise put it to None. But we need to ensure that anyone who uses this must be authenticated. This function will be used by master anyway.
+    pass
+
+
+# ! Implement blacklisted users!
+async def authenticate_node_client(
+    instances: tuple[Namespace, Database],
+) -> None:  # Create a pydantic model from this.
+
+    user_credentials: tuple[CredentialContext, CredentialContext] | None = None
+
+    if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
+        logger.debug(
+            "Environment file doesn't contain the values for 'NODE_USERNAME' and/or 'NODE_PWD' or is entirely missing. Assuming first-time instance."
+        )
+
+        logger.info(
+            f"The system will create an auth_token for you to register yourself as a {NodeRoles.MASTER.name}. Please enter your email address:"
+        )
+
+        while True:
+            email_address: EmailStr = ensure_input_prompt(
+                "Email Address > ",
+                False,
+                "email address",
+                "You will have to restart the instance if you confirmed it late that it was a mistake!",
+            )
+
+            await get_email_instance_or_initialize().send(
+                content=f"<html><body><h1>Register Auth Code from olioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE</b></p><br><br><h4>Auth Code: {token_hex(randint(6, 12))}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                subject="Register Auth Code for Registration @ Folioblocks",
+                to=email_address,
+            )
+
+            logger.info(
+                f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint. Once done, press any key to continue and put your `auth_code` to login."
+            )
+
+            break
+
+        while True:
+            auth_code = ensure_input_prompt("Auth Code >", False, "auth code", None)
+            check_auth_stmt = (
+                auth_codes.select().where(auth_codes.c.code == auth_code).count()
+            )
+            auth_result = await instances[1].fetch_one(check_auth_stmt)
+
+            if not auth_result:
+                logger.error(
+                    "Auth code is not valid! Please enter again and check if you have mis-typed it."
+                )
+                continue
+
+            logger.info(
+                "Auth code is validated, please login and enter your credentials to save it from the environment file for future sessions."
+            )
+            break
+
+        while True:
+            if (
+                env.get("NODE_USERNAME", None) is None
+                and env.get("NODE_PWD", None) is None
+            ):
+                user_credentials = ensure_input_prompt(
+                    ["Node Username > ", "Node Password > "],
+                    [False, True],
+                    "username and password",
+                    "You will have to ensure it this time to avoid potential conflicts!",
+                )
+
+            # Create a session for this request.
+            login_session = ClientSession()
+
+            # Ensure that ENV will be covered here.
+            login_req = await login_session.post(
+                f"{instances[0].host}:{instances[0].port}/entity/login",
+                data={
+                    "username": env.get(
+                        "NODE_USERNAME",
+                        None if user_credentials is None else user_credentials[0],
+                    ),
+                    "password": env.get("NODE_PWD", None)
+                    if user_credentials is None
+                    else user_credentials[1],
+                },
+            )
+
+            if login_req.ok:
+                # Resolve via pydantic.
+                resolved_model = EntityLoginResult.parse_obj(login_req.json())
+
+                # With this, we should also save the context by using store_auth_token().
+                store_auth_token(JWTToken(resolved_model.jwt_token))
+
+                if (  # Ensure fields are None from the environment file and process the credentials.
+                    env.get("NODE_USERNAME", None) is None
+                    and env.get("NODE_PWD", None) is None
+                    and user_credentials
+                ):
+                    with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
+                        hashed_pwd: HashedData = hash_context(
+                            RawData(user_credentials[1])
+                        )
+                        env_writer.write(
+                            f"NODE_USERNAME={user_credentials[0]}, NODE_PWD={hashed_pwd}"
+                        )
+                    return
+
+            else:
+                logger.critical("Credentials are incorrect! Please try again...")
+                await sleep(3)
+                continue
 
 
 class EnsureAuthorized:
@@ -55,7 +203,7 @@ class EnsureAuthorized:
 
                 # ! I didn't use the Metadata().select() because its parameter whereclause blocks selective column to return.
                 # * Therefore use the general purpose sqlalchemy.select instead.
-                user_role_ref = select([users.c.user_type]).where(
+                user_role_ref = select([users.c.type]).where(
                     users.c.unique_address == ref_token.from_user
                 )
 
@@ -76,7 +224,7 @@ class EnsureAuthorized:
         )
 
 
-# TODO: Class version of this oen soon.
+# TODO: Class version of this one soon.
 def ensure_past_negotiations() -> bool:
     # Maybe query or use the current session or the Node ID.
     # We need to contact the other part to ensure that there is negotiations.

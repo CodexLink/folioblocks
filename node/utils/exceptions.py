@@ -8,7 +8,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import Callable, Final, Type
+from typing import Callable, Final
 
 from core.constants import (
     MAX_JWT_HOLD_TOKEN,
@@ -42,7 +42,7 @@ class MaxJWTOnHold(AssertionError):
         max_hold: int = MAX_JWT_HOLD_TOKEN,
     ) -> None:
 
-        message: str = f"This user {uuids[0]} ({uuids[1]}) currently witholds {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
+        message: str = f"This user {uuids[0]} ({uuids[1]}) currently withold/s {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
 
         super().__init__(message)
 
@@ -50,13 +50,13 @@ class MaxJWTOnHold(AssertionError):
 class NoKeySupplied(ValueError):
     def __init__(self, fn_ref: Callable, extra_info: str | None = None) -> None:
 
-        message: str = f"This function {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
+        message: str = f"This function / context {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
 
         super().__init__(message)
 
 
 class UnsatisfiedClassType(ValueError):
-    def __init__(self, has: Type[Expects], expected: Type[Has]) -> None:
+    def __init__(self, has: Expects, expected: Has) -> None:
 
         message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
 

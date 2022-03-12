@@ -16,13 +16,15 @@ from os import _exit
 from pathlib import Path
 from secrets import token_hex
 from sqlite3 import Connection, OperationalError, connect
+from typing import Any
 
 import aiofiles
 from sqlalchemy import create_engine
 from blueprint.models import model_metadata
+from blueprint.schemas import Block
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    AUTH_FILE_NAME,
+    AUTH_ENV_FILE_NAME,
     BLOCKCHAIN_NAME,
     BLOCKCHAIN_RAW_PATH,
     DATABASE_NAME,
@@ -34,17 +36,17 @@ from core.constants import (
     HashedData,
     KeyContext,
     RawData,
-    RuntimeLoop,
+    RuntimeLoopContext,
 )
 from core.dependencies import store_db_instance
 from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from passlib.context import CryptContext
 from core.constants import NodeRoles
-
 from utils.decorators import assert_instance
 from utils.exceptions import NoKeySupplied
 from getpass import getpass
+from json import dump as json_export
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -53,7 +55,7 @@ pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
 @assert_instance
 async def acrypt_file(
     afilename: str,
-    akey: KeyContext | bytes | None,
+    akey: KeyContext,
     aprocess: CryptFileAction,
     return_new_key: bool = False,
 ) -> bytes | None:
@@ -112,7 +114,7 @@ async def acrypt_file(
 @assert_instance
 def crypt_file(
     filename: str,
-    key: KeyContext | bytes | None,
+    key: KeyContext,
     process: CryptFileAction,
     return_new_key: bool = False,
 ) -> bytes | None:
@@ -122,6 +124,7 @@ def crypt_file(
 
     file_content: bytes = b""
     processed_content: bytes = b""
+    crypt_context: Fernet | None = None
 
     # Open the file first.
     with open(filename, "rb") as content_buffer:
@@ -136,11 +139,13 @@ def crypt_file(
             if key is None:
                 raise NoKeySupplied(crypt_file, "Decryption doesn't have a key.")
 
-            crypt_context: Fernet = Fernet(key.encode("utf-8"))
+            if isinstance(key, str):
+                crypt_context = Fernet(key.encode("utf-8"))
 
         else:
             if key is None:
-                key = Fernet.generate_key()
+                key = Fernet.generate_key()  # TODO: Idk why.
+
             crypt_context = Fernet(key)
 
         processed_content = getattr(
@@ -156,7 +161,7 @@ def crypt_file(
             f"Successfully {'decrypted' if process is CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
         )
 
-        if return_new_key:
+        if return_new_key and isinstance(key, bytes):
             return key
 
     except InvalidToken:
@@ -169,8 +174,10 @@ def crypt_file(
 # # File Handlers, Cryptography — END
 
 # # File Resource Initializers and Validators, Blockchain and Database — START
-def initialize_resources(
-    runtime: RuntimeLoop, role: NodeRoles, auth_key: KeyContext | str | None = None
+def initialize_resources_and_return_db_context(
+    runtime: RuntimeLoopContext,
+    role: NodeRoles,
+    auth_key: KeyContext | None = None,
 ) -> Database:
     """
     A non-async initializer for both database and blockchain files.
@@ -186,7 +193,7 @@ def initialize_resources(
         Database | None: Returns the context of the database for accessing the tables. Which can be ORM-accessible.
     """
 
-    logger.info("Initializing a database..")
+    logger.info("Initializing a database...")
     db_instance: Database = Database(DATABASE_URL_PATH)
     sql_engine = create_engine(
         DATABASE_URL_PATH, connect_args={"check_same_thread": False}
@@ -235,7 +242,7 @@ def initialize_resources(
         # This may not be tested.
         elif (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is None:
             logger.critical(
-                f"A database exists but there's no key inside of {AUTH_FILE_NAME} or the file ({AUTH_FILE_NAME}) is missing. Have you modified it? Please check and try again."
+                f"A database exists but there's no key inside of {AUTH_ENV_FILE_NAME} or the file ({AUTH_ENV_FILE_NAME}) is missing. Have you modified it? Please check and try again."
             )
             _exit(1)
 
@@ -253,7 +260,11 @@ def initialize_resources(
             )
 
             model_metadata.create_all(sql_engine)
-            logger.info("Database context inserted ...")
+            logger.info("Database structure applied...")
+
+            logger.warning(
+                f"The system detects the invocation of a role as a {NodeRoles.MASTER.name}, please create a "
+            )
 
             logger.info("Encrypting a new database ...")
             auth_key = crypt_file(
@@ -262,16 +273,17 @@ def initialize_resources(
 
             if auth_key is None:
                 raise NoKeySupplied(
-                    initialize_resources,
+                    initialize_resources_and_return_db_context,
                     "This part of the function should have a returned new auth key. This was not intended! Please report this issue as soon as possible!",
                 )
 
             # Since encrypting the database also returns a new generated key, used that as a reference for the second argument.
             logger.info("Encrypting a new blockchain file ...")
 
-            # TODO: THis will be removed later, after we finish the database and other stuff.
             with open(BLOCKCHAIN_RAW_PATH, "w") as temp_writer:
-                temp_writer.write("test.")
+
+                initial_json_context: dict[str, list[Any]] = {"chain": []}
+                json_export(initial_json_context, temp_writer)
 
             crypt_file(BLOCKCHAIN_RAW_PATH, auth_key, CryptFileAction.TO_ENCRYPT)
 
@@ -279,7 +291,7 @@ def initialize_resources(
 
             if role is NodeRoles.MASTER:
                 logger.warning(
-                    "The system detects the invocation of role as a MASTER. Please insert email address and password for the email services."
+                    f"The system detects the invocation of role as a {NodeRoles.MASTER.name}. Please insert email address and password for the email services."
                 )
                 logger.warning(
                     "Please ENSURE that credentials are correct. Don't worry, it will be hashed along with the `auth_key` that is generated here."
@@ -310,12 +322,12 @@ def initialize_resources(
 
             # Override AUTH_FILE_NAME after encryption.
             logger.info("Generating a new key environment file ...")
-            with open(AUTH_FILE_NAME, "w") as env_writer:
+            with open(AUTH_ENV_FILE_NAME, "w") as env_writer:
                 env_context: list[str] = [
                     f"AUTH_KEY={auth_key.decode('utf-8')}",
                     f"SECRET_KEY={token_hex(32)}",
-                    f"EMAIL_ADDRESS={email}",
-                    f"EMAIL_PWD={pwd}",
+                    f"EMAIL_SERVER_ADDRESS={email}",
+                    f"EMAIL_SERVER_PWD={pwd}",
                 ]
 
                 for each_context in env_context:
@@ -324,7 +336,7 @@ def initialize_resources(
             logger.info("Generation of new key file is done ...")
 
             logger.info(
-                f"Generation of resources is done! Please check the file {AUTH_FILE_NAME}. DO NOT SHARE THOSE CREDENTIALS. | You need to relaunch this program so that the program will load the generated keys from the file."
+                f"Generation of resources is done! Please check the file {AUTH_ENV_FILE_NAME}. DO NOT SHARE THOSE CREDENTIALS. | You need to relaunch this program so that the program will load the generated keys from the file."
             )
             _exit(1)
 
@@ -364,7 +376,6 @@ def validate_file_keys(
     if Path(file_ref).is_file():
 
         from os import environ as env
-
         from dotenv import find_dotenv, load_dotenv
 
         try:
@@ -381,7 +392,7 @@ def validate_file_keys(
         a_key: str | None = env.get("AUTH_KEY", None)
         s_key: str | None = env.get("SECRET_KEY", None)
 
-        # Validate the AUTH_KEY and SECRET_KEY.
+        # Validate the (AUTH_KEY and SECRET_KEY)'s length.
         if (
             a_key is not None
             and a_key.__len__() == FERNET_KEY_LENGTH
@@ -391,13 +402,12 @@ def validate_file_keys(
 
             return a_key, s_key
 
-        else:
-            exit(  # TODO: Create a custom exception of this.
-                f"Error: One of the keys either has an invalid value or is missing. Have you modified your {file_ref}? Please check and try again."
-            )
+        raise NoKeySupplied(
+            validate_file_keys,
+            f"Error: One of the keys either has an invalid value or is missing. Have you modified your {file_ref}? Please check and try again.",
+        )
 
-    else:
-        return None
+    return
 
 
 # # File Resource Initializers and Validators, Blockchain and Database — END
@@ -409,6 +419,47 @@ def hash_context(pwd: RawData) -> HashedData:
 
 def verify_hash_context(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
     return pwd_handler.verify(real_pwd, hashed_pwd)
+
+
+def ensure_input_prompt(
+    input_context: list[Any] | Any,
+    hide_fields: list[bool] | bool,
+    ensure_prompt_title: str,
+    prompt_info: str | None = None,
+) -> Any:
+
+    assert len(input_context) == len(
+        list(str(hide_fields))
+    ), "The `input_context` and the `hide_fields` were unequal! This is a developer issue, please report as possible."
+
+    while True:
+        input_s: list[str] | str = (
+            "" or []
+        )  # TODO: Not a prio but have to be fixed later.
+        if isinstance(input_context, list) and isinstance(hide_fields, list):
+            for field_idx, each_context_to_input in enumerate(input_context):
+                input_s.append(
+                    input(each_context_to_input)
+                    if not hide_fields[field_idx]
+                    else getpass(each_context_to_input)
+                )
+        else:
+            input_s = (
+                input(input_context) if not hide_fields else getpass(str(input_context))
+            )
+
+        logger.warning(
+            f"Are you sure you is this the right {prompt_info}? {prompt_info}"
+        )
+
+        ensure: str = input(
+            f"[Press any key to continue / N or n to re-type {ensure_prompt_title}] > "
+        )
+
+        if ensure == "n" or ensure == "N":
+            continue
+
+        return input_s
 
 
 # # Variable Password Crypt Handlers — END

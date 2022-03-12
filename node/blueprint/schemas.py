@@ -9,7 +9,6 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from datetime import datetime
-import email
 from typing import Any, List
 
 from pydantic import BaseModel, EmailStr, Field, FilePath
@@ -190,10 +189,10 @@ class Transaction(BaseModel):
 
 class Block(BaseModel):
     id: int
-    nonce: int
+    nonce: int | None
     validator: AddressUUID  # ! TODO: We need the database before being able to implement self-reference from producing the genesis block.
-    prer_block: HashUUID
-    next_block: HashUUID | None
+    prev_hash_block: HashUUID
+    next_hash_block: HashUUID | None
     transactions: List[Transaction]
     block_size: int
     timestamp: datetime
@@ -357,7 +356,7 @@ class Users(BaseModel):
     email: EmailStr | None = Field(
         ..., description="The email address to contact for notifications."
     )
-    user_type: UserEntity = Field(
+    type: UserEntity = Field(
         ..., description="A classifier that represents the entity of this data."
     )
     user_activity: UserActivityState = Field(

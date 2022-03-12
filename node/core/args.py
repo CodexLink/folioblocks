@@ -17,8 +17,10 @@ if __name__ == "__main__":
 from argparse import ArgumentParser
 from re import Pattern, compile
 
+from utils.processors import validate_file_keys
+
 from core.constants import (  # TODO: To be moved later. This will be used for the options that we have. We create an on_event("startup") and create a dependency where we check if we wanted to be side node or master node. But still the checking is still needed for it to work properoly. Also, therefore, ArgParse > Evaluation of Endpoint to Launch > SQL > Node Role Check > [...].
-    AUTH_FILE_NAME,
+    AUTH_ENV_FILE_NAME,
     ENUM_NAME_PATTERN,
     FOLIOBLOCKS_EPILOG,
     FOLIOBLOCKS_HELP,
@@ -26,10 +28,10 @@ from core.constants import (  # TODO: To be moved later. This will be used for t
     FOLIOBLOCKS_NODE_TITLE,
     NODE_IP_ADDR_FLOOR,
     NODE_IP_PORT_FLOOR,
+    ArgumentParameter,
     LoggerLevelCoverage,
     NodeRoles,
 )
-from utils.processors import validate_file_keys
 
 args_handler = ArgumentParser(
     prog=FOLIOBLOCKS_NODE_TITLE,
@@ -56,31 +58,41 @@ for each_enum in [LoggerLevelCoverage, NodeRoles]:
 
 
 args_handler.add_argument(
-    "-d", "--debug", action="store_true", help=FOLIOBLOCKS_HELP["DEBUG"], required=False
+    "-d",
+    "--debug",
+    action="store_true",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("DEBUG")],
+    required=False,
 )
 
 args_handler.add_argument(
-    "-ho", "--host", default=NODE_IP_ADDR_FLOOR, help=FOLIOBLOCKS_HELP["HOST"]
+    "-ho",
+    "--host",
+    default=NODE_IP_ADDR_FLOOR,
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("HOST")],
 )
 
 args_handler.add_argument(
-    "-k",
-    "--keys",
+    "-kf",
+    "--key-file",
     action="store",
-    default=AUTH_FILE_NAME,
-    help=FOLIOBLOCKS_HELP["KEY_FILE"],
+    default=AUTH_ENV_FILE_NAME,
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("KEY_FILE")],
     type=validate_file_keys,
 )
 
 args_handler.add_argument(
-    "-l", "--local", action="store_true", help=FOLIOBLOCKS_HELP["LOCAL"]
+    "-l",
+    "--local",
+    action="store_true",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("LOCAL")],
 )
 
 args_handler.add_argument(
     "-ll",
     "--log-level",
     choices=locals()["_injected_llc_choices"],
-    help=FOLIOBLOCKS_HELP["LOG_LEVEL"],
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("LOG_LEVEL")],
     default=LoggerLevelCoverage.INFO.value,
 )
 
@@ -88,7 +100,7 @@ args_handler.add_argument(
     "-nlf",
     "--no-log-file",
     action="store_true",
-    help=FOLIOBLOCKS_HELP["NO_LOG_FILE"],
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("NO_LOG_FILE")],
     required=False,
 )
 
@@ -97,7 +109,7 @@ args_handler.add_argument(
     "--port",
     action="store",
     default=NODE_IP_PORT_FLOOR,
-    help=FOLIOBLOCKS_HELP["PORT"],
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("PORT")],
     type=int,
     required=False,
 )
@@ -106,6 +118,6 @@ args_handler.add_argument(
     "-pr",
     "--prefer-role",
     choices=locals()["_injected_nr_choices"],
-    help=FOLIOBLOCKS_HELP["PREFER_ROLE"],
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("PREFER_ROLE")],
     required=True,
 )

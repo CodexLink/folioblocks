@@ -10,11 +10,9 @@ FolioBlocks is distributed in the hope that it will be useful, but without any w
 you should have received a copy of the gnu general public license along with FolioBlocks. if not, see <https://www.gnu.org/licenses/>.
 """
 
-if __name__ == "__main__":  # TODO: ???
-    pass
-
-
+from datetime import timedelta
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -35,6 +33,8 @@ from core.constants import (
     TokenStatus,
 )
 from sqlalchemy import Enum as SQLEnum
+
+from node.core.constants import QueueStatus, QueueTaskType
 
 # TODO: We might wanna create a key where it combines all of the certain fields
 # ! And when it was inserted for reset password, it should resulted to that!
@@ -86,9 +86,7 @@ users = Table(
     Column("username", String(24), unique=True, nullable=False),
     Column("password", String(64), nullable=False),  # ! Expects hashed.
     Column("email", String(128), unique=True, nullable=False),
-    Column(
-        "user_type", SQLEnum(UserEntity), server_default=UserEntity.DASHBOARD_USER.name
-    ),
+    Column("type", SQLEnum(UserEntity), server_default=UserEntity.DASHBOARD_USER.name),
     Column(
         "user_activity",
         SQLEnum(UserActivityState),
@@ -135,7 +133,41 @@ tokens = Table(
 tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 # TODO: Need checker function for asserting if the user is a Node Type.
 # ! This is just a preparation for the blockchain system approach.
-# class QueueTasks(DeclarativeModel):
-#     __tablename__ = "queued_tasks"
 
-#     id = Column(Integer, primary_key=True)
+auth_codes = Table(
+    "auth_codes",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column(
+        "generated_by", String(38), ForeignKey("users.unique_address"), nullable=True
+    ),
+    Column("code", String(16), unique=True, nullable=False),
+    Column("account_type", SQLEnum(UserEntity), nullable=False),
+    Column("to_email", String(128), unique=True, nullable=False),
+    Column("is_used", Boolean, default=False),
+    Column("expiration", DateTime, server_default=func.now() + timedelta(days=2)),
+)
+
+auth_codes.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
+
+# ! Note that these are not yet finalized and may be subjected for removal if kept unused.
+queued_tasks = Table(
+    "queued_tasks",
+    model_metadata,
+    Column("queue_id", Integer, primary_key=True),
+    Column(
+        "status",
+        SQLEnum(QueueStatus),
+        server_default=QueueStatus.ON_QUEUE,
+        nullable=False,
+    ),
+    Column(
+        "type",
+        SQLEnum(QueueTaskType),
+        server_default=QueueTaskType.UNSPECIFIED,
+        nullable=False,
+    ),
+    #     Column(),
+    #     Column(),
+    #     Column(),
+)

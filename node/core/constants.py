@@ -10,10 +10,10 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from enum import Enum, IntEnum, auto
 from pathlib import Path
-from typing import Any, Final
+from types import NoneType
+from typing import Any, Callable, Final
 from typing import NewType as _N
 from typing import TypeVar, Union
-
 from asgiref.typing import ASGIApplication
 
 
@@ -42,7 +42,6 @@ DocRequestType = _N("DocRequestType", DocToRequestTypes)
 Documents = _N("Documents", DocumentSet)
 DocumentMeta = _N("DocumentMeta", str)
 DocumentProof = _N("DocumentProof", DocumentSet)
-KeyContext = _N("KeyContext", str)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
 HashedData = _N("HashedData", str)
@@ -54,7 +53,7 @@ JWTToken = _N("JWTToken", str)
 ProgramMetadata = _N("ProgramMetadata", str)
 RawData = _N("RawData", str)
 RegExp = _N("RegExp", str)
-RuntimeLoop = _N("RuntimeLoop", str)
+RuntimeLoopContext = _N("RuntimeLoopContext", str)
 RequestContext = _N("RequestContext", str)
 URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
@@ -63,17 +62,24 @@ WorkExperience = _N("WorkExperience", DocumentSet)
 
 # # Custom Typed Types
 # * For the exceptions.
-Expects = TypeVar("Expects")
-Has = TypeVar("Has")
+Expects = TypeVar("Expects", str, object)
+Has = TypeVar("Has", str, object)
+KeyContext = TypeVar("KeyContext", str, bytes)
 
-# # Constants, Auth
-FERNET_KEY_LENGTH: Final[int] = 44  # TODO: ???
-SECRET_KEY_LENGTH: Final[int] = 32  # TODO: ???
+fn = TypeVar(  # ! Doesn't work for now.
+    "fn", bound=Callable[..., Any]
+)  # https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped
+
+
+# # Constants / Constraints, Auth
+BLOCK_HASH_LENGTH: Final[int] = 64
+FERNET_KEY_LENGTH: Final[int] = 44  # TODO: ??? | What???
+SECRET_KEY_LENGTH: Final[int] = 32  # TODO: ??? | What???
 MAX_JWT_HOLD_TOKEN: Final[int] = 5
 
 UUID_KEY_PREFIX: Final[str] = "fl"
 UUID_KEY_LENGTH: Final[int] = 35
-AUTH_FILE_NAME: Final[str] = ".env"
+AUTH_ENV_FILE_NAME: Final[str] = ".env"
 
 # # Constants, Auth: JWT
 JWT_DAY_EXPIRATION: Final[int] = 7
@@ -177,6 +183,7 @@ class TransactionActions(IntEnum):  # TODO: This will be expanded later on.
     DATA_DISREGARDED = auto()
     DATA_BATCH_MINTING = auto()
     DOCUMENT_INSUANCE = auto()
+    GENESIS_INITIALIZATION = auto()
     REQUEST_INITIATION = auto()
     REQUEST_PROCESSING = auto()
     REQUEST_MARKED_ENDED = auto()
@@ -237,7 +244,10 @@ class TokenStatus(Enum):
     )
 
 
-class TaskType(Enum):
+class QueueTaskType(Enum):
+    UNSPECIFIED = auto()
+    INITIATE_CONSENSUS = auto()
+    CHECKPOINT_FILE = auto()
     NEGOTIATION_INITIAL = "Negotiation Phase: Initial"
     NEGOTIATION_PROCESSING = "Negotiation: Processing"
     NEGOTIATION_RECEIVE_RESULT = "Negotiation: End, Receive Result"
@@ -261,11 +271,10 @@ class CryptFileAction(IntEnum):
     TO_ENCRYPT = auto()
 
 
-class FuncProcessState(IntEnum):
-    SUCCESS = auto()
-    FAILED = auto()
-    SUCCESS_WITH_WARNING = auto()
-    FAILED_WITH_WARNING = auto()
+class QueueStatus(IntEnum):
+    ON_QUEUE = auto()
+    UP_NEXT = auto()
+    CURRENTLY_WORKING = auto()
 
 
 # Program Metadata
