@@ -188,13 +188,15 @@ class Transaction(BaseModel):
 
 
 class Block(BaseModel):
+    # Note: Variables that is None is determined first before doing something.
     id: int
     nonce: int | None
-    validator: AddressUUID  # ! TODO: We need the database before being able to implement self-reference from producing the genesis block.
+    block_size: int | None
+    validator: AddressUUID
     prev_hash_block: HashUUID
+    hash_block: HashUUID | None
     next_hash_block: HashUUID | None
-    transactions: List[Transaction]
-    block_size: int
+    transactions: List[Transaction] | None
     timestamp: datetime
 
 
@@ -255,7 +257,12 @@ class EntityRegisterCredentials(BaseModel):
         max_length=32,
     )
 
-    auth_code: KeyContext | None
+    auth_code: str | bytes = Field(  # KeyContext is the key of this one.
+        ...,
+        description="The authentication code that is used to authorize the registration.",
+        min_length=6,
+        max_length=12,
+    )
 
 
 class EntityRegisterResult(BaseModel):

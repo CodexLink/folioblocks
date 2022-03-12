@@ -16,6 +16,8 @@ from typing import NewType as _N
 from typing import TypeVar, Union
 from asgiref.typing import ASGIApplication
 
+from node.blueprint.schemas import Transaction
+
 
 # ! Priority Classification Types
 class DocToRequestTypes(IntEnum):
@@ -59,13 +61,13 @@ URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
-
 # # Custom Typed Types
 # * For the exceptions.
+BlockAttribute = TypeVar("BlockAttribute", int, str, list[Transaction], None)
 Expects = TypeVar("Expects", str, object)
 Has = TypeVar("Has", str, object)
+# IdentityTokens = TypeVar("IdentityTokens", AddressUUID, JWTToken) # ???
 KeyContext = TypeVar("KeyContext", str, bytes)
-
 fn = TypeVar(  # ! Doesn't work for now.
     "fn", bound=Callable[..., Any]
 )  # https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped
@@ -81,12 +83,16 @@ UUID_KEY_PREFIX: Final[str] = "fl"
 UUID_KEY_LENGTH: Final[int] = 35
 AUTH_ENV_FILE_NAME: Final[str] = ".env"
 
+# # Constants, Blockchain
+BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
+    int
+] = 4  # Consider 6??? Consider adjusting in the latter.
+
 # # Constants, Auth: JWT
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"
 
 # # Constants, Auth: SMTP Email
-
 DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
 DEFAULT_SMTP_PORT: Final[int] = 465
 DEFAULT_SMTP_CONNECT_MAX_RETRIES: Final[int] = 10

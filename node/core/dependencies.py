@@ -17,13 +17,14 @@ from os import environ as env
 from random import randint
 from secrets import token_hex
 
-from aiohttp import ClientSession
+from aiohttp import BasicAuth, ClientSession
 from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import EntityLoginResult, Tokens
 from databases import Database
 from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
 from sqlalchemy import select
+from node.core.constants import AddressUUID
 from utils.processors import ensure_input_prompt, hash_context
 
 from core.constants import (
@@ -39,7 +40,7 @@ from core.constants import (
 )
 from core.email import get_email_instance_or_initialize
 
-auth_token: JWTToken
+identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -54,14 +55,14 @@ def get_db_instance() -> Database:
     return db_instance
 
 
-def store_auth_token(token: JWTToken) -> None:
-    global auth_token
-    auth_token = token
+def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
+    global identity_tokens
+    identity_tokens = _tokens
 
 
-def get_auth_token() -> JWTToken:
-    global auth_token
-    return JWTToken(auth_token)
+def get_identity_token() -> tuple[AddressUUID, JWTToken]:
+    global identity_tokens
+    return identity_tokens
 
 
 def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
@@ -141,15 +142,18 @@ async def authenticate_node_client(
             # Ensure that ENV will be covered here.
             login_req = await login_session.post(
                 f"{instances[0].host}:{instances[0].port}/entity/login",
-                data={
-                    "username": env.get(
-                        "NODE_USERNAME",
-                        None if user_credentials is None else user_credentials[0],
+                auth=BasicAuth(
+                    login=(
+                        env.get("NODE_USERNAME", None)
+                        if user_credentials is None
+                        else user_credentials[0]
                     ),
-                    "password": env.get("NODE_PWD", None)
-                    if user_credentials is None
-                    else user_credentials[1],
-                },
+                    password=(
+                        env.get("NODE_PWD", None)
+                        if user_credentials is None
+                        else user_credentials[1]
+                    ),
+                ),
             )
 
             if login_req.ok:
@@ -157,7 +161,12 @@ async def authenticate_node_client(
                 resolved_model = EntityLoginResult.parse_obj(login_req.json())
 
                 # With this, we should also save the context by using store_auth_token().
-                store_auth_token(JWTToken(resolved_model.jwt_token))
+                store_identity_tokens(
+                    (
+                        AddressUUID(resolved_model.user_address),
+                        JWTToken(resolved_model.jwt_token),
+                    )
+                )
 
                 if (  # Ensure fields are None from the environment file and process the credentials.
                     env.get("NODE_USERNAME", None) is None

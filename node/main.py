@@ -25,7 +25,7 @@ from api.dashboard import dashboard_router
 from api.entity import entity_router
 from api.explorer import explorer_router
 from api.node import node_router
-from blueprint.models import tokens
+from blueprint.models import identity_tokens
 from blueprint.schemas import Tokens
 from core.args import args_handler as ArgsHandler
 from core.constants import (
@@ -149,10 +149,6 @@ async def initialize() -> None:
 
         return
 
-    else:
-        # Do something here.
-        logger.info("Step 2.1 | Completed?")  # Require...
-
     logger.info("Step 3 | Initializing blockchain instance...")
     await get_blockchain_instance_or_initialize().initialize()
 
@@ -204,7 +200,9 @@ if parsed_args.prefer_role is NodeRoles.MASTER.name:
     @repeat_every(seconds=120, wait_first=True)
     async def jwt_invalidation() -> None:
 
-        token_query = tokens.select().where(tokens.c.state != TokenStatus.EXPIRED)
+        token_query = identity_tokens.select().where(
+            identity_tokens.c.state != TokenStatus.EXPIRED
+        )
         tokens_available = await database_instance.fetch_all(token_query)
 
         if not tokens_available:
@@ -222,8 +220,8 @@ if parsed_args.prefer_role is NodeRoles.MASTER.name:
             if current_datetime >= token.expiration:
                 # Instead of deletion, change the state instead.
                 token_to_del = (
-                    tokens.update()
-                    .where(tokens.c.expiration == token.expiration)
+                    identity_tokens.update()
+                    .where(identity_tokens.c.expiration == token.expiration)
                     .values(state=TokenStatus.EXPIRED)
                 )
 

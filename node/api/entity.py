@@ -17,7 +17,7 @@ from typing import Any
 from uuid import uuid4
 
 import jwt
-from blueprint.models import tokens, users
+from blueprint.models import identity_tokens, users
 from blueprint.schemas import (
     EntityLoginCredentials,
     EntityLoginResult,
@@ -162,8 +162,9 @@ async def login_entity(
         if verify_hash_context(
             RawData(credentials.password), HashedData(fetched_data["password"])
         ):
-            other_tokens_stmt = tokens.select().where(
-                (tokens.c.from_user == fetched_data.unique_address) & tokens.c.state
+            other_tokens_stmt = identity_tokens.select().where(
+                (identity_tokens.c.from_user == fetched_data.unique_address)
+                & identity_tokens.c.state
                 != TokenStatus.EXPIRED.name
             )
 
@@ -190,7 +191,7 @@ async def login_entity(
 
             # Put a new token to the database.
 
-            new_token = tokens.insert().values(
+            new_token = identity_tokens.insert().values(
                 from_user=fetched_data.unique_address,
                 token=token,
                 expiration=jwt_expire_at,
@@ -231,14 +232,15 @@ async def logout_entity(
     db: Any = Depends(get_db_instance),
 ) -> None:
 
-    fetched_token = tokens.select().where(
-        (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
+    fetched_token = identity_tokens.select().where(
+        (identity_tokens.c.token == x_token)
+        & (identity_tokens.c.state != TokenStatus.EXPIRED)
     )
 
     if await db.fetch_one(fetched_token):
         token_ref = (
-            tokens.update()
-            .where(tokens.c.token == x_token)
+            identity_tokens.update()
+            .where(identity_tokens.c.token == x_token)
             .values(state=TokenStatus.EXPIRED)
         )
 

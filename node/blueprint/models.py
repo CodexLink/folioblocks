@@ -114,7 +114,7 @@ blacklisted_users = Table(
 
 blacklisted_users.user_ref = relationship(users, foreign_keys=["user"])  # type: ignore
 
-tokens = Table(
+identity_tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
@@ -130,7 +130,7 @@ tokens = Table(
     Column("issued", DateTime, server_default=func.now()),
 )
 
-tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
+identity_tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 # TODO: Need checker function for asserting if the user is a Node Type.
 # ! This is just a preparation for the blockchain system approach.
 
