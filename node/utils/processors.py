@@ -11,6 +11,8 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from getpass import getpass
+from json import dump as json_export
 from logging import Logger, getLogger
 from os import _exit
 from pathlib import Path
@@ -19,7 +21,7 @@ from sqlite3 import Connection, OperationalError, connect
 from typing import Any
 
 import aiofiles
-from sqlalchemy import create_engine
+from aioconsole import ainput
 from blueprint.models import model_metadata
 from blueprint.schemas import Block
 from core.constants import (
@@ -32,9 +34,11 @@ from core.constants import (
     DATABASE_URL_PATH,
     FERNET_KEY_LENGTH,
     SECRET_KEY_LENGTH,
+    CredentialContext,
     CryptFileAction,
     HashedData,
     KeyContext,
+    NodeRoles,
     RawData,
     RuntimeLoopContext,
 )
@@ -42,11 +46,10 @@ from core.dependencies import store_db_instance
 from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from passlib.context import CryptContext
-from core.constants import NodeRoles
+from sqlalchemy import create_engine
+
 from utils.decorators import assert_instance
 from utils.exceptions import NoKeySupplied
-from getpass import getpass
-from json import dump as json_export
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -174,7 +177,7 @@ def crypt_file(
 # # File Handlers, Cryptography — END
 
 # # File Resource Initializers and Validators, Blockchain and Database — START
-def initialize_resources_and_return_db_context(
+async def initialize_resources_and_return_db_context(
     runtime: RuntimeLoopContext,
     role: NodeRoles,
     auth_key: KeyContext | None = None,
@@ -297,28 +300,12 @@ def initialize_resources_and_return_db_context(
                     "Please ENSURE that credentials are correct. Don't worry, it will be hashed along with the `auth_key` that is generated here."
                 )
 
-            while True:
-                email: RawData = RawData(input("Email Address > "))
-                pwd: RawData = RawData(getpass("Email Password > "))
-
-                if not email or not pwd:
-                    logger.warning(
-                        "The inputs from email address or password is missing! Please try again."
-                    )
-                    continue
-
-                logger.critical(
-                    "Are you sure your credentials are correct? There's no going back once proceed."
-                )
-
-                ensure: str = input(
-                    "[Press any key to continue / N or n to re-type credentials] >  "
-                )
-
-                if ensure == "n" or ensure == "N":
-                    continue
-
-                break
+            credentials: list[CredentialContext] = await ensure_input_prompt(
+                input_context=["Email Address", "Email Password"],
+                hide_fields=[False, True],
+                generalized_context="Server email credentials",
+                additional_context="There's no going back once proceeded.",
+            )
 
             # Override AUTH_FILE_NAME after encryption.
             logger.info("Generating a new key environment file ...")
@@ -326,8 +313,8 @@ def initialize_resources_and_return_db_context(
                 env_context: list[str] = [
                     f"AUTH_KEY={auth_key.decode('utf-8')}",
                     f"SECRET_KEY={token_hex(32)}",
-                    f"EMAIL_SERVER_ADDRESS={email}",
-                    f"EMAIL_SERVER_PWD={pwd}",
+                    f"EMAIL_SERVER_ADDRESS={credentials[0]}",
+                    f"EMAIL_SERVER_PWD={credentials[1]}",
                 ]
 
                 for each_context in env_context:
@@ -341,13 +328,11 @@ def initialize_resources_and_return_db_context(
             _exit(1)
 
     store_db_instance(db_instance)
-
     return db_instance
 
 
 async def close_resources(key: KeyContext) -> None:
     """
-
     Asynchronous Database Close Function.
 
     Async-ed since on_event("shutdown") is under async scope and does
@@ -376,6 +361,7 @@ def validate_file_keys(
     if Path(file_ref).is_file():
 
         from os import environ as env
+
         from dotenv import find_dotenv, load_dotenv
 
         try:
@@ -421,16 +407,28 @@ def verify_hash_context(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
     return pwd_handler.verify(real_pwd, hashed_pwd)
 
 
-def ensure_input_prompt(
+# TODO: Make a function or do the ensure_input_prompt run on executor for the processor initialize_resource ....
+# TODO: Ensure that the server is running when we implemented the aiocosole to ensure that we can do some self login...
+async def ensure_input_prompt(
     input_context: list[Any] | Any,
     hide_fields: list[bool] | bool,
-    ensure_prompt_title: str,
-    prompt_info: str | None = None,
+    generalized_context: str,
+    additional_context: str | None = None,
+    enable_async: bool = False,
+    delimiter: str = ":",
 ) -> Any:
 
-    assert len(input_context) == len(
-        list(str(hide_fields))
-    ), "The `input_context` and the `hide_fields` were unequal! This is a developer issue, please report as possible."
+    # * Assert in list form for all readable type.
+    assert_lvalue: int = len(
+        input_context if isinstance(input_context, list) else [input_context]
+    )
+    assert_rvalue: int = len(
+        hide_fields if isinstance(input_context, list) else [hide_fields]  # type: ignore # ??? | Resolve the `Sized` incompatibility with bool.
+    )
+
+    assert (
+        assert_lvalue == assert_rvalue
+    ), f"The `input_context` (length of {assert_lvalue}) and the `hide_fields` (length of {assert_rvalue}) were unequal! This is a developer issue, please report as possible."
 
     while True:
         input_s: list[str] | str = (
@@ -438,22 +436,51 @@ def ensure_input_prompt(
         )  # TODO: Not a prio but have to be fixed later.
         if isinstance(input_context, list) and isinstance(hide_fields, list):
             for field_idx, each_context_to_input in enumerate(input_context):
-                input_s.append(
-                    input(each_context_to_input)
-                    if not hide_fields[field_idx]
-                    else getpass(each_context_to_input)
-                )
+                while True:
+                    _input = (
+                        (
+                            input(f"{each_context_to_input}{delimiter} ")
+                            if not enable_async
+                            else await ainput(f"{each_context_to_input}{delimiter} ")
+                        )
+                        if not hide_fields[field_idx]
+                        else getpass(f"{each_context_to_input}{delimiter} ")
+                    )
+
+                    if not _input:
+                        logger.critical(
+                            f"One of the inputs for the {generalized_context} is empty! Please try again."
+                        )
+                        continue
+
+                    if isinstance(input_s, list):
+                        input_s.append(_input)
+
+                    break
+
         else:
             input_s = (
-                input(input_context) if not hide_fields else getpass(str(input_context))
+                (
+                    input(f"{input_context}{delimiter} ")
+                    if not enable_async
+                    else await ainput(f"{input_context}{delimiter} ")
+                )
+                if not hide_fields
+                else getpass(str(f"{input_context}{delimiter} "))
             )
 
+            if not input_s:
+                logger.critical(
+                    f"The input for the {generalized_context} is empty! Please try again."
+                )
+                continue
+
         logger.warning(
-            f"Are you sure you is this the right {prompt_info}? {prompt_info}"
+            f"Are you sure you this is the right{(' ' + generalized_context) if generalized_context is not None else ''}? {additional_context}"
         )
 
         ensure: str = input(
-            f"[Press any key to continue / N or n to re-type {ensure_prompt_title}] > "
+            f"[Press any key to continue / N or n to re-type {generalized_context}] > "
         )
 
         if ensure == "n" or ensure == "N":

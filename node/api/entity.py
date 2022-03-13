@@ -11,13 +11,14 @@ from asyncio import create_task
 from datetime import datetime, timedelta
 from enum import EnumMeta
 from http import HTTPStatus
+from logging import Logger, getLogger
 from os import environ as env
 from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
 
 import jwt
-from blueprint.models import identity_tokens, users
+from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import (
     EntityLoginCredentials,
     EntityLoginResult,
@@ -25,6 +26,7 @@ from blueprint.schemas import (
     EntityRegisterResult,
 )
 from core.constants import (
+    ASYNC_TARGET_LOOP,
     JWT_ALGORITHM,
     JWT_DAY_EXPIRATION,
     MAX_JWT_HOLD_TOKEN,
@@ -40,12 +42,14 @@ from core.constants import (
     UserEntity,
 )
 from core.dependencies import get_db_instance
-from fastapi import APIRouter, Depends, HTTPException, Header
-from utils.exceptions import MaxJWTOnHold
-from utils.processors import hash_context, verify_hash_context
 
 # from main import email_instance_service
 from core.email import get_email_instance_or_initialize
+from fastapi import APIRouter, Depends, Header, HTTPException
+from utils.exceptions import MaxJWTOnHold
+from utils.processors import hash_context, verify_hash_context
+
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 entity_router = APIRouter(
     prefix="/entity",
@@ -76,55 +80,69 @@ async def register_entity(
 
     unique_address_ref: AddressUUID = AddressUUID(f"{UUID_KEY_PREFIX}:{uuid4().hex}")
     dict_credentials: dict[str, Any] = credentials.dict()
-    is_node: bool = False
-    # Save something from the database here.
 
     # TODO
     # Our auth code should contain the information if that is applicable at certain role.
     # Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
 
-    if not credentials.first_name or not credentials.last_name:
-        # Asserted that this entity must be NODE_USER.
-        del dict_credentials["first_name"], dict_credentials["last_name"]
-        is_node = True  # This is just a temporary.
-
-    dict_credentials["type"] = (
-        UserEntity.NODE_USER if is_node else UserEntity.DASHBOARD_USER
-    )  #  else SQLEntityUser.ADMIN_USER
-
-    del (
-        dict_credentials["password"],
-        dict_credentials["auth_code"],
-    )  # Remove other fields so that we can do the double starred expression for unpacking.
-
-    data = users.insert().values(
-        **dict_credentials,
-        unique_address=unique_address_ref,
-        password=hash_context(RawData(credentials.password))
-        # association=, # I'm not sure on what to do with this one, as of now.
+    get_auth_token_stmt = auth_codes.select().where(
+        (auth_codes.c.code == credentials.auth_code)
+        & (auth_codes.c.to_email == credentials.email)
+        & (auth_codes.c.is_used == "False")
+        & (auth_codes.c.expiration >= datetime.now())
     )
 
-    try:
-        await db.execute(data)
-        create_task(
-            get_email_instance_or_initialize().send(
-                content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                subject="Welcome to Folioblocks!",
-                to=credentials.email,
+    auth_token = await db.fetch_one(get_auth_token_stmt)
+
+    if auth_token:
+        if not credentials.first_name or not credentials.last_name:
+            # Asserted that this entity must be NODE_USER.
+            del dict_credentials["first_name"], dict_credentials["last_name"]
+
+        dict_credentials["type"] = (
+            UserEntity.NODE_USER
+            if auth_token.account_type == UserEntity.NODE_USER.name
+            else UserEntity.DASHBOARD_USER
+        )  #  else SQLEntityUser.ADMIN_USER
+
+        del (
+            dict_credentials["password"],
+            dict_credentials["auth_code"],
+        )  # Remove other fields so that we can do the double starred expression for unpacking.
+
+        data = users.insert().values(
+            **dict_credentials,
+            unique_address=unique_address_ref,
+            password=hash_context(RawData(credentials.password))
+            # association=, # I'm not sure on what to do with this one, as of now.
+        )
+
+        try:
+            await db.execute(data)
+            create_task(
+                get_email_instance_or_initialize().send(
+                    content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject="Welcome to Folioblocks!",
+                    to=credentials.email,
+                )
             )
+
+        except IntegrityError:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
+            )
+
+        return EntityRegisterResult(
+            user_address=unique_address_ref,
+            username=credentials.username,
+            date_registered=datetime.now(),
+            role=dict_credentials["type"],
         )
 
-    except IntegrityError:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT,
-            detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
-        )
-
-    return EntityRegisterResult(
-        user_address=unique_address_ref,
-        username=credentials.username,
-        date_registered=datetime.now(),
-        role=dict_credentials["type"],
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_ACCEPTABLE,
+        detail="The `auth code` you entered is not valid! Please check your input and try again. If persists, you may not be using the email that the code was sent on, or the code has expired.",
     )
 
 
@@ -137,7 +155,7 @@ async def register_entity(
 )
 async def login_entity(
     credentials: EntityLoginCredentials, db: Any = Depends(get_db_instance)
-) -> EntityLoginResult:
+) -> EntityLoginResult:  # We didn't use aiohttp.BasicAuth because frontend has a form, we don't need a prompt.
 
     credential_to_look = users.select().where(users.c.username == credentials.username)
     fetched_data = await db.fetch_one(credential_to_look)
@@ -160,11 +178,10 @@ async def login_entity(
         payload["date_registered"] = payload["date_registered"].isoformat()
 
         if verify_hash_context(
-            RawData(credentials.password), HashedData(fetched_data["password"])
+            RawData(credentials.password), HashedData(fetched_data.password)
         ):
-            other_tokens_stmt = identity_tokens.select().where(
-                (identity_tokens.c.from_user == fetched_data.unique_address)
-                & identity_tokens.c.state
+            other_tokens_stmt = tokens.select().where(
+                (tokens.c.from_user == fetched_data.unique_address) & tokens.c.state
                 != TokenStatus.EXPIRED.name
             )
 
@@ -191,7 +208,7 @@ async def login_entity(
 
             # Put a new token to the database.
 
-            new_token = identity_tokens.insert().values(
+            new_token = tokens.insert().values(
                 from_user=fetched_data.unique_address,
                 token=token,
                 expiration=jwt_expire_at,
@@ -232,15 +249,14 @@ async def logout_entity(
     db: Any = Depends(get_db_instance),
 ) -> None:
 
-    fetched_token = identity_tokens.select().where(
-        (identity_tokens.c.token == x_token)
-        & (identity_tokens.c.state != TokenStatus.EXPIRED)
+    fetched_token = tokens.select().where(
+        (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
     )
 
     if await db.fetch_one(fetched_token):
         token_ref = (
-            identity_tokens.update()
-            .where(identity_tokens.c.token == x_token)
+            tokens.update()
+            .where(tokens.c.token == x_token)
             .values(state=TokenStatus.EXPIRED)
         )
 

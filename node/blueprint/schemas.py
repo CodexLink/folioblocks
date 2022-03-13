@@ -38,6 +38,7 @@ from core.constants import (
     WorkExperience,
 )
 from core.constants import UserActivityState
+from core.constants import AUTH_CODE_MAX_CONTEXT, AUTH_CODE_MIN_CONTEXT
 
 # ! Note that we can use one the exclude or include functionality upon returning the context of these models.
 
@@ -260,8 +261,8 @@ class EntityRegisterCredentials(BaseModel):
     auth_code: str | bytes = Field(  # KeyContext is the key of this one.
         ...,
         description="The authentication code that is used to authorize the registration.",
-        min_length=6,
-        max_length=12,
+        min_length=AUTH_CODE_MIN_CONTEXT,
+        max_length=AUTH_CODE_MAX_CONTEXT * 2,
     )
 
 

@@ -24,6 +24,7 @@ aiohttp = "^3.8.1"
 aiosmtplib = "^1.1.6"
 frozendict = "^2.3.0"
 Pympler = "^1.0.1"
+aioconsole = "^0.4.1"
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"

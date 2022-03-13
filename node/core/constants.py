@@ -10,13 +10,11 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from enum import Enum, IntEnum, auto
 from pathlib import Path
-from types import NoneType
 from typing import Any, Callable, Final
 from typing import NewType as _N
 from typing import TypeVar, Union
-from asgiref.typing import ASGIApplication
 
-from node.blueprint.schemas import Transaction
+from asgiref.typing import ASGIApplication
 
 
 # ! Priority Classification Types
@@ -63,7 +61,7 @@ TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 # # Custom Typed Types
 # * For the exceptions.
-BlockAttribute = TypeVar("BlockAttribute", int, str, list[Transaction], None)
+BlockAttribute = TypeVar("BlockAttribute", int, str, list["Transaction"], None)  # TODO.
 Expects = TypeVar("Expects", str, object)
 Has = TypeVar("Has", str, object)
 # IdentityTokens = TypeVar("IdentityTokens", AddressUUID, JWTToken) # ???
@@ -83,10 +81,11 @@ UUID_KEY_PREFIX: Final[str] = "fl"
 UUID_KEY_LENGTH: Final[int] = 35
 AUTH_ENV_FILE_NAME: Final[str] = ".env"
 
+AUTH_CODE_MIN_CONTEXT: Final[int] = 4
+AUTH_CODE_MAX_CONTEXT: Final[int] = 32
+
 # # Constants, Blockchain
-BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
-    int
-] = 4  # Consider 6??? Consider adjusting in the latter.
+BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[int] = 4
 
 # # Constants, Auth: JWT
 JWT_DAY_EXPIRATION: Final[int] = 7
@@ -199,6 +198,18 @@ class TransactionActions(IntEnum):  # TODO: This will be expanded later on.
 class TransactionActionString(Enum):
     pass
 
+# # Enums, Blockchain
+class BlockchainIOAction(IntEnum):
+    TO_WRITE = auto()
+    TO_READ = auto()
+
+    # These are unconfirmed and is subject for removal.
+    TO_APPEND = auto()
+    TO_OVERWRITE = auto()
+
+class ObjectProcessAction(IntEnum):
+    TO_SERIALIZE = auto()
+    TO_DESERIALIZE = auto()
 
 # # Enums, Constraints
 # ! Blockchain (Explorer) Query

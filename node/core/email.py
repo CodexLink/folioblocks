@@ -16,7 +16,7 @@ from email.mime.text import MIMEText
 from logging import Logger, getLogger
 from os import environ as env
 
-from aiosmtplib import SMTP, SMTPConnectError, SMTPServerDisconnected
+from aiosmtplib import SMTP, SMTPAuthenticationError, SMTPConnectError, SMTPServerDisconnected
 from pydantic import EmailStr
 from utils.exceptions import InsufficientCredentials
 
@@ -78,7 +78,7 @@ class EmailService:
 
                 return
 
-            except (SMTPServerDisconnected, SMTPConnectError) as e:
+            except (SMTPAuthenticationError, SMTPConnectError, SMTPServerDisconnected) as e:
                 # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.
                 logger.critical(
                     f"Failed to connect at email services.| Additional Info: {e}."

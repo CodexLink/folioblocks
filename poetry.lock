@@ -1,4 +1,12 @@
 [[package]]
+name = "aioconsole"
+version = "0.4.1"
+description = "Asynchronous console and interfaces for asyncio"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[[package]]
 name = "aiofiles"
 version = "0.8.0"
 description = "File support for asyncio."
@@ -894,9 +902,12 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "42e6be7f3cd4e4aa72eae7823a062d3dc7fb82d4c8d0d07a64b8097fd613b6b6"
+content-hash = "db4cad27d7e3d83561883b186c7056f7afc5103b76246a3a8330725c6ae2d37f"
 
 [metadata.files]
+aioconsole = [
+    {file = "aioconsole-0.4.1.tar.gz", hash = "sha256:0c0acb66b4e72d6606c9fa14ac9eb001a222c37c885b8fbdf65f41824cfa855f"},
+]
 aiofiles = [
     {file = "aiofiles-0.8.0-py3-none-any.whl", hash = "sha256:7a973fc22b29e9962d0897805ace5856e6a566ab1f0c8e5c91ff6c866519c937"},
     {file = "aiofiles-0.8.0.tar.gz", hash = "sha256:8334f23235248a3b2e83b2c3a78a22674f39969b96397126cc93664d9a901e59"},

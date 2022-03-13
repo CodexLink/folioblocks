@@ -10,26 +10,34 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from argparse import Namespace
 from asyncio import sleep
-from datetime import timedelta
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from logging import Logger, getLogger
 from os import environ as env
 from random import randint
 from secrets import token_hex
-
-from aiohttp import BasicAuth, ClientSession
+from sqlite3 import IntegrityError
+from aioconsole import ainput
+from aiohttp import (
+    BasicAuth,
+    ClientConnectionError,
+    ClientConnectorCertificateError,
+    ClientConnectorError,
+    ClientConnectorSSLError,
+    ClientError,
+    ClientSession,
+)
 from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import EntityLoginResult, Tokens
 from databases import Database
 from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
 from sqlalchemy import select
-from node.core.constants import AddressUUID
-from utils.processors import ensure_input_prompt, hash_context
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_ENV_FILE_NAME,
+    AddressUUID,
     CredentialContext,
     HashedData,
     JWTToken,
@@ -39,6 +47,7 @@ from core.constants import (
     UserEntity,
 )
 from core.email import get_email_instance_or_initialize
+from core.constants import AUTH_CODE_MAX_CONTEXT, AUTH_CODE_MIN_CONTEXT
 
 identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database
@@ -60,11 +69,12 @@ def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
     identity_tokens = _tokens
 
 
-def get_identity_token() -> tuple[AddressUUID, JWTToken]:
+def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
     global identity_tokens
     return identity_tokens
 
 
+# TODO
 def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
     # To identify who the heck did it, we need to ensure fetch its token or otherwise put it to None. But we need to ensure that anyone who uses this must be authenticated. This function will be used by master anyway.
     pass
@@ -73,7 +83,10 @@ def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> N
 # ! Implement blacklisted users!
 async def authenticate_node_client(
     instances: tuple[Namespace, Database],
-) -> None:  # Create a pydantic model from this.
+) -> AddressUUID:  # Create a pydantic model from this.
+
+    # Inserted from this context due to circular import.
+    from utils.processors import ensure_input_prompt
 
     user_credentials: tuple[CredentialContext, CredentialContext] | None = None
 
@@ -83,22 +96,44 @@ async def authenticate_node_client(
         )
 
         logger.info(
-            f"The system will create an auth_token for you to register yourself as a {NodeRoles.MASTER.name}. Please enter your email address:"
+            f"The system will create an `auth_token` for you to register yourself as a {NodeRoles.MASTER.name}. Please enter your email address."
         )
 
         while True:
-            email_address: EmailStr = ensure_input_prompt(
-                "Email Address > ",
-                False,
-                "email address",
-                "You will have to restart the instance if you confirmed it late that it was a mistake!",
-            )
+            try:
+                email_address: EmailStr = await ensure_input_prompt(
+                    input_context="Email Address",
+                    hide_fields=False,
+                    generalized_context="email address",
+                    additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
+                )
 
-            await get_email_instance_or_initialize().send(
-                content=f"<html><body><h1>Register Auth Code from olioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE</b></p><br><br><h4>Auth Code: {token_hex(randint(6, 12))}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                subject="Register Auth Code for Registration @ Folioblocks",
-                to=email_address,
-            )
+                # Infer, try again here later.
+                generated_token: str = token_hex(
+                    randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT)
+                )
+                insert_generated_token_stmt = auth_codes.insert().values(
+                    code=generated_token,
+                    account_type=UserEntity.NODE_USER,
+                    to_email=email_address,
+                    expiration=datetime.now() + timedelta(days=2),
+                )
+
+                await instances[1].execute(
+                    insert_generated_token_stmt
+                )  # TODO: Obligatory. Not sure if this is safe without fail-safe.
+
+                await get_email_instance_or_initialize().send(
+                    content=f"<html><body><h1>Register Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject="Register Auth Code for Registration @ Folioblocks",
+                    to=email_address,
+                )
+
+            # ! Assumes email service is running, so unhandled it for now because complexity rises.
+            except IntegrityError as e:
+                logger.critical(
+                    f"Your input matches one of the records for `{NodeRoles.MASTER.name} registration.` Are you attempting to restart instance, please delete the generated files and try again."
+                )
 
             logger.info(
                 f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint. Once done, press any key to continue and put your `auth_code` to login."
@@ -107,10 +142,13 @@ async def authenticate_node_client(
             break
 
         while True:
-            auth_code = ensure_input_prompt("Auth Code >", False, "auth code", None)
-            check_auth_stmt = (
-                auth_codes.select().where(auth_codes.c.code == auth_code).count()
+            auth_code = await ensure_input_prompt(
+                input_context="Auth Code",
+                hide_fields=False,
+                generalized_context="auth code",
+                additional_context=None,
             )
+            check_auth_stmt = auth_codes.select().where(auth_codes.c.code == auth_code)
             auth_result = await instances[1].fetch_one(check_auth_stmt)
 
             if not auth_result:
@@ -124,41 +162,36 @@ async def authenticate_node_client(
             )
             break
 
-        while True:
-            if (
-                env.get("NODE_USERNAME", None) is None
-                and env.get("NODE_PWD", None) is None
-            ):
-                user_credentials = ensure_input_prompt(
-                    ["Node Username > ", "Node Password > "],
-                    [False, True],
-                    "username and password",
-                    "You will have to ensure it this time to avoid potential conflicts!",
-                )
+    while True:
+        if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
+            user_credentials = await ensure_input_prompt(
+                input_context=["Node Username", "Node Password"],
+                hide_fields=[False, True],
+                generalized_context="username and password",
+                additional_context="You will have to ensure it this time to avoid potential conflicts!",
+                enable_async=True,
+            )
 
-            # Create a session for this request.
-            login_session = ClientSession()
+        # Create a session for this request.
+        login_session = ClientSession()
 
-            # Ensure that ENV will be covered here.
+        # Ensure that ENV will be covered here.
+        try:
             login_req = await login_session.post(
-                f"{instances[0].host}:{instances[0].port}/entity/login",
-                auth=BasicAuth(
-                    login=(
-                        env.get("NODE_USERNAME", None)
-                        if user_credentials is None
-                        else user_credentials[0]
-                    ),
-                    password=(
-                        env.get("NODE_PWD", None)
-                        if user_credentials is None
-                        else user_credentials[1]
-                    ),
-                ),
+                f"http://{instances[0].host}:{instances[0].port}/entity/login",
+                json={
+                    "username": env.get("NODE_USERNAME", None)
+                    if user_credentials is None
+                    else user_credentials[0],
+                    "password": env.get("NODE_PWD", None)
+                    if user_credentials is None
+                    else user_credentials[1],
+                },
             )
 
             if login_req.ok:
                 # Resolve via pydantic.
-                resolved_model = EntityLoginResult.parse_obj(login_req.json())
+                resolved_model = EntityLoginResult.parse_obj(await login_req.json())
 
                 # With this, we should also save the context by using store_auth_token().
                 store_identity_tokens(
@@ -174,18 +207,26 @@ async def authenticate_node_client(
                     and user_credentials
                 ):
                     with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
-                        hashed_pwd: HashedData = hash_context(
-                            RawData(user_credentials[1])
-                        )
                         env_writer.write(
-                            f"NODE_USERNAME={user_credentials[0]}, NODE_PWD={hashed_pwd}"
+                            f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}"
                         )
-                    return
 
+                await login_session.close()
+                return AddressUUID(resolved_model.user_address)
             else:
-                logger.critical("Credentials are incorrect! Please try again...")
+                logger.error(
+                    f"Credentials are incorrect! Please try again... | Info: {login_req.content}"
+                )
                 await sleep(3)
                 continue
+
+        # * Should cover the following exceptions: (ClientConnectorError, ClientConnectorSSLError, ClientConnectorCertificateError, and ClientConnectionError)
+        except ClientError as e:
+            logger.critical(
+                f"There was an error during request. Please try again. | Information: {e}"
+            )
+            await sleep(3)
+            continue
 
 
 class EnsureAuthorized:

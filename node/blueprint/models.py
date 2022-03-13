@@ -11,30 +11,20 @@ you should have received a copy of the gnu general public license along with Fol
 """
 
 from datetime import timedelta
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    ForeignKey,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    Text,
-    func,
-)
 
-from sqlalchemy.orm import relationship
-from core.constants import UserEntity
 from core.constants import (
-    UserActivityState,
     BlacklistDuration,
     GroupType,
+    QueueStatus,
+    QueueTaskType,
     TokenStatus,
+    UserActivityState,
+    UserEntity,
 )
+from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-
-from node.core.constants import QueueStatus, QueueTaskType
+from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
+from sqlalchemy.orm import relationship
 
 # TODO: We might wanna create a key where it combines all of the certain fields
 # ! And when it was inserted for reset password, it should resulted to that!
@@ -114,7 +104,7 @@ blacklisted_users = Table(
 
 blacklisted_users.user_ref = relationship(users, foreign_keys=["user"])  # type: ignore
 
-identity_tokens = Table(
+tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
@@ -130,7 +120,7 @@ identity_tokens = Table(
     Column("issued", DateTime, server_default=func.now()),
 )
 
-identity_tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
+tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 # TODO: Need checker function for asserting if the user is a Node Type.
 # ! This is just a preparation for the blockchain system approach.
 
@@ -141,11 +131,15 @@ auth_codes = Table(
     Column(
         "generated_by", String(38), ForeignKey("users.unique_address"), nullable=True
     ),
-    Column("code", String(16), unique=True, nullable=False),
+    Column(
+        "code", String(64), unique=True, nullable=False
+    ),  # 64 because token_hex-based restriction is not enforced, meaning len is unpredictable for some reason.
     Column("account_type", SQLEnum(UserEntity), nullable=False),
     Column("to_email", String(128), unique=True, nullable=False),
-    Column("is_used", Boolean, default=False),
-    Column("expiration", DateTime, server_default=func.now() + timedelta(days=2)),
+    Column("is_used", Boolean, server_default="False"),
+    Column(
+        "expiration", DateTime, server_default=func.now()
+    ),  # TODO: Move this server_default  + 2 days from creation of auth_codes.
 )
 
 auth_codes.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
@@ -158,13 +152,13 @@ queued_tasks = Table(
     Column(
         "status",
         SQLEnum(QueueStatus),
-        server_default=QueueStatus.ON_QUEUE,
+        server_default=QueueStatus.ON_QUEUE.name,
         nullable=False,
     ),
     Column(
         "type",
         SQLEnum(QueueTaskType),
-        server_default=QueueTaskType.UNSPECIFIED,
+        server_default=QueueTaskType.UNSPECIFIED.name,
         nullable=False,
     ),
     #     Column(),
