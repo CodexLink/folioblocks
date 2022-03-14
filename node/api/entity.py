@@ -54,14 +54,9 @@ logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 entity_router = APIRouter(
     prefix="/entity",
     tags=[BaseAPI.ENTITY.value],
-    responses={
-        404: {"description": "Not Found."}
-    },  # TODO: Handle more than Not Found. ADD METADATA here or something.
 )
 
 # # WARNING: When this was SIDE mode, use endpoints instead of using it's own SQL database.
-
-
 @entity_router.post(
     "/register",
     tags=[EntityAPI.REGISTRATION_API.value],
@@ -69,8 +64,6 @@ entity_router = APIRouter(
     summary="Registers a node from the blockchain network.",
     description="An API endpoint that allows a node to be introduced to the blockchain network.",
 )
-
-# TODO: Add the auth_code generation when endpoint is done.
 async def register_entity(
     credentials: EntityRegisterCredentials, db: Any = Depends(get_db_instance)
 ) -> EntityRegisterResult:
@@ -160,8 +153,8 @@ async def login_entity(
     credential_to_look = users.select().where(users.c.username == credentials.username)
     fetched_data = await db.fetch_one(credential_to_look)
 
-    # TODO: This is implementable when we have the capability to lock out users due to suspicious activities.
-    # * Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
+    # TODO: Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
+    # - This is implementable when we have the capability to lock out users due to suspicious activities.
 
     if fetched_data is not None:
 
@@ -268,8 +261,6 @@ async def logout_entity(
         detail="The inferred token does not exist or is already labelled as expired!",
     )
 
-
-# TODO: USER INFORMATION ENDPOINT
 @entity_router.get(
     "/info",
     summary="Obtains the information of the entity.",

@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from pydantic import BaseModel
 
@@ -90,18 +90,21 @@ class LoggerHandler:
             # * Create a general file handler.
             base_config["handlers"]["file_logger"] = {
                 "class": "logging.FileHandler",
-                "filename": f"{Path(__file__).cwd()}/logs/node_id_{datetime.now().strftime(_custom_config['LOG_DATE_FORMAT_IN_FILE'])}.log",  # ! TODO: Add Node ID on this one when we implement the node system.
+                "filename": f"{Path(__file__).cwd()}/logs/node_id_{datetime.now().strftime(_custom_config['LOG_DATE_FORMAT_IN_FILE'])}.log",
                 "formatter": "default_no_colors",
             }
 
             # * For all loggers, set the general file handler as another handler (if there's one existing) or a new handler.
             # * Note that the log level is set here as well.
-            for each_loggers in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
-                if each_loggers == "uvicorn.error":
-                    base_config["loggers"]["uvicorn.error"] = {
+            AR_UVICORN_ERROR_LOGGER: Final[str] = "uvicorn.error"
+            for each_loggers in ["uvicorn", "uvicorn.access", AR_UVICORN_ERROR_LOGGER]:
+                if each_loggers == AR_UVICORN_ERROR_LOGGER:
+                    base_config["loggers"][AR_UVICORN_ERROR_LOGGER] = {
                         "handlers": ["file_logger"]
                     }
-                    base_config["loggers"]["uvicorn.error"]["level"] = logger_level.name
+                    base_config["loggers"][AR_UVICORN_ERROR_LOGGER][
+                        "level"
+                    ] = logger_level.name
                 else:
                     base_config["loggers"][each_loggers]["handlers"].append(
                         "file_logger"

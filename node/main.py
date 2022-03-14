@@ -152,15 +152,17 @@ async def post_initialize() -> None:
         f"Step 2.1 | Attempting to look {'for the master node' if parsed_args.prefer_role == NodeRoles.MASTER.name else 'at other nodes'} at host {parsed_args.host}, port {parsed_args.port}..."
     )
 
-    if parsed_args.prefer_role == NodeRoles.MASTER.name:
-        if not get_email_instance_or_initialize().is_connected:
-            logger.info("Step 2.2 | Initializing email service...")
-            create_task(get_email_instance_or_initialize().connect())
-            logger.info("Step 2.2 | Email service instantiated.")
+    if (
+        parsed_args.prefer_role == NodeRoles.MASTER.name
+        and not get_email_instance_or_initialize().is_connected
+    ):
+        logger.info("Step 2.2 | Initializing email service...")
+        create_task(get_email_instance_or_initialize().connect())
+        logger.info("Step 2.2 | Email service instantiated.")
 
-            # TODO: look_for_nodes() function has been deleted.
-            # await look_for_nodes()
-            logger.info("Step 2.1 | Able to look for other nodes ...")
+        # TODO: look_for_nodes() function has been deleted.
+        # await look_for_nodes()
+        logger.info("Step 2.1 | Able to look for other nodes ...")
 
     # In the end, both NodeRoles.MASTER and NodeRoles.SIDE will initialize their local or universal (depending on the role) blockchain file.
     # Note that there are several steps that differentiates the two roles.
@@ -189,9 +191,10 @@ async def terminate() -> None:
     await get_blockchain_instance_or_initialize().close()  # type: ignore
     get_email_instance_or_initialize().close()
     await close_resources(parsed_args.key_file[0])
+
     await database_instance.disconnect()
 
-    # lmao, we need to logout as well hahahaha.
+    # TODO: Create an http.py that can be used across for the request.
 
     if parsed_args.prefer_role is NodeRoles.SIDE.name:
         pass

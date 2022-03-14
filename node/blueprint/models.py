@@ -10,8 +10,7 @@ FolioBlocks is distributed in the hope that it will be useful, but without any w
 you should have received a copy of the gnu general public license along with FolioBlocks. if not, see <https://www.gnu.org/licenses/>.
 """
 
-from datetime import timedelta
-
+from typing import Final
 from core.constants import (
     BlacklistDuration,
     GroupType,
@@ -26,11 +25,10 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
 from sqlalchemy.orm import relationship
 
-# TODO: We might wanna create a key where it combines all of the certain fields
-# ! And when it was inserted for reset password, it should resulted to that!
+# TODO: We might wanna create a key where it combines all of the certain fields and when it was inserted for reset password, it should resulted to that!
 
 """
-    Notes:
+    @o Notes:
     - SQLAlchemy doesn't use enum.Enum as their Enum.
     - Therefore, I have to subclass sqlalchemy.Enum as SQLEnum and subclass it to all classified enums that will be used in the database.
     - Their use-case on non-database is possible since their `dir()` shows that we can access items just like what we have in enum.Enum.
@@ -39,8 +37,6 @@ from sqlalchemy.orm import relationship
     - The use case of DeclarativeModel (declarative_base()) is not possible and is not supported by encode/databases. An example of instantiating
     - sqlalchemy.Metadata() is only possible. Though even we are going to use encode/databases with SQLAlchemy ORM, then I'm not sure why they didn't support it.
 """
-
-# DeclarativeModel: DeclarativeMeta = declarative_base()
 
 model_metadata: MetaData = MetaData()
 
@@ -55,10 +51,10 @@ associations = Table(
         server_default=GroupType.ORGANIZATION.name,
         nullable=False,
     ),
-    Column("date_added", DateTime, default=func.now())
-    # TODO
+    Column("date_added", DateTime, default=func.now()),
 )
 associations.associates = relationship("users", back_populates="association")  # type: ignore
+
 users = Table(
     "users",
     model_metadata,
@@ -86,12 +82,13 @@ users = Table(
 )
 
 users.association = relationship(associations, back_populates="associates")  # type: ignore
+user_id_ref: Final[str] = "users.unique_address"
 
 blacklisted_users = Table(
     "blacklisted_users",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("user", String(38), ForeignKey("users.unique_address"), nullable=False),
+    Column("user", String(38), ForeignKey(user_id_ref), nullable=False),
     Column("reason", Text, nullable=False),
     Column(
         "duration",
@@ -108,7 +105,7 @@ tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("from_user", String(38), ForeignKey("users.unique_address"), nullable=False),
+    Column("from_user", String(38), ForeignKey(user_id_ref), nullable=False),
     Column("token", Text, nullable=False),
     Column(
         "state",
@@ -121,16 +118,12 @@ tokens = Table(
 )
 
 tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
-# TODO: Need checker function for asserting if the user is a Node Type.
-# ! This is just a preparation for the blockchain system approach.
 
 auth_codes = Table(
     "auth_codes",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column(
-        "generated_by", String(38), ForeignKey("users.unique_address"), nullable=True
-    ),
+    Column("generated_by", String(38), ForeignKey(user_id_ref), nullable=True),
     Column(
         "code", String(64), unique=True, nullable=False
     ),  # 64 because token_hex-based restriction is not enforced, meaning len is unpredictable for some reason.

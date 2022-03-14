@@ -22,9 +22,6 @@ from core.constants import BaseAPI
 admin_router = APIRouter(
     prefix="/admin",
     tags=[BaseAPI.ADMIN.value],
-    responses={
-        404: {"description": "Not Found."}
-    },  # Show authenticity by accessing the endpoint here.
 )
 
 
@@ -40,12 +37,11 @@ admin_router = APIRouter(
 async def generate_auth_token(
     # credentials: NodeRegisterCredentials,
     # ) -> NodeRegisterResult:
-):
-    return
-
+) -> None:
     """
-		Use admin address, date to add, role type.
-	"""
+    Use admin address, date to add, role type.
+    """
+    return
 
 
 # ! This may be inserted from the blockchain as a proof.

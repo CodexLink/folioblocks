@@ -8,9 +8,11 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from logging import Logger, getLogger
 from typing import Callable, Final
 
 from core.constants import (
+    ASYNC_TARGET_LOOP,
     MAX_JWT_HOLD_TOKEN,
     AddressUUID,
     CredentialContext,
@@ -18,7 +20,7 @@ from core.constants import (
     Has,
 )
 
-# TODO: Integrate the logger here soon.
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 
 class ConversionUnequalLength(AssertionError):
@@ -31,7 +33,8 @@ class ConversionUnequalLength(AssertionError):
             % (f"| Additional Info: {context}" if context else "")
         )
 
-        super().__init__(message)
+        logger.exception(message)
+        super().__init__()
 
 
 class MaxJWTOnHold(AssertionError):
@@ -44,6 +47,7 @@ class MaxJWTOnHold(AssertionError):
 
         message: str = f"This user {uuids[0]} ({uuids[1]}) currently withold/s {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
 
+        logger.exception(message)
         super().__init__(message)
 
 
@@ -52,6 +56,7 @@ class NoKeySupplied(ValueError):
 
         message: str = f"This function / context {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
 
+        logger.exception(message)
         super().__init__(message)
 
 
@@ -60,6 +65,7 @@ class UnsatisfiedClassType(ValueError):
 
         message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
 
+        logger.exception(message)
         super().__init__(message)
 
 
@@ -69,4 +75,5 @@ class InsufficientCredentials(ValueError):
     ) -> None:
         message: str = f"This entity {what_service} requires the following credentals: {fields_require}."
 
+        logger.exception(message)
         super().__init__(message)

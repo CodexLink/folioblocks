@@ -11,7 +11,7 @@
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--local", "--prefer-role", "MASTER", "-d"] // TODO: Reflect final arguments from the args.py.
+      "args": ["--local", "--prefer-role", "MASTER", "-d"]
     },
     {
       "name": "Folioblocks Node Backend: No Local Param, Debug as MASTER (Top-Level Code Check)",
@@ -20,7 +20,7 @@
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--local", "--prefer-role", "MASTER", "-d"] // TODO: Reflect final arguments from the args.py.
+      "args": ["--local", "--prefer-role", "MASTER", "-d"]
     },
     {
       "name": "Folioblocks Node Backend: No Local, No Debug FLAG as MASTER (Top-Level Code Check)",
@@ -29,7 +29,7 @@
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--prefer-role", "MASTER"] // TODO: Reflect final arguments from the args.py.
+      "args": ["--prefer-role", "MASTER"]
     },
     {
       "name": "Folioblocks Node Backend: No Local, No Debug FLAG as MASTER (Deep Check)",
@@ -38,7 +38,7 @@
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": false,
-      "args": ["--prefer-role", "MASTER"] // TODO: Reflect final arguments from the args.py.
+      "args": ["--prefer-role", "MASTER"]
     },
     {
       "name": "Folioblocks Node Backend: Debug as SIDE",
@@ -47,7 +47,7 @@
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": false,
-      "args": ["--local", "--prefer-role", "SIDE"] // TODO: Reflect final arguments from the args.py.
+      "args": ["--local", "--prefer-role", "SIDE"]
     }
   ]
 }

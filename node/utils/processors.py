@@ -147,7 +147,7 @@ def crypt_file(
 
         else:
             if key is None:
-                key = Fernet.generate_key()  # TODO: Idk why.
+                key = Fernet.generate_key()
 
             crypt_context = Fernet(key)
 
@@ -393,8 +393,6 @@ def validate_file_keys(
             f"Error: One of the keys either has an invalid value or is missing. Have you modified your {file_ref}? Please check and try again.",
         )
 
-    return
-
 
 # # File Resource Initializers and Validators, Blockchain and Database — END
 
@@ -407,8 +405,6 @@ def verify_hash_context(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
     return pwd_handler.verify(real_pwd, hashed_pwd)
 
 
-# TODO: Make a function or do the ensure_input_prompt run on executor for the processor initialize_resource ....
-# TODO: Ensure that the server is running when we implemented the aiocosole to ensure that we can do some self login...
 async def ensure_input_prompt(
     input_context: list[Any] | Any,
     hide_fields: list[bool] | bool,
@@ -433,7 +429,7 @@ async def ensure_input_prompt(
     while True:
         input_s: list[str] | str = (
             "" or []
-        )  # TODO: Not a prio but have to be fixed later.
+        )  # TODO: Not a prio but have to fix its typing later.
         if isinstance(input_context, list) and isinstance(hide_fields, list):
             for field_idx, each_context_to_input in enumerate(input_context):
                 while True:

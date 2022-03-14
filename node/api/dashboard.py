@@ -36,7 +36,6 @@ from core.constants import AddressUUID, DashboardAPI, ItemReturnCount
 dashboard_router = APIRouter(
     prefix="/dashboard",
     tags=[BaseAPI.DASHBOARD.value],
-    responses={404: {"description": "Not Found."}},  # TODO: Handle more than Not Found.
 )
 
 """
@@ -103,7 +102,7 @@ async def get_applicant(applicant_id: AddressUUID):
     summary="Obtains all requests associated to this client-individual.",
     description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
 )
-async def get_all_requests():
+async def get_all_requests() -> None:
     pass
 
 
@@ -153,7 +152,7 @@ async def get_issuances(
     | None = Query(
         None,
         title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the `applicant_count` is higher than the number of returned blocks.",  # TODO: If this renders the `` style, use it across other arguments that have the same functionality.
+        description="The page you are currently sitting, defaults to page 1. Other pages are available if the `applicant_count` is higher than the number of returned blocks.",  # TODO: [TO BE CONFIRMED] If this renders the `` style, use it across other arguments that have the same functionality.
     ),
 ):
     pass

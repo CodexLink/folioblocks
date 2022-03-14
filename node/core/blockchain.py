@@ -1,7 +1,8 @@
-from asyncio import get_event_loop
+from asyncio import create_task, get_event_loop
 from datetime import datetime
 from hashlib import sha256
 from json import dumps as export_to_json
+from json import loads as import_raw_json_to_dict
 from logging import Logger, getLogger
 from random import randint
 from time import time
@@ -38,16 +39,21 @@ from core.tasks import AsyncTaskQueue
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 # TODO: Should we seperate consensus from this class?
-class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
+class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     def __init__(
         self,
         auth_tokens: tuple[AddressUUID, JWTToken],
         client_role: NodeRoles,
     ) -> None:
 
+        # TODO: After finalization, seperate some methods and attributes for the SIDE and MASTER.
         # Required since this class will be invoked no matter what the role of the client instance is.
         self.client_role = client_role
         self.auth_token = auth_tokens
+        self.consensus_timer: datetime | None = None
+        self.blockchain_ready = False
+
+        # TODO: Add implementation for when there's a concurrency of new data, then await all of them then sort then insert.
 
         super().__init__()
 
@@ -55,24 +61,31 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
         # First check for the file if it is valid de-serializable.
         # ! Raise error if it contains nothing. The processor of the file for the blockchain should already have a context.
 
-        # If client_role is SIDE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER node that is available.
+        # If client_role is SIDE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER node that is available. Also consider checking for unfinished tasks.
 
         # TODO.
         # ! Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
+
         # If everything is okay, then load the blockchain.
-        self._chain: dict[str, list[frozendict]] = frozendict(
-            {"chain": []}
-        )  # TODO I'm concerned from its deserialization and serialization in JSON.
+        # self._chain: dict[str, list[frozendict]] = frozendict({"chain": []})
+        self._chain = {}
 
-        await self.create_genesis_block()
+        self._chain = await self._process_file_state(
+            operation=BlockchainIOAction.TO_READ, chain=self._chain
+        )
 
-    # TODO: Not sure if this should be here or from the processor.
-    async def serialize(self) -> None:
-        pass
+        # TODO: try running this if we were able to finish most parts of the blockchain. 3 to 5 times.
+        for _ in range(randint(1, 4)):
+            create_task(
+                self.create_genesis_block()
+            )  # * Add this to async queue then await for the return with the sorted data based on block id.
 
     # Write to file or write_to_buffer.
     async def _append(
-        self, context: Block | Transaction, auth_context: tuple[AddressUUID, JWTToken]
+        self,
+        *,
+        context: Block | Transaction,
+        auth_context: tuple[AddressUUID, JWTToken],
     ) -> None:
         # I handle only the context at this moment for now.
 
@@ -82,19 +95,22 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
         # TODO: Add it in the file or something idk.
         self._chain["chain"].append(frozendict(context.dict()))
 
-        await self._overwrite_or_read_file_state(
+        await self._process_file_state(
             operation=BlockchainIOAction.TO_WRITE, chain=self._chain
         )
 
     # Overwrites existing buffer from the frozendict if consensus has been established.
-    async def _overwrite_or_read_file_state(
-        self, operation: BlockchainIOAction, chain: dict[str, list[frozendict]]
-    ) -> None:
-        if chain and operation == BlockchainIOAction.TO_WRITE:
-            async with aiofiles.open(
-                BLOCKCHAIN_RAW_PATH,
-                "w" if operation == BlockchainIOAction.TO_WRITE else "r",
-            ) as writer:
+    # TODO: Make the existing file loaded and deserialize it.
+    # TODO: Create an attribute that tells if we are ready to do some processing or not. | PREPARED.
+    # TODO: This is gonna be useful for asnyc tasks queue that we have for the consensus implementation.
+    async def _process_file_state(
+        self, *, operation: BlockchainIOAction, chain: dict[str, list[frozendict]] | Any
+    ) -> Any | None:  # ! TYPES HAS BEEN COMPLICATED, WILL RESOLVE LATER.
+        async with aiofiles.open(
+            BLOCKCHAIN_RAW_PATH,
+            "w" if operation == BlockchainIOAction.TO_WRITE else "r",
+        ) as writer:
+            if chain and operation == BlockchainIOAction.TO_WRITE:
                 # TODO for the r. or r+ whatever.
                 await writer.write(
                     export_to_json(
@@ -104,12 +120,20 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
                         )
                     )
                 )
+            elif chain and operation == BlockchainIOAction.TO_READ:
+                # First we fetch something form the file.
+                raw_data = await writer.read()
+                serialized_data = import_raw_json_to_dict(raw_data)
+
+                # Then we deserialize it to something that represents the default of self._chain.
+                logger.warning("Chain has been loaded from the file to the in-memory.")
+                return await self._process_objects(
+                    action=ObjectProcessAction.TO_SERIALIZE, context=serialized_data
+                )
 
     async def _process_objects(
-        self,
-        action: ObjectProcessAction,
-        context: dict[str, list[frozendict]],  # INCLUDE IOStream HERE.
-    ) -> dict[str, list[frozendict]]:  # TODO: Annotate this.
+        self, *, action: ObjectProcessAction, context: dict[str, list[frozendict] | str]
+    ) -> dict[str, list[frozendict]] | frozendict:  # TODO: Annotate this.
         """
         An async function that deserialize or serialize objects for process. Probably used a lot by the _overwrite_or_read_file_state.
 
@@ -119,20 +143,40 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
         """
         #
 
-        if action == ObjectProcessAction.TO_SERIALIZE and isinstance(
-            context, dict
-        ):  # TODO: Handle or restrict data inserted here.
+        # * Check the structure in the initial phase before processing.
+        # - Ensure that the wrapped object is 'dict' regardless of their recent forms. Please process it before feeding it from this function.
+        if action in ObjectProcessAction and isinstance(context, dict):
 
+            # TODO: Post Feature (Low Priority) | Properly set types.
             for dict_idx, dict_data in enumerate(context["chain"]):
-                if isinstance(dict_data, frozendict):
-                    context["chain"][dict_idx] = dict(dict_data)  # type: ignore # Reports something abou indexing.
 
-                    # Since we know that we have a format, meaning we don't need to assume, statically declare to modify timestamp to be compatible in JSON serialization.
-                    context["chain"][dict_idx]["timestamp"] = context["chain"][
-                        dict_idx
-                    ]["timestamp"].isoformat()
+                # * Check internal structure.
+                # - Ensure that we are only dealing either 'dict' or 'frozendict' at its respected 'action'. Otherwise we raise an exception.
+                # * Congrats, I made hard to be readable, but hey less codespace.
 
-        return context
+                context["chain"][dict_idx] = (  # type: ignore # Reports something about indexing.
+                    dict(dict_data)
+                    if isinstance(dict_data, frozendict)
+                    and action == ObjectProcessAction.TO_SERIALIZE
+                    else frozendict(dict_data)
+                )
+
+                # @o Since we know that we have a format, meaning we don't need to assume, statically declare to modify timestamp to be compatible in JSON serialization.
+                context["chain"][dict_idx]["timestamp"] = (  # type: ignore
+                    context["chain"][dict_idx]["timestamp"].isoformat()  # type: ignore
+                    if ObjectProcessAction.TO_SERIALIZE
+                    and isinstance(context["chain"][dict_idx]["timestamp"], datetime)  # type: ignore
+                    else datetime.fromisoformat(context["chain"][dict_idx]["timestamp"])  # type: ignore
+                )  # type: ignore
+                # ! Here me out, this is ugly, but elegant for some reason. Don't blame my code formatter for this.
+
+            # * When a function contains `TO_DESERIALIZE`, do some additional work by wrapping the processed data with frozendict().
+            if action == ObjectProcessAction.TO_SERIALIZE:
+                context = frozendict(context)
+
+            return context
+
+        print("There something wrong.")  # TODO: Create an exception of this.
 
     async def create_genesis_block(self) -> None:
         """
@@ -174,10 +218,10 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
         pass
 
     # ! We may need thread pool here if we have multiple things happening.
-    def mine_block(self, block: Block) -> tuple[int, HashUUID]:
+    def mine_block(self, *, block: Block) -> tuple[int, HashUUID]:
         # If success, then return the hash of the block based from the difficulty.
         prev: float = time()
-        nth = 1
+        nth: int = 1
 
         logger.debug(f"Attempting to mine the Block #{block.id} ...")
 
@@ -210,6 +254,10 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
         pass
 
     @property
+    def is_blockchain_ready(self) -> bool:
+        return self.blockchain_ready
+
+    @property
     def get_last_block(self) -> frozendict:
         return self._chain[:-1]  # ! This is not working.
 
@@ -225,10 +273,12 @@ class Blockchain(AsyncTaskQueue, AdaptedPoETConsensus):
 
 # # This approach was (not completely) taken from stackoverflow.
 # * Please refer to the node/core/email.py:132 for more information.
-blockchain_service: Blockchain | None = None
+blockchain_service: BlockchainMechanism | None = None
 
 
-def get_blockchain_instance_or_initialize(role: NodeRoles | None = None) -> Blockchain:
+def get_blockchain_instance_or_initialize(
+    role: NodeRoles | None = None,
+) -> BlockchainMechanism:
 
     global blockchain_service
 
@@ -242,7 +292,7 @@ def get_blockchain_instance_or_initialize(role: NodeRoles | None = None) -> Bloc
     # Resolve.
     if role and blockchain_service is None and token_ref is not None:
         # # Note that this will create an issue later when we tried SIDE node mode later on.
-        blockchain_service = Blockchain(
+        blockchain_service = BlockchainMechanism(
             auth_tokens=token_ref,
             client_role=role,
         )

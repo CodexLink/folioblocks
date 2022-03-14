@@ -75,9 +75,12 @@ def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
 
 
 # TODO
-def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
+# def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
+def generate_auth_token() -> str:
     # To identify who the heck did it, we need to ensure fetch its token or otherwise put it to None. But we need to ensure that anyone who uses this must be authenticated. This function will be used by master anyway.
-    pass
+
+    # Note that we transferred this one to ensure that it will be used later.
+    return token_hex(randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT))
 
 
 # ! Implement blacklisted users!
@@ -109,9 +112,7 @@ async def authenticate_node_client(
                 )
 
                 # Infer, try again here later.
-                generated_token: str = token_hex(
-                    randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT)
-                )
+                generated_token: str = generate_auth_token()
                 insert_generated_token_stmt = auth_codes.insert().values(
                     code=generated_token,
                     account_type=UserEntity.NODE_USER,
@@ -274,8 +275,10 @@ class EnsureAuthorized:
         )
 
 
-# TODO: Class version of this one soon.
-def ensure_past_negotiations() -> bool:
+def ensure_past_negotiations(
+    identity: tuple[AddressUUID, JWTToken] = Depends(get_identity_tokens),
+    db: Database = Depends(get_db_instance),
+) -> bool:
     # Maybe query or use the current session or the Node ID.
     # We need to contact the other part to ensure that there is negotiations.
     return False

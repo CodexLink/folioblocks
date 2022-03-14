@@ -73,8 +73,8 @@ fn = TypeVar(  # ! Doesn't work for now.
 
 # # Constants / Constraints, Auth
 BLOCK_HASH_LENGTH: Final[int] = 64
-FERNET_KEY_LENGTH: Final[int] = 44  # TODO: ??? | What???
-SECRET_KEY_LENGTH: Final[int] = 32  # TODO: ??? | What???
+FERNET_KEY_LENGTH: Final[int] = 44
+SECRET_KEY_LENGTH: Final[int] = 32
 MAX_JWT_HOLD_TOKEN: Final[int] = 5
 
 UUID_KEY_PREFIX: Final[str] = "fl"
@@ -198,6 +198,7 @@ class TransactionActions(IntEnum):  # TODO: This will be expanded later on.
 class TransactionActionString(Enum):
     pass
 
+
 # # Enums, Blockchain
 class BlockchainIOAction(IntEnum):
     TO_WRITE = auto()
@@ -207,9 +208,11 @@ class BlockchainIOAction(IntEnum):
     TO_APPEND = auto()
     TO_OVERWRITE = auto()
 
+
 class ObjectProcessAction(IntEnum):
     TO_SERIALIZE = auto()
     TO_DESERIALIZE = auto()
+
 
 # # Enums, Constraints
 # ! Blockchain (Explorer) Query
@@ -256,15 +259,12 @@ class TokenStatus(Enum):
     EXPIRED = "Token Expired"
     RECENTLY_CREATED = "Token Recently Created"
     ON_USE = "Token On Use"
-    TOKEN_RETAINED_WHILE_EXPIRED = (
-        "Token Expired but Retained"  # TODO: Not sure on this one.
-    )
 
 
 class QueueTaskType(Enum):
-    UNSPECIFIED = auto()
-    INITIATE_CONSENSUS = auto()
-    CHECKPOINT_FILE = auto()
+    UNSPECIFIED = "Unspecified Task"
+    INITIATE_CONSENSUS = "Consensus Initialization"
+    CHECKPOINT_FILE = "In-Memory to File Checkpoint"
     NEGOTIATION_INITIAL = "Negotiation Phase: Initial"
     NEGOTIATION_PROCESSING = "Negotiation: Processing"
     NEGOTIATION_RECEIVE_RESULT = "Negotiation: End, Receive Result"

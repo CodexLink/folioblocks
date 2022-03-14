@@ -11,8 +11,6 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-# TODO: Finish config, and then design schema for both the blockchain and the config and test it later on.
-
 if __name__ == "__main__":
     raise SystemExit(
         "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
@@ -38,8 +36,6 @@ from core.constants import (
     TxID,
 )
 
-# from core.models import Blockchain
-
 """
 # Regarding Dependency Injection on this endpoint.
 
@@ -57,7 +53,6 @@ Since this endpoint is just returning by reading through file, we can make this 
 explorer_router = APIRouter(
     prefix="/explorer",
     tags=[BaseAPI.EXPLORER.value],
-    responses={404: {"description": "Not Found."}},  # TODO: Handle more than Not Found.
 )
 
 # ! Note: Most of these operations require the need of the original JSON of the master node. From there, we may be able to cache the output.
@@ -71,7 +66,7 @@ explorer_router = APIRouter(
     ],
     response_model=Blockchain,
     summary="Fetch the context of the blockchain, formatted for displaying in the web.",
-    description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",  # TODO
+    description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",
 )
 async def get_blockchain():
     pass
@@ -109,7 +104,7 @@ async def get_blocks(
     ],
     response_model=Block,
     summary="Fetches a certain block from the blockchain.",
-    description="An API endpoint that specifically obtains a certain block from the blockchain.",  # TODO: Search for the cached output.
+    description="An API endpoint that specifically obtains a certain block from the blockchain.",
 )
 async def get_certain_block(
     block_id: BlockID,

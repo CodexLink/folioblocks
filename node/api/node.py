@@ -21,9 +21,6 @@ from core.constants import UserEntity
 node_router = APIRouter(
     prefix="/node",
     tags=[BaseAPI.NODE.value],
-    responses={
-        404: {"description": "Not Found."}
-    },  # TODO: Handle more than Not Found. ADD METADATA here or something.
 )
 
 
@@ -60,7 +57,7 @@ async def pre_post_negotiate(
     role: Any = Depends(
         EnsureAuthorized(_as=UserEntity.NODE_USER)
     ),  # TODO: # ! No TYPE!
-):  # Argument is TODO. Actions should be, receive_block, (During this, one of the assert processes will be executed.)
+) -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     pass
 
 
@@ -73,7 +70,7 @@ async def pre_post_negotiate(
 )
 async def process_negotiate(
     deps: Any = Depends(ensure_past_negotiations),
-):  # Actions should be updating data for the master node to communicate.
+) -> None:  # Actions should be updating data for the master node to communicate.
     pass
 
 
