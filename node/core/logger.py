@@ -35,6 +35,7 @@ class LoggerHandler:
     @classmethod
     def init(
         cls,
+        *,
         base_config: dict[str, Any],
         disable_file_logging: bool = False,
         logger_level: LoggerLevelCoverage = LoggerLevelCoverage.INFO,

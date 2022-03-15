@@ -16,7 +16,12 @@ from email.mime.text import MIMEText
 from logging import Logger, getLogger
 from os import environ as env
 
-from aiosmtplib import SMTP, SMTPAuthenticationError, SMTPConnectError, SMTPServerDisconnected
+from aiosmtplib import (
+    SMTP,
+    SMTPAuthenticationError,
+    SMTPConnectError,
+    SMTPServerDisconnected,
+)
 from pydantic import EmailStr
 from utils.exceptions import InsufficientCredentials
 
@@ -36,6 +41,7 @@ logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 class EmailService:
     def __init__(
         self,
+        *,
         url: URLAddress,
         port: IPPort,
         username: CredentialContext,
@@ -78,7 +84,11 @@ class EmailService:
 
                 return
 
-            except (SMTPAuthenticationError, SMTPConnectError, SMTPServerDisconnected) as e:
+            except (
+                SMTPAuthenticationError,
+                SMTPConnectError,
+                SMTPServerDisconnected,
+            ) as e:
                 # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.
                 logger.critical(
                     f"Failed to connect at email services.| Additional Info: {e}."
@@ -99,6 +109,7 @@ class EmailService:
 
     async def send(
         self,
+        *,
         content: str,
         subject: str,
         to: EmailStr,

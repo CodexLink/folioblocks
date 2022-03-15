@@ -57,6 +57,7 @@ pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
 # # File Handlers, Cryptography — START
 @assert_instance
 async def acrypt_file(
+    *,
     afilename: str,
     akey: KeyContext,
     aprocess: CryptFileAction,
@@ -116,6 +117,7 @@ async def acrypt_file(
 
 @assert_instance
 def crypt_file(
+    *,
     filename: str,
     key: KeyContext,
     process: CryptFileAction,
@@ -178,6 +180,7 @@ def crypt_file(
 
 # # File Resource Initializers and Validators, Blockchain and Database — START
 async def initialize_resources_and_return_db_context(
+    *,
     runtime: RuntimeLoopContext,
     role: NodeRoles,
     auth_key: KeyContext | None = None,
@@ -331,7 +334,7 @@ async def initialize_resources_and_return_db_context(
     return db_instance
 
 
-async def close_resources(key: KeyContext) -> None:
+async def close_resources(*, key: KeyContext) -> None:
     """
     Asynchronous Database Close Function.
 
@@ -353,6 +356,7 @@ async def close_resources(key: KeyContext) -> None:
 
 
 def validate_file_keys(
+    *,
     context: KeyContext | None,
 ) -> tuple[KeyContext, KeyContext] | None:
     file_ref = f"{Path(__file__).cwd()}/{context}"
@@ -397,15 +401,16 @@ def validate_file_keys(
 # # File Resource Initializers and Validators, Blockchain and Database — END
 
 # # Variable Password Crypt Handlers — START
-def hash_context(pwd: RawData) -> HashedData:
+def hash_context(*, pwd: RawData) -> HashedData:
     return pwd_handler.hash(pwd)
 
 
-def verify_hash_context(real_pwd: RawData, hashed_pwd: HashedData) -> bool:
+def verify_hash_context(*, real_pwd: RawData, hashed_pwd: HashedData) -> bool:
     return pwd_handler.verify(real_pwd, hashed_pwd)
 
 
 async def ensure_input_prompt(
+    *,
     input_context: list[Any] | Any,
     hide_fields: list[bool] | bool,
     generalized_context: str,

@@ -42,6 +42,7 @@ logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     def __init__(
         self,
+        *,
         auth_tokens: tuple[AddressUUID, JWTToken],
         client_role: NodeRoles,
     ) -> None:
@@ -206,16 +207,17 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
         await self._append(genesis_block, get_identity_tokens())
 
-    def get_sizeof(self, block: Block) -> int:
+    def get_sizeof(self, *, block: Block) -> int:
         return asizeof(block)
 
     async def create_block(
         self,
+        *
     ) -> None:  # We need to trigger this so that it will be inserted.
-        pass
+        return
 
     async def create_transaction(self) -> None:
-        pass
+        return
 
     # ! We may need thread pool here if we have multiple things happening.
     def mine_block(self, *, block: Block) -> tuple[int, HashUUID]:
@@ -250,7 +252,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         pass
 
     # Ensure to follow the rule that we made last time.
-    async def search_for(self, type: str, uid: AddressUUID | str) -> None:
+    async def search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         pass
 
     @property
@@ -277,7 +279,7 @@ blockchain_service: BlockchainMechanism | None = None
 
 
 def get_blockchain_instance_or_initialize(
-    role: NodeRoles | None = None,
+    *, role: NodeRoles | None = None,
 ) -> BlockchainMechanism:
 
     global blockchain_service

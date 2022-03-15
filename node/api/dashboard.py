@@ -9,11 +9,10 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from http import HTTPStatus
-from fastapi import Query, APIRouter
 from typing import List
+
 from blueprint.schemas import (
-    Applicant,
+    Applicant,  # UserLoginIn,; UserLoginResult,
     Applicants,
     DashboardContext,
     Issuance,
@@ -26,12 +25,17 @@ from blueprint.schemas import (
     Requests,
     Student,
     Students,
-    # UserLoginIn,
-    # UserLoginResult,
     UserLogoutIn,
 )
-from core.constants import BaseAPI
-from core.constants import AddressUUID, DashboardAPI, ItemReturnCount
+from core.constants import (
+    QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
+    QUERY_CURRENT_INDEX_PAGE_NAME,
+    AddressUUID,
+    BaseAPI,
+    DashboardAPI,
+    ItemReturnCount,
+)
+from fastapi import APIRouter, Query
 
 dashboard_router = APIRouter(
     prefix="/dashboard",
@@ -52,8 +56,8 @@ Will work on this one when I was able to finish the explorer and node API functi
     summary="Obtains necessary information for the dashboard display.",
     description="An API endpoint that returns the data of the user based on their role.",
 )
-async def get_data_to_dashboard(context: DashboardContext):
-    pass
+async def get_data_to_dashboard(*, context: DashboardContext) -> None:
+    return
 
 
 @dashboard_router.get(
@@ -64,6 +68,7 @@ async def get_data_to_dashboard(context: DashboardContext):
     description="An API-exclusive to employers that obtains a list of individuals (applicants) who applies to them.",
 )
 async def get_applicants(
+    *,
     applicant_count: int
     | None = Query(
         ItemReturnCount.MIN,
@@ -73,11 +78,11 @@ async def get_applicants(
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the `applicant_count` is higher than the number of returned blocks.",  # TODO: If this renders the `` style, use it across other arguments that have the same functionality.
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @dashboard_router.get(
@@ -87,8 +92,8 @@ async def get_applicants(
     summary="Obtain a certain individual.",
     description="An API-exclusive to employers that obtains a particular individual, which displays their information.",
 )
-async def get_applicant(applicant_id: AddressUUID):
-    pass
+async def get_applicant(*, applicant_id: AddressUUID) -> None:
+    return
 
 
 @dashboard_router.get(
@@ -102,8 +107,8 @@ async def get_applicant(applicant_id: AddressUUID):
     summary="Obtains all requests associated to this client-individual.",
     description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
 )
-async def get_all_requests() -> None:
-    pass
+async def get_all_requests() -> None:  # TODO.
+    return
 
 
 @dashboard_router.get(
@@ -117,8 +122,8 @@ async def get_all_requests() -> None:
     summary="Obtain a particular request. Context-protected based on the association of the user.",
     description="An API endpoint that returns a particular requests that is associated from this user.",
 )
-async def get_request(request_id: int):  # Remember the type assertion here.
-    pass
+async def get_request(*, request_id: int) -> None:
+    return
 
 
 @dashboard_router.get(
@@ -129,9 +134,9 @@ async def get_request(request_id: int):  # Remember the type assertion here.
     description="An API-exclusive to employers that allows them to make request for documents to be viewed.",
 )
 async def request_document_view(
-    request_id: int, doc_type: str
+    *, request_id: int, doc_type: str
 ):  # TODO: Types. | doc_type should have choices.
-    pass
+    return
 
 
 @dashboard_router.get(
@@ -142,6 +147,7 @@ async def request_document_view(
     description="An API endpoint that returns of a list of issuances that was invoked from the students.",
 )
 async def get_issuances(
+    *,
     issuance_count: int
     | None = Query(
         ItemReturnCount.MIN,
@@ -151,10 +157,10 @@ async def get_issuances(
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the `applicant_count` is higher than the number of returned blocks.",  # TODO: [TO BE CONFIRMED] If this renders the `` style, use it across other arguments that have the same functionality.
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,  # TODO: [TO BE CONFIRMED] If this renders the `` style, use it across other arguments that have the same functionality.
     ),
-):
+) -> None:
     pass
 
 
@@ -165,8 +171,8 @@ async def get_issuances(
     summary="Obtain a particular issued document.",
     description="An API endpoint that obtains a specified document based on its ID.",
 )
-async def get_issued_docs(issue_id: int):
-    pass
+async def get_issued_docs(*, issue_id: int) -> None:
+    return
 
 
 @dashboard_router.post(
@@ -176,8 +182,8 @@ async def get_issued_docs(issue_id: int):
     summary="Submit a document to mint from the blockchain.",
     description="An API endpoint that allows institutions to submit new documents in the blockchain. Note that minting them requires user (address) reference.",
 )
-async def mint_document(doc_context: IssueToStudentIn):
-    pass
+async def mint_document(*, doc_context: IssueToStudentIn) -> None:
+    return
 
 
 @dashboard_router.get(
@@ -188,6 +194,7 @@ async def mint_document(doc_context: IssueToStudentIn):
     description="An API endpoint that returns a list of addresses that is classified as student.",
 )
 async def get_students(
+    *,
     student_count: int
     | None = Query(
         ItemReturnCount.MIN,
@@ -197,11 +204,11 @@ async def get_students(
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the `applicant_count` is higher than the number of returned blocks.",  # TODO: If this renders the `` style, use it across other arguments that have the same functionality.
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,  # TODO: If this renders the `` style, use it across other arguments that have the same functionality.
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @dashboard_router.get(
@@ -211,8 +218,8 @@ async def get_students(
     summary="Obtain a particular student's information.",
     description="An API endpoint that obtains a student along with its readable information.",
 )
-async def get_student(student_addr: AddressUUID):
-    pass
+async def get_student(*, student_addr: AddressUUID) -> None:
+    return
 
 
 # ! TODO: We need PUT method and a batch push accounts method to the blockchain so that it is less error prone. We implement that if we already have the web.
@@ -223,5 +230,5 @@ async def get_student(student_addr: AddressUUID):
     summary="Create a student information for the blockchain to recognize.",
     description="An API endpoint that creates a student account on the blockchain.",
 )
-async def create_student(student_context: NewStudentIn):
-    pass
+async def create_student(*, student_context: NewStudentIn) -> None:
+    return

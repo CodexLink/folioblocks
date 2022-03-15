@@ -26,8 +26,11 @@ from blueprint.schemas import (
     Transaction,
     Transactions,
 )
-from fastapi import APIRouter, Depends, Query
 from core.constants import (
+    QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
+    QUERY_CURRENT_INDEX_PAGE_NAME,
+    QUERY_TRANSACTION_RETURN_DESCRIPTION,
+    QUERY_TRANSACTION_RETURN_NAME,
     AddressUUID,
     BaseAPI,
     BlockID,
@@ -35,6 +38,7 @@ from core.constants import (
     ItemReturnCount,
     TxID,
 )
+from fastapi import APIRouter, Depends, Query
 
 """
 # Regarding Dependency Injection on this endpoint.
@@ -68,8 +72,8 @@ explorer_router = APIRouter(
     summary="Fetch the context of the blockchain, formatted for displaying in the web.",
     description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",
 )
-async def get_blockchain():
-    pass
+async def get_blockchain() -> None:
+    return
 
 
 @explorer_router.get(
@@ -80,6 +84,7 @@ async def get_blockchain():
     description="An API endpoint that specifically obtains all blocks from the blockchain.",  # TODO: Search for the cached output.
 )
 async def get_blocks(
+    *,
     block_count: int
     | None = Query(
         ItemReturnCount.MIN,
@@ -89,11 +94,11 @@ async def get_blocks(
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the block_count is higher than the number of returned blocks.",
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @explorer_router.get(
@@ -107,21 +112,22 @@ async def get_blocks(
     description="An API endpoint that specifically obtains a certain block from the blockchain.",
 )
 async def get_certain_block(
+    *,
     block_id: BlockID,
     tx_count: int
     | None = Query(
         ItemReturnCount.MID,
-        title="Number of Transaction Return",
-        description="The number of transactions to return on that block.",
+        title=QUERY_TRANSACTION_RETURN_NAME,
+        description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
     ),
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
         description="The page you are currently sitting, defaults to page 1. Other pages are available if the tx_count is higher than the number of total transactions from that block.",
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @explorer_router.get(
@@ -135,20 +141,21 @@ async def get_certain_block(
     description="An API endpoint that returns all transactions that recently entered in the blockchain.",
 )
 async def get_transactions(
+    *,
     tx_count: int
     | None = Query(
         ItemReturnCount.MIN,
-        title="Number of Transaction Return",
-        description="The number of transactions to return.",
+        title=QUERY_TRANSACTION_RETURN_NAME,
+        description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
     ),
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the block_count is higher than the number of returned blocks.",
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @explorer_router.get(
@@ -161,8 +168,8 @@ async def get_transactions(
     summary="Fetches a specific transaction.",
     description="An API endpoint that returns a specific transaction that matches for all block inserted in the blockchain.",
 )
-async def get_particular_transaction(tx_id: TxID):
-    pass
+async def get_particular_transaction(*, tx_id: TxID) -> None:
+    return
 
 
 @explorer_router.get(
@@ -176,6 +183,7 @@ async def get_particular_transaction(tx_id: TxID):
     description="An API endpoint that returns all addresses that is recorded in blockchain.",
 )
 async def get_addresses(
+    *,
     addr_count: int
     | None = Query(
         ItemReturnCount.MIN,
@@ -185,11 +193,11 @@ async def get_addresses(
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the block_count is higher than the number of returned blocks.",
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @explorer_router.get(
@@ -203,21 +211,22 @@ async def get_addresses(
     description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
 async def get_particular_addresses(
+    *,
     address_uuid: AddressUUID,
     tx_count: int
     | None = Query(
         ItemReturnCount.MIN,
-        title="Number of Transaction Return",
-        description="The number of transactions to return.",
+        title=QUERY_TRANSACTION_RETURN_NAME,
+        description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
     ),
     page: int
     | None = Query(
         None,
-        title="Current Index Page",
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the block_count is higher than the number of returned blocks.",
+        title=QUERY_CURRENT_INDEX_PAGE_NAME,
+        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     ),
-):
-    pass
+) -> None:
+    return
 
 
 @explorer_router.get(
@@ -228,11 +237,12 @@ async def get_particular_addresses(
     description="An API endpoint that attempts to search for an entity provided by input. This endpoint enforce length restrictions, as well as returns a singleton data as a redirection link.",
 )
 async def search_in_explorer(
+    *,
     context: str = Query(
         ...,
         title="The context to search in the blockchain.",
         min_length=3,
         max_length=32,
-    )
-):
-    pass
+    ),
+) -> None:
+    return

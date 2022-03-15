@@ -70,6 +70,16 @@ fn = TypeVar(  # ! Doesn't work for now.
     "fn", bound=Callable[..., Any]
 )  # https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped
 
+# # Constants, API
+QUERY_CURRENT_INDEX_PAGE_NAME: Final[str] = "Current Index Page"
+QUERY_CURRENT_INDEX_NAME_DESCRIPTION: Final[
+    str
+] = "The page you are currently sitting, defaults to page 1. Other pages are available if the `<context>_count` is higher than the number of returned blocks."
+
+QUERY_TRANSACTION_RETURN_NAME: Final[str] = "Number of Transaction Return"
+QUERY_TRANSACTION_RETURN_DESCRIPTION: Final[
+    str
+] = "The number of transactions to return."
 
 # # Constants / Constraints, Auth
 BLOCK_HASH_LENGTH: Final[int] = 64

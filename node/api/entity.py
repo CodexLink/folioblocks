@@ -42,8 +42,6 @@ from core.constants import (
     UserEntity,
 )
 from core.dependencies import get_db_instance
-
-# from main import email_instance_service
 from core.email import get_email_instance_or_initialize
 from fastapi import APIRouter, Depends, Header, HTTPException
 from utils.exceptions import MaxJWTOnHold
@@ -65,7 +63,7 @@ entity_router = APIRouter(
     description="An API endpoint that allows a node to be introduced to the blockchain network.",
 )
 async def register_entity(
-    credentials: EntityRegisterCredentials, db: Any = Depends(get_db_instance)
+    *, credentials: EntityRegisterCredentials, db: Any = Depends(get_db_instance)
 ) -> EntityRegisterResult:
 
     # If there are no association then push that first.
@@ -147,8 +145,8 @@ async def register_entity(
     description="An API endpoint that logs an entity to the blockchain network.",
 )
 async def login_entity(
-    credentials: EntityLoginCredentials, db: Any = Depends(get_db_instance)
-) -> EntityLoginResult:  # We didn't use aiohttp.BasicAuth because frontend has a form, we don't need a prompt.
+    *, credentials: EntityLoginCredentials, db: Any = Depends(get_db_instance)
+) -> EntityLoginResult:  # * We didn't use aiohttp.BasicAuth because frontend has a form, and we don't need a prompt.
 
     credential_to_look = users.select().where(users.c.username == credentials.username)
     fetched_data = await db.fetch_one(credential_to_look)
@@ -238,6 +236,7 @@ async def login_entity(
 
 # TODO: Implement logout then we go implement the info for the header testing and then we go to the blockchain.
 async def logout_entity(
+    *,
     x_token: JWTToken = Header(..., description="The acquired token to invalidate."),
     db: Any = Depends(get_db_instance),
 ) -> None:
@@ -260,6 +259,7 @@ async def logout_entity(
         status_code=HTTPStatus.NOT_FOUND,
         detail="The inferred token does not exist or is already labelled as expired!",
     )
+
 
 @entity_router.get(
     "/info",
