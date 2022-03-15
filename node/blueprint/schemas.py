@@ -10,6 +10,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from datetime import datetime
 from typing import Any, List
+from httpx import URL
 
 from pydantic import BaseModel, EmailStr, Field, FilePath
 from core.constants import (
@@ -39,6 +40,12 @@ from core.constants import (
 )
 from core.constants import UserActivityState
 from core.constants import AUTH_CODE_MAX_CONTEXT, AUTH_CODE_MIN_CONTEXT
+from node.core.constants import (
+    HTTPQueueMethods,
+    HTTPQueueTaskType,
+    RequestPayloadContext,
+    URLAddress,
+)
 
 # ! Note that we can use one the exclude or include functionality upon returning the context of these models.
 
@@ -412,4 +419,18 @@ class NodeNegotiationProcess(BaseModel):
     pass
 
 
-# # Node API — START
+# # Node API — START # TODO: What?
+
+
+# # HTTP Methods — START
+# * Note that this class is not used in the API system! Meaning they are used internally.
+class HTTPRequestPayload(BaseModel):
+    url: URL | str
+    data: RequestPayloadContext
+    method: HTTPQueueMethods
+    task_type: HTTPQueueTaskType
+    await_immediate: bool
+    name: str | None
+
+
+# # HTTP Methods — END

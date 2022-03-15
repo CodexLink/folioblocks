@@ -46,7 +46,7 @@ from core.constants import (
     TokenStatus,
     UserEntity,
 )
-from core.email import get_email_instance_or_initialize
+from core.email import get_email_instance
 from core.constants import AUTH_CODE_MAX_CONTEXT, AUTH_CODE_MIN_CONTEXT
 
 identity_tokens: tuple[AddressUUID, JWTToken]
@@ -55,43 +55,52 @@ logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 
 def store_db_instance(instance: Database) -> None:
+    logger.debug(f"Database instance has been stored. | Context: {instance}")
     global db_instance
     db_instance = instance
 
 
 def get_db_instance() -> Database:
+    logger.debug(f"Database instance has been fetched.")
     global db_instance
     return db_instance
 
 
 def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
+    logger.debug(f"Identity tokens were stored. | Context: {_tokens}")
     global identity_tokens
     identity_tokens = _tokens
 
 
 def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
+    logger.debug(f"Identity tokens were fetched.")
     global identity_tokens
     return identity_tokens
 
 
-# TODO
+# TODO: Not sure why we have this function signature.
 # def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
 def generate_auth_token() -> str:
-    # To identify who the heck did it, we need to ensure fetch its token or otherwise put it to None. But we need to ensure that anyone who uses this must be authenticated. This function will be used by master anyway.
-
-    # Note that we transferred this one to ensure that it will be used later.
-    return token_hex(randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT))
+    generated: str = token_hex(randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT))
+    logger.debug(
+        f"Auth token generated with min {AUTH_CODE_MIN_CONTEXT} and max {AUTH_CODE_MAX_CONTEXT}. | Context: {generated}"
+    )
+    return generated
 
 
 # ! Implement blacklisted users!
 async def authenticate_node_client(
+    *,
+    role: NodeRoles,
     instances: tuple[Namespace, Database],
-) -> AddressUUID:  # Create a pydantic model from this.
+) -> None:  # Create a pydantic model from this.
 
     # Inserted from this context due to circular import.
     from utils.processors import ensure_input_prompt
 
     user_credentials: tuple[CredentialContext, CredentialContext] | None = None
+
+    logger.debug("Attempting to authenticate ...")
 
     if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
         logger.debug(
@@ -111,7 +120,6 @@ async def authenticate_node_client(
                     additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
                 )
 
-                # Infer, try again here later.
                 generated_token: str = generate_auth_token()
                 insert_generated_token_stmt = auth_codes.insert().values(
                     code=generated_token,
@@ -120,11 +128,9 @@ async def authenticate_node_client(
                     expiration=datetime.now() + timedelta(days=2),
                 )
 
-                await instances[1].execute(
-                    insert_generated_token_stmt
-                )  # TODO: Obligatory. Not sure if this is safe without fail-safe.
+                await instances[1].execute(insert_generated_token_stmt)
 
-                await get_email_instance_or_initialize().send(
+                await get_email_instance().send(
                     content=f"<html><body><h1>Register Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                     subject="Register Auth Code for Registration @ Folioblocks",
                     to=email_address,
@@ -133,34 +139,14 @@ async def authenticate_node_client(
             # ! Assumes email service is running, so unhandled it for now because complexity rises.
             except IntegrityError as e:
                 logger.critical(
-                    f"Your input matches one of the records for `{NodeRoles.MASTER.name} registration.` Are you attempting to restart instance, please delete the generated files and try again."
+                    f"Your input matches one of the records for `{NodeRoles.MASTER.name} registration.` Are you attempting to restart instance? Please delete the generated files and try again."
                 )
 
             logger.info(
-                f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint. Once done, press any key to continue and put your `auth_code` to login."
+                f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint. Once done, press any key to continue and put your credentials to login."
             )
+            input()
 
-            break
-
-        while True:
-            auth_code = await ensure_input_prompt(
-                input_context="Auth Code",
-                hide_fields=False,
-                generalized_context="auth code",
-                additional_context=None,
-            )
-            check_auth_stmt = auth_codes.select().where(auth_codes.c.code == auth_code)
-            auth_result = await instances[1].fetch_one(check_auth_stmt)
-
-            if not auth_result:
-                logger.error(
-                    "Auth code is not valid! Please enter again and check if you have mis-typed it."
-                )
-                continue
-
-            logger.info(
-                "Auth code is validated, please login and enter your credentials to save it from the environment file for future sessions."
-            )
             break
 
     while True:
@@ -212,21 +198,23 @@ async def authenticate_node_client(
                             f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}"
                         )
 
+                    logger.info(f"Authenticated as {resolved_model.user_address}.")
+
                 await login_session.close()
-                return AddressUUID(resolved_model.user_address)
+
             else:
                 logger.error(
                     f"Credentials are incorrect! Please try again... | Info: {login_req.content}"
                 )
-                await sleep(3)
+                await sleep(2)
                 continue
 
         # * Should cover the following exceptions: (ClientConnectorError, ClientConnectorSSLError, ClientConnectorCertificateError, and ClientConnectionError)
         except ClientError as e:
             logger.critical(
-                f"There was an error during request. Please try again. | Information: {e}"
+                f"There was an error during request. Please try again. | Context: {e}"
             )
-            await sleep(3)
+            await sleep(2)
             continue
 
 

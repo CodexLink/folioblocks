@@ -77,3 +77,11 @@ class InsufficientCredentials(ValueError):
 
         logger.exception(message)
         super().__init__(message)
+
+class NamedNonAwaitedResponseRequired(ValueError):
+    def __init__(self) -> None:
+
+        message: str = f"The response requires to have a name as this request is not awaited-immediate. Please add a name even when you don't need its response."
+
+        logger.exception(message)
+        super().__init__(message)

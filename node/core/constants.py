@@ -28,6 +28,7 @@ class DocToRequestTypes(IntEnum):
 NotificationContext = list[dict[str, Any]]
 RoleContext = dict[str, Any]
 DocumentSet = list[dict[str, Any]]
+RequestPayloadContext = dict[str, Any]
 
 # # Custom Assertable Types
 # TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.
@@ -271,16 +272,6 @@ class TokenStatus(Enum):
     ON_USE = "Token On Use"
 
 
-class QueueTaskType(Enum):
-    UNSPECIFIED = "Unspecified Task"
-    INITIATE_CONSENSUS = "Consensus Initialization"
-    CHECKPOINT_FILE = "In-Memory to File Checkpoint"
-    NEGOTIATION_INITIAL = "Negotiation Phase: Initial"
-    NEGOTIATION_PROCESSING = "Negotiation: Processing"
-    NEGOTIATION_RECEIVE_RESULT = "Negotiation: End, Receive Result"
-    CONSENSUS_MODE = "Consensus Mode, Block Sync"
-
-
 class UserActivityState(Enum):
     OFFLINE = "Offline"
     ONLINE = "Online"
@@ -298,10 +289,36 @@ class CryptFileAction(IntEnum):
     TO_ENCRYPT = auto()
 
 
-class QueueStatus(IntEnum):
+# # Enums, HTTP Queues
+class HTTPQueueStatus(IntEnum):
     ON_QUEUE = auto()
     UP_NEXT = auto()
     CURRENTLY_WORKING = auto()
+
+
+class HTTPQueueMethods(IntEnum):
+    GET = auto()
+    POST = auto()
+    PUT = auto()
+    PATCH = auto()
+    DELETE = auto()
+
+
+class HTTPQueueResponseFormat(IntEnum):
+    AS_OBJECT = auto()
+    AS_JSON = auto()
+    AS_DICT = auto()
+
+
+class HTTPQueueTaskType(Enum):
+    UNSPECIFIED_HTTP_REQUEST = "HTTP Request"
+    UNSPECIFIED = "Unspecified Task"
+    INITIATE_CONSENSUS = "Consensus Initialization"
+    CHECKPOINT_FILE = "In-Memory to File Checkpoint"
+    NEGOTIATION_INITIAL = "Negotiation Phase: Initial"
+    NEGOTIATION_PROCESSING = "Negotiation: Processing"
+    NEGOTIATION_RECEIVE_RESULT = "Negotiation: End, Receive Result"
+    CONSENSUS_MODE = "Consensus Mode, Block Sync"
 
 
 # Program Metadata

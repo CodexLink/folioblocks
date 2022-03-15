@@ -47,6 +47,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
+from node.core.constants import IPAddress, IPPort
 
 from utils.decorators import assert_instance
 from utils.exceptions import NoKeySupplied
@@ -357,7 +358,7 @@ async def close_resources(*, key: KeyContext) -> None:
         key (KeyContext): The key that is recently used for decrypting the SQLite database.
 
     """
-    logger.warn("Closing database instance by encryption...")
+    logger.warn("Closing database and blockchain files by encryption...")
 
     await acrypt_file(
         afilename=DATABASE_RAW_PATH, akey=key, aprocess=CryptFileAction.TO_ENCRYPT
@@ -366,7 +367,7 @@ async def close_resources(*, key: KeyContext) -> None:
         afilename=BLOCKCHAIN_RAW_PATH, akey=key, aprocess=CryptFileAction.TO_ENCRYPT
     )
 
-    logger.info("Database successfully closed and encrypted.")
+    logger.info("Database and blockchain successfully closed and encrypted.")
 
 
 def validate_file_keys(
@@ -506,3 +507,11 @@ async def ensure_input_prompt(
 
 
 # # Variable Password Crypt Handlers — END
+
+
+# # Blockchain
+# TODO: We need to import the HTTP here.
+async def look_for_nodes(*, role: NodeRoles, host: IPAddress, port: IPPort) -> None:
+    logger.info(
+        f"Step 2.1 | Attempting to look {'for the master node' if role == NodeRoles.MASTER.name else 'at other nodes'} at host {host}, port {port}..."
+    )

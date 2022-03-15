@@ -55,7 +55,7 @@ class EmailService:
         self.password: CredentialContext = CredentialContext(password)
         self.max_retries = max_retries
 
-    async def connect(self) -> None:
+    async def connect(self, *, is_immediate: bool = False) -> None:
 
         retries_count: int = 1  # Protect the constant for iteration purposes.
 
@@ -78,10 +78,11 @@ class EmailService:
 
                 await self._email_service.ehlo()
                 logger.debug(
-                    f"SMTP send EHLO packets to {self.url} to initiate service."
+                    f"SMTP send EHLO packets to {self.url} to initiate service ..."
                 )
-                logger.info("SMTP email service acknowledged and ready.")
-
+                logger.info(
+                    f"SMTP email service acknowledged and ready.{' (by immediate call.)' if is_immediate else ''}"
+                )
                 return
 
             except (
@@ -152,12 +153,13 @@ class EmailService:
 email_service: EmailService | None = None
 
 
-def get_email_instance_or_initialize() -> EmailService:
+def get_email_instance() -> EmailService:
     global email_service
 
-    # * Note that this assumes python-dotenv initializes the .env.
     address: str | None = env.get("EMAIL_SERVER_ADDRESS", None)
     pwd: str | None = env.get("EMAIL_SERVER_PWD", None)
+
+    logger.debug("Initializing or returning emails service instance ...")
 
     if address is not None and pwd is not None:
 
@@ -169,6 +171,7 @@ def get_email_instance_or_initialize() -> EmailService:
                 password=CredentialContext(pwd),
             )
 
+        logger.debug("Email service instance retrieved, returning to the requestor ...")
         return email_service
 
     else:

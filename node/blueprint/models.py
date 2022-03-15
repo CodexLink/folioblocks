@@ -137,24 +137,10 @@ auth_codes = Table(
 
 auth_codes.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 
-# ! Note that these are not yet finalized and may be subjected for removal if kept unused.
-queued_tasks = Table(
-    "queued_tasks",
+file_signatures = Table(
+    "file_signatures",
     model_metadata,
-    Column("queue_id", Integer, primary_key=True),
-    Column(
-        "status",
-        SQLEnum(QueueStatus),
-        server_default=QueueStatus.ON_QUEUE.name,
-        nullable=False,
-    ),
-    Column(
-        "type",
-        SQLEnum(QueueTaskType),
-        server_default=QueueTaskType.UNSPECIFIED.name,
-        nullable=False,
-    ),
-    #     Column(),
-    #     Column(),
-    #     Column(),
+    Column("id", Integer, primary_key=True),
+    Column("filename", String(64), unique=True, nullable=False),
+    Column("hash_signature", Text, unique=True, nullable=False),
 )

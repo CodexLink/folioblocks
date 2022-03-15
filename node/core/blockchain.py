@@ -276,16 +276,16 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 blockchain_service: BlockchainMechanism | None = None
 
 
-def get_blockchain_instance_or_initialize(
+def get_blockchain_instance(
     *,
     role: NodeRoles | None = None,
 ) -> BlockchainMechanism:
 
     global blockchain_service
-
     token_ref: tuple[AddressUUID, JWTToken] | None = get_identity_tokens()
 
-    # Resolve.
+    logger.debug("Initializing or returning blockchain instance ...")
+
     if role and blockchain_service is None and token_ref is not None:
         # # Note that this will create an issue later when we tried SIDE node mode later on.
         blockchain_service = BlockchainMechanism(
@@ -304,4 +304,5 @@ def get_blockchain_instance_or_initialize(
             "There are no identity tokens inferred from your instance. A login authentication should not bypass this method from running. This a developer issue, please report as possible or try again."
         )
 
+    logger.debug("Blockchain instance retrieved, returning to the requestor ...")
     return blockchain_service  # type: ignore # Not sure how can I comprehend where's the mistake, or I just got caffeine overdose to understand mypy's complaint.

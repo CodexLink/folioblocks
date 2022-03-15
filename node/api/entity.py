@@ -42,7 +42,7 @@ from core.constants import (
     UserEntity,
 )
 from core.dependencies import get_db_instance
-from core.email import get_email_instance_or_initialize
+from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from utils.exceptions import MaxJWTOnHold
 from utils.processors import hash_context, verify_hash_context
@@ -111,7 +111,7 @@ async def register_entity(
         try:
             await db.execute(data)
             create_task(
-                get_email_instance_or_initialize().send(
+                get_email_instance().send(
                     content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                     subject="Welcome to Folioblocks!",
                     to=credentials.email,
