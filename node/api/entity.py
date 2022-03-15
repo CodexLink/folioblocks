@@ -104,7 +104,7 @@ async def register_entity(
         data = users.insert().values(
             **dict_credentials,
             unique_address=unique_address_ref,
-            password=hash_context(RawData(credentials.password))
+            password=hash_context(pwd=RawData(credentials.password))
             # association=, # I'm not sure on what to do with this one, as of now.
         )
 
@@ -169,7 +169,8 @@ async def login_entity(
         payload["date_registered"] = payload["date_registered"].isoformat()
 
         if verify_hash_context(
-            RawData(credentials.password), HashedData(fetched_data.password)
+            real_pwd=RawData(credentials.password),
+            hashed_pwd=HashedData(fetched_data.password),
         ):
             other_tokens_stmt = tokens.select().where(
                 (tokens.c.from_user == fetched_data.unique_address) & tokens.c.state

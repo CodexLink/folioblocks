@@ -61,11 +61,11 @@ TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
 # # Custom Typed Types
 # * For the exceptions.
-BlockAttribute = TypeVar("BlockAttribute", int, str, list["Transaction"], None)  # TODO.
+# BlockAttribute = TypeVar("BlockAttribute", int, str, list["Transaction"], None)  # TODO.
 Expects = TypeVar("Expects", str, object)
 Has = TypeVar("Has", str, object)
 # IdentityTokens = TypeVar("IdentityTokens", AddressUUID, JWTToken) # ???
-KeyContext = TypeVar("KeyContext", str, bytes)
+KeyContext = TypeVar("KeyContext", str, bytes, None)
 fn = TypeVar(  # ! Doesn't work for now.
     "fn", bound=Callable[..., Any]
 )  # https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped

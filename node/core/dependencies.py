@@ -276,6 +276,7 @@ class EnsureAuthorized:
 
 
 def ensure_past_negotiations(
+    *,
     identity: tuple[AddressUUID, JWTToken] = Depends(get_identity_tokens),
     db: Database = Depends(get_db_instance),
 ) -> bool:

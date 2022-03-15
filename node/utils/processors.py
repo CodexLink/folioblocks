@@ -119,7 +119,7 @@ async def acrypt_file(
 def crypt_file(
     *,
     filename: str,
-    key: KeyContext,
+    key: KeyContext | None,
     process: CryptFileAction,
     return_new_key: bool = False,
 ) -> bytes | None:
@@ -183,7 +183,7 @@ async def initialize_resources_and_return_db_context(
     *,
     runtime: RuntimeLoopContext,
     role: NodeRoles,
-    auth_key: KeyContext | None = None,
+    auth_key: KeyContext = None,
 ) -> Database:
     """
     A non-async initializer for both database and blockchain files.
@@ -220,7 +220,11 @@ async def initialize_resources_and_return_db_context(
             con: Connection | None = None
 
             logger.info("Decrypting the database...")
-            crypt_file(DATABASE_RAW_PATH, auth_key, CryptFileAction.TO_DECRYPT)
+            crypt_file(
+                filename=DATABASE_RAW_PATH,
+                key=auth_key,
+                process=CryptFileAction.TO_DECRYPT,
+            )
 
             try:
                 con = connect(DATABASE_RAW_PATH)
@@ -240,7 +244,11 @@ async def initialize_resources_and_return_db_context(
             logger.debug("Database instance has been saved for access later.")
 
             logger.info("Decrypting a blockchain file ...")
-            crypt_file(BLOCKCHAIN_RAW_PATH, auth_key, CryptFileAction.TO_DECRYPT)
+            crypt_file(
+                filename=BLOCKCHAIN_RAW_PATH,
+                key=auth_key,
+                process=CryptFileAction.TO_DECRYPT,
+            )
             logger.info("Blockchain file decrypted.")
 
             return db_instance
@@ -274,7 +282,10 @@ async def initialize_resources_and_return_db_context(
 
             logger.info("Encrypting a new database ...")
             auth_key = crypt_file(
-                DATABASE_RAW_PATH, auth_key, CryptFileAction.TO_ENCRYPT, True
+                filename=DATABASE_RAW_PATH,
+                key=auth_key,
+                process=CryptFileAction.TO_ENCRYPT,
+                return_new_key=True,
             )
 
             if auth_key is None:
@@ -340,7 +351,6 @@ async def close_resources(*, key: KeyContext) -> None:
 
     Async-ed since on_event("shutdown") is under async scope and does
     NOT await non-async functions.
-
     Closes the state of the database by encrypting it back to the uninitialized state.
 
     Args:
@@ -349,8 +359,12 @@ async def close_resources(*, key: KeyContext) -> None:
     """
     logger.warn("Closing database instance by encryption...")
 
-    await acrypt_file(DATABASE_RAW_PATH, key, CryptFileAction.TO_ENCRYPT)
-    await acrypt_file(BLOCKCHAIN_RAW_PATH, key, CryptFileAction.TO_ENCRYPT)
+    await acrypt_file(
+        afilename=DATABASE_RAW_PATH, akey=key, aprocess=CryptFileAction.TO_ENCRYPT
+    )
+    await acrypt_file(
+        afilename=BLOCKCHAIN_RAW_PATH, akey=key, aprocess=CryptFileAction.TO_ENCRYPT
+    )
 
     logger.info("Database successfully closed and encrypted.")
 
@@ -358,7 +372,8 @@ async def close_resources(*, key: KeyContext) -> None:
 def validate_file_keys(
     *,
     context: KeyContext | None,
-) -> tuple[KeyContext, KeyContext] | None:
+) -> tuple[KeyContext, KeyContext]:
+
     file_ref = f"{Path(__file__).cwd()}/{context}"
 
     # Validate if the given context is a path first.
@@ -371,7 +386,7 @@ def validate_file_keys(
         try:
             # Redundant, but ensure.
             load_dotenv(
-                find_dotenv(filename=Path(file_ref), raise_error_if_not_found=True)
+                find_dotenv(filename=str(Path(file_ref)), raise_error_if_not_found=True)
             )
 
         except OSError:
@@ -379,8 +394,8 @@ def validate_file_keys(
                 f"The file {file_ref} may not be a valid .env file or is missing. Please check your arguments or the file."
             )
 
-        a_key: str | None = env.get("AUTH_KEY", None)
-        s_key: str | None = env.get("SECRET_KEY", None)
+        a_key: KeyContext = env.get("AUTH_KEY", None)
+        s_key: KeyContext = env.get("SECRET_KEY", None)
 
         # Validate the (AUTH_KEY and SECRET_KEY)'s length.
         if (

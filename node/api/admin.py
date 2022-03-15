@@ -54,4 +54,4 @@ async def generate_auth_token(
     description="An exclusive API endpoint that shows the currently unused generated token.",
 )
 async def check_unused_tokens() -> None:
-    pass
+    return

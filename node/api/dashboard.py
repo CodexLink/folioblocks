@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with Fol
 from typing import List
 
 from blueprint.schemas import (
-    Applicant,  # UserLoginIn,; UserLoginResult,
+    Applicant,
     Applicants,
     DashboardContext,
     Issuance,
@@ -135,7 +135,7 @@ async def get_request(*, request_id: int) -> None:
 )
 async def request_document_view(
     *, request_id: int, doc_type: str
-):  # TODO: Types. | doc_type should have choices.
+) -> None:  # TODO: Types. | doc_type should have choices.
     return
 
 

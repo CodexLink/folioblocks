@@ -203,16 +203,15 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         )
 
         genesis_block.nonce, genesis_block.hash_block = await ensured_future_hash_block
-        genesis_block.block_size = self.get_sizeof(genesis_block)
+        genesis_block.block_size = self.get_sizeof(block=genesis_block)
 
-        await self._append(genesis_block, get_identity_tokens())
+        await self._append(context=genesis_block, auth_context=get_identity_tokens())
 
     def get_sizeof(self, *, block: Block) -> int:
         return asizeof(block)
 
     async def create_block(
         self,
-        *
     ) -> None:  # We need to trigger this so that it will be inserted.
         return
 
@@ -245,7 +244,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 return block.nonce, computed_hash
 
             nth += 1
-            continue
 
     # I think this should work only on miner nodes.
     async def update_chain(self) -> None:
@@ -279,17 +277,13 @@ blockchain_service: BlockchainMechanism | None = None
 
 
 def get_blockchain_instance_or_initialize(
-    *, role: NodeRoles | None = None,
+    *,
+    role: NodeRoles | None = None,
 ) -> BlockchainMechanism:
 
     global blockchain_service
 
-    token_ref = get_identity_tokens()
-
-    if token_ref is None:
-        logger.critical(
-            "There are no identity tokens inferred from your instance. A login authentication should not bypass this method from running. This a developer issue, please report as possible or try again."
-        )
+    token_ref: tuple[AddressUUID, JWTToken] | None = get_identity_tokens()
 
     # Resolve.
     if role and blockchain_service is None and token_ref is not None:
@@ -303,6 +297,11 @@ def get_blockchain_instance_or_initialize(
     if blockchain_service is None:
         logger.critical(
             "Unresolved role from this instance. Please specify your role. This may be a developer issue, please report this as possible or try again."
+        )
+
+    if token_ref is None:
+        logger.critical(
+            "There are no identity tokens inferred from your instance. A login authentication should not bypass this method from running. This a developer issue, please report as possible or try again."
         )
 
     return blockchain_service  # type: ignore # Not sure how can I comprehend where's the mistake, or I just got caffeine overdose to understand mypy's complaint.

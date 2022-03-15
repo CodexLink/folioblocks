@@ -14,7 +14,7 @@ from core.constants import CryptFileAction, fn
 from typing import cast
 
 # * Ref for the typing a decorator: https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped
-def assert_instance(*, f: fn) -> fn:  #
+def assert_instance(f: fn) -> fn:  #
     def deco(*args):
 
         # Assert 'to' have CryptFileAction. I prefer isinstance instead of enum.Enum.__members__.

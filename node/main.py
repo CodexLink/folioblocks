@@ -65,9 +65,9 @@ logger: logging.Logger = logging.getLogger(
 
 database_instance: Database = get_event_loop().run_until_complete(
     initialize_resources_and_return_db_context(
-        RuntimeLoopContext(__name__),
-        NodeRoles(parsed_args.prefer_role),
-        parsed_args.key_file[0] if parsed_args.key_file is not None else None,
+        runtime=RuntimeLoopContext(__name__),
+        role=NodeRoles(parsed_args.prefer_role),
+        auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
     ),
 )
 
@@ -169,7 +169,7 @@ async def post_initialize() -> None:
 
     logger.info("Step 3 | Initializing blockchain instance...")
     await get_blockchain_instance_or_initialize(  # type: ignore # Refer to the constructor on why I ignore this as of now.
-        NodeRoles(parsed_args.prefer_role)
+        role=NodeRoles(parsed_args.prefer_role)
     ).initialize()
 
     # We also need to check for other parts if this instance has any other task to send with the master node. Otherwise, have to resolve that before we able to send some data.
@@ -190,7 +190,7 @@ async def terminate() -> None:
 
     await get_blockchain_instance_or_initialize().close()  # type: ignore
     get_email_instance_or_initialize().close()
-    await close_resources(parsed_args.key_file[0])
+    await close_resources(key=parsed_args.key_file[0])
 
     await database_instance.disconnect()
 
