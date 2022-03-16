@@ -429,7 +429,7 @@ class HTTPRequestPayload(BaseModel):
     data: RequestPayloadContext
     method: HTTPQueueMethods
     task_type: HTTPQueueTaskType
-    await_immediate: bool
+    await_result_immediate: bool
     name: str | None
 
 

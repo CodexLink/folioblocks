@@ -9,7 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from logging import Logger, getLogger
-from typing import Callable, Final
+from typing import Any, Callable, Final
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
@@ -48,7 +48,7 @@ class MaxJWTOnHold(AssertionError):
         message: str = f"This user {uuids[0]} ({uuids[1]}) currently withold/s {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
 
         logger.exception(message)
-        super().__init__(message)
+        super().__init__()
 
 
 class NoKeySupplied(ValueError):
@@ -57,7 +57,7 @@ class NoKeySupplied(ValueError):
         message: str = f"This function / context {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
 
         logger.exception(message)
-        super().__init__(message)
+        super().__init__()
 
 
 class UnsatisfiedClassType(ValueError):
@@ -66,7 +66,7 @@ class UnsatisfiedClassType(ValueError):
         message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
 
         logger.exception(message)
-        super().__init__(message)
+        super().__init__()
 
 
 class InsufficientCredentials(ValueError):
@@ -76,7 +76,8 @@ class InsufficientCredentials(ValueError):
         message: str = f"This entity {what_service} requires the following credentals: {fields_require}."
 
         logger.exception(message)
-        super().__init__(message)
+        super().__init__()
+
 
 class NamedNonAwaitedResponseRequired(ValueError):
     def __init__(self) -> None:
@@ -84,4 +85,13 @@ class NamedNonAwaitedResponseRequired(ValueError):
         message: str = f"The response requires to have a name as this request is not awaited-immediate. Please add a name even when you don't need its response."
 
         logger.exception(message)
-        super().__init__(message)
+        super().__init__()
+
+
+class ResponseNotOkay(AssertionError):
+    def __init__(self, *, task_name: str, result: Any) -> None:
+
+        message: str = f"The following request '{task_name}' returned an error response. | Context: {result}"
+        logger.exception(message)
+
+        super().__init__()

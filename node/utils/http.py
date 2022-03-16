@@ -5,7 +5,6 @@ from typing import Any
 from aiohttp import ClientSession
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    HTTPQueueStatus,
     HTTPQueueTaskType,
     HTTPQueueMethods,
 )
@@ -15,7 +14,7 @@ from blueprint.schemas import HTTPRequestPayload
 from node.core.constants import HTTPQueueResponseFormat
 from secrets import token_urlsafe
 
-from node.utils.exceptions import NamedNonAwaitedResponseRequired
+from node.utils.exceptions import HTTPResponseNotOkay, NamedNonAwaitedResponseRequired
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -24,7 +23,7 @@ class HTTPClient:
     """
     - This class is just a mini-handler that can be called across the codebase to ensure that there's only one session to be instanted, and only one reference to create and receive requests.
 
-    - Also, there are some additional features added to ensure that there is a management from initiated requests.
+    - The only additional features of this implementation is the storage for the requests that is sent off via `create_task()`. It can also await from the create_task via list.
 
     ! POST-FEATURE: Database implementation.
     - As of now, my time is too short to implement security features that are specifically side-features.
@@ -34,14 +33,11 @@ class HTTPClient:
         self._queue: list[Any] = []
         self._response: RequestPayloadContext = {}
         self._is_ready: bool = False
-
-    # We can create a pool here if we want that.
+        self._queue_running: bool = False
 
     async def initialize(self) -> None:
         self._session = ClientSession()  # * Initialize the ClientSession.
         logger.debug("HTTP client ClientSession initialized.")
-
-        # await self._sync_state_to_database() # ! Discontinued.
 
         self._is_ready = True
         logger.info("HTTP client is ready to take some requests...")
@@ -53,39 +49,39 @@ class HTTPClient:
         data: RequestPayloadContext,
         method: HTTPQueueMethods,
         task_type: HTTPQueueTaskType = HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST,
-        await_immediate: bool = True,
+        await_result_immediate: bool = True,
         name: str | None = None,
     ) -> None:
         """
         A method that enqueues request payload to the LIFO list container to execute in burst or for the latter.
 
         Args:
-            - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
-            - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
-            - task_type (HTTPQueueTaskType, optional): An enum that contains a set of tasks to classify the request. Defaults to HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST.
-            - await_immediate (bool, optional): Should this request run under asyncio.create_task() or await them? By doing `await_immediate`, it blocks other requests at the LIFO list container as it was prioritized to run first. But you get to have a data to return. Defaults to False.
-            - name (str, optional): The name of the request. This is required whenever the request is not `await_immediate`. Use get_finished_task` to fetch the request.
+                        - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
+                        - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
+                        - task_type (HTTPQueueTaskType, optional): An enum that contains a set of tasks to classify the request. Defaults to HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST.
+                        - await_result_immediate (bool, optional): Should this request run under asyncio.create_task() or await them? By doing `await_result_immediate`, it blocks other requests at the LIFO list container as it was prioritized to run first. But you get to have a data to return. Defaults to False.
+                        - name (str, optional): The name of the request. This is required whenever the request is not `await_result_immediate`. Use get_finished_task` to fetch the request.
 
         Note:
-            * Despite complexity, I wanted to implement this so that we can query something while needing it later. Aside from stacking request, it is best to have a managing queue to ensure that we get back to them as is.
-            ! With the name being required when the request is not `await_immediate`, in the case of `await_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
-            # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
+                        * Despite complexity, I wanted to implement this so that we can query something while needing it later. Aside from stacking request, it is best to have a managing queue to ensure that we get back to them as is.
+                        ! With the name being required when the request is not `await_result_immediate`, in the case of `await_result_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_result_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
+                        # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
         """
 
         response_name: str = ""
 
-        if name is None and not await_immediate:
+        if name is None and not await_result_immediate:
             raise NamedNonAwaitedResponseRequired
 
-        elif name is None and await_immediate:
+        elif name is None and await_result_immediate:
             response_name = f"response_{token_urlsafe(8)}"
             logger.debug(
-                f"This request doesn't have a name and is awaited (await_immediate). Named as {response_name} (generated) for log clarity."
+                f"This request doesn't have a name and is awaited (await_result_immediate). Named as {response_name} (generated) for log clarity."
             )
 
-        elif name is not None and await_immediate:
+        elif name is not None and await_result_immediate:
             logger.warning(
-                f"This request is named as '{name}'. Note that, this will not be saved in the queue for result caching, catch the result instead."
+                f"This request is named as '{name}'. Note that the result of the response will not be saved in the queue for result caching, please catch the result instead."
             )
 
         wrapped_request = HTTPRequestPayload(
@@ -93,34 +89,42 @@ class HTTPClient:
             data=data,
             method=method,
             task_type=task_type,
-            await_immediate=await_immediate,
+            await_result_immediate=await_result_immediate,
             name=name if name is not None else response_name,
         )
 
         self._queue.append(wrapped_request)
 
-        if await_immediate:
+        if await_result_immediate:
             await self.get_finished_task(task_name=response_name)
 
-    # TODO: We need to do the FILO here to remove the at_queue.
-    # TODO: When empty we need to handle its exception (custom???)
-    async def _run_request(self) -> RequestPayloadContext | None:
-        if self._queue:
-            for loaded_request in self._queue:
-                requested_item = getattr(
-                    self._session, loaded_request.method.name.lower()
-                )(data=loaded_request.data)
+    async def _queue_iterator_runtime(self) -> None:
+        # ! Note that this should be called once!
+        while True:
+            if self._queue:
+                self.set_queue_state(to=True)
+                await self._run_request()
 
-                if loaded_request.awaitable:
-                    await requested_item
+            await sleep(1)
+            self.set_queue_state(to=False)
 
-                    if requested_item.ok:
-                        return requested_item
-                else:
-                    # TODO: Not sure if this would resolve to something.
-                    self._response[loaded_request.name] = create_task(
-                        name=loaded_request.name, coro=requested_item
-                    )
+    async def _run_request(self) -> None:
+        for loaded_request in self._queue:
+            requested_item = getattr(self._session, loaded_request.method.name.lower())(
+                data=loaded_request.data
+            )
+
+            self._response[loaded_request.name] = create_task(
+                name=loaded_request.name, coro=requested_item
+            )
+
+    @property
+    def queue_state(self) -> bool:
+        return self._queue_running
+
+    def set_queue_state(self, *, to: bool) -> None:
+        logger.debug(f"HTTP client queue has been set to {to}.")
+        self._queue_running = to
 
     async def _sync_state_to_database(
         self,
@@ -128,7 +132,7 @@ class HTTPClient:
         logger.debug("Syncing unfinished tasks to the database (if there is any)...")
         raise NotImplemented  # ! Will not complicate this one as SonarLint requires me to subclass this one to create a new exception class.
 
-    async def close(self, should_destroy: bool = False) -> None:
+    async def close(self, *, should_destroy: bool = False) -> None:
         while True:
             if self._queue:
                 logger.info(
@@ -140,16 +144,39 @@ class HTTPClient:
                         each_left_task.cancel()
                         self._queue.pop()
 
-                await sleep(1)
-                continue
+                    break
 
-            logger.info("All requests done! HTTP client sessions will close.")
-            return await self._session.close()
+            await sleep(1)
 
-    async def get_finished_task(self, *, task_name: str) -> None:
-        # TODO: Note that for every fetched task, they should get popped.
-        # @o We are iterating with the dict here, please note on that.
-        pass
+        logger.info("All requests done! HTTP client sessions will close.")
+        return await self._session.close()
+
+    async def get_finished_task(
+        self, *, task_name: str, raise_on_not_ok: bool = False
+    ) -> Any:
+        fetched_task = self._response.get(task_name, None)
+
+        if fetched_task is not None:
+            if not fetched_task.done():
+                logger.warning(
+                    f"The following task '{task_name}' is not yet finished! Awaiting ..."
+                )
+                await fetched_task
+
+            if raise_on_not_ok and not fetched_task.result().ok:
+                raise HTTPResponseNotOkay(
+                    task_name=task_name, result=fetched_task.result()
+                )
+
+            return fetched_task.result()
+
+        else:
+            logger.error(
+                f"The mentioned task '{task_name}' does not exist from the queue. Please try agian."
+            )
+
+        # * Nevertheless of the condition, pop this request from the queue.
+        self._queue.pop(self._queue.index(fetched_task))
 
     # This is just an extra.
     def get_current_queue(
