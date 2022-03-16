@@ -71,6 +71,10 @@ class HTTPClient:
                         ! With the name being required when the request is not `await_result_immediate`, in the case of `await_result_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_result_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
                         # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
         """
+        if not self.is_ready:
+            logger.warning(
+                "Enqueued requests is not possible to be executed unless this instance executes its initialize() method."
+            )
 
         response_name: str = ""
 
@@ -103,16 +107,28 @@ class HTTPClient:
             await self.get_finished_task(task_name=response_name)
 
     async def _queue_iterator_runtime(self) -> None:
+        if not self._is_ready:
+            logger.warning(
+                "You cannot initialize this iterator unless this instance's initialize() method has been executed."
+            )
+            return
+
         # ! Note that this should be called once!
         while True:
             if self._queue:
-                self.set_queue_state(to=True)
+                self._set_queue_state(to=True)
                 await self._run_request()
 
             await sleep(1)
-            self.set_queue_state(to=False)
+            self._set_queue_state(to=False)
 
     async def _run_request(self) -> None:
+        if not self._is_ready:
+            logger.warning(
+                "You cannot initialize this request executor unless this instance's initialize() method has been executed."
+            )
+            return
+
         for loaded_request in self._queue:
             requested_item = getattr(self._session, loaded_request.method.name.lower())(
                 data=loaded_request.data
@@ -126,7 +142,7 @@ class HTTPClient:
     def queue_state(self) -> bool:
         return self._queue_running
 
-    def set_queue_state(self, *, to: bool) -> None:
+    def _set_queue_state(self, *, to: bool) -> None:
         logger.debug(f"HTTP client queue has been set to {to}.")
         self._queue_running = to
 
@@ -160,6 +176,12 @@ class HTTPClient:
     ) -> Any:
         fetched_task = self._response.get(task_name, None)
 
+        if not self._is_ready:
+            logger.warning(
+                "There is no finished task since no task has been executed. Please execute initialize() method for this instance to work as intended."
+            )
+            return
+
         if fetched_task is not None:
             if not fetched_task.done():
                 logger.warning(
@@ -185,13 +207,18 @@ class HTTPClient:
     # This is just an extra.
     def get_current_queue(
         self, format: HTTPQueueResponseFormat = HTTPQueueResponseFormat.AS_OBJECT
-    ) -> HTTPRequestPayload | RequestPayloadContext | bytes:
-        if format == HTTPQueueResponseFormat.AS_DICT:
-            return self._queue[0].dict()
-        elif format == HTTPQueueResponseFormat.AS_JSON:
-            return self._queue[0].json()
+    ) -> HTTPRequestPayload | RequestPayloadContext | bytes | None:
+
+        if self._queue:
+            if format == HTTPQueueResponseFormat.AS_DICT:
+                return self._queue[0].dict()
+            elif format == HTTPQueueResponseFormat.AS_JSON:
+                return self._queue[0].json()
+            else:
+                return self._queue[0]
         else:
-            return self._queue[0]
+            logger.error("There are no task on queue.")
+            return None
 
     @property
     def is_ready(self) -> bool:
