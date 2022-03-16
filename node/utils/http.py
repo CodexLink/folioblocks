@@ -45,6 +45,7 @@ class HTTPClient:
 
         self._is_ready = True
         logger.info("HTTP client is ready to take some requests...")
+        create_task(self._queue_iterator_runtime())
 
     async def enqueue_request(
         self,
@@ -60,20 +61,20 @@ class HTTPClient:
         A method that enqueues request payload to the LIFO list container to execute in burst or for the latter.
 
         Args:
-                        - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
-                        - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
-                        - task_type (HTTPQueueTaskType, optional): An enum that contains a set of tasks to classify the request. Defaults to HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST.
-                        - await_result_immediate (bool, optional): Should this request run under asyncio.create_task() or await them? By doing `await_result_immediate`, it blocks other requests at the LIFO list container as it was prioritized to run first. But you get to have a data to return. Defaults to False.
-                        - name (str, optional): The name of the request. This is required whenever the request is not `await_result_immediate`. Use get_finished_task` to fetch the request.
+                                        - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
+                                        - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
+                                        - task_type (HTTPQueueTaskType, optional): An enum that contains a set of tasks to classify the request. Defaults to HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST.
+                                        - await_result_immediate (bool, optional): Should this request run under asyncio.create_task() or await them? By doing `await_result_immediate`, it blocks other requests at the LIFO list container as it was prioritized to run first. But you get to have a data to return. Defaults to False.
+                                        - name (str, optional): The name of the request. This is required whenever the request is not `await_result_immediate`. Use get_finished_task` to fetch the request.
 
         Note:
-                        * Despite complexity, I wanted to implement this so that we can query something while needing it later. Aside from stacking request, it is best to have a managing queue to ensure that we get back to them as is.
-                        ! With the name being required when the request is not `await_result_immediate`, in the case of `await_result_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_result_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
-                        # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
+                                        * Despite complexity, I wanted to implement this so that we can query something while needing it later. Aside from stacking request, it is best to have a managing queue to ensure that we get back to them as is.
+                                        ! With the name being required when the request is not `await_result_immediate`, in the case of `await_result_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_result_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
+                                        # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
         """
         if not self.is_ready:
             logger.warning(
-                "Enqueued requests is not possible to be executed unless this instance executes its initialize() method."
+                "Enqueued requests is not possible to be executed unless this instance executes its initialize() method."  # TODO: Shall we ignore such request on outbound is_ready?
             )
 
         response_name: str = ""
@@ -84,13 +85,22 @@ class HTTPClient:
         elif name is None and await_result_immediate:
             response_name = f"response_{token_urlsafe(8)}"
             logger.debug(
-                f"This request doesn't have a name and is awaited (await_result_immediate). Named as {response_name} (generated) for log clarity."
+                f"This request doesn't have a name and is awaited (`await_result_immediate`). Named as {response_name} (generated) for log clarity."
             )
 
         elif name is not None and await_result_immediate:
             logger.warning(
-                f"This request is named as '{name}'. Note that the result of the response will not be saved in the queue for result caching, please catch the result instead."
+                f"This request is named as '{name}' will not save its result / resposne in the queue for result caching, please catch the result instead."
             )
+
+        # Resolve conflict references as one.
+        name = name if name is not None else response_name
+
+        if self._response.get(name, None) is not None:
+            logger.error(
+                f"One of the request conflicts with the name '{name}'. Please set new request to be distinctive with other request."
+            )
+            return
 
         wrapped_request = HTTPRequestPayload(
             url=url,
@@ -98,78 +108,55 @@ class HTTPClient:
             method=method,
             task_type=task_type,
             await_result_immediate=await_result_immediate,
-            name=name if name is not None else response_name,
+            name=name,
         )
 
         self._queue.append(wrapped_request)
 
-        if await_result_immediate:
-            await self.get_finished_task(task_name=response_name)
+        if await_result_immediate and self._is_ready:
+            await self.get_finished_task(task_name=name)
+
+        elif await_result_immediate and not self._is_ready:
+            logger.critical(
+                f"This instance is not yet initialized (from: {self.enqueue_request.__name__}). Please execute initialize() first before attempting to enqueue requests that requires to have its data to be returned immediately."
+            )
 
     async def _queue_iterator_runtime(self) -> None:
         if not self._is_ready:
             logger.warning(
-                "You cannot initialize this iterator unless this instance's initialize() method has been executed."
+                f"You cannot initialize this iterator '{self._queue_iterator_runtime.__name__}' unless this instance's initialize() method has been executed."
             )
             return
 
-        # ! Note that this should be called once!
         while True:
             if self._queue:
-                self._set_queue_state(to=True)
-                await self._run_request()
-
+                create_task(self._run_request())
             await sleep(1)
-            self._set_queue_state(to=False)
 
     async def _run_request(self) -> None:
         if not self._is_ready:
             logger.warning(
-                "You cannot initialize this request executor unless this instance's initialize() method has been executed."
+                f"You cannot initialize this request executor '{self._run_request.__name__}' unless this instance's initialize() method has been executed."
             )
             return
 
         for loaded_request in self._queue:
             requested_item = getattr(self._session, loaded_request.method.name.lower())(
-                data=loaded_request.data
+                url=loaded_request.url, data=loaded_request.data
+            )
+            logger.debug(
+                f"Request {loaded_request.name} (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
             )
 
             self._response[loaded_request.name] = create_task(
                 name=loaded_request.name, coro=requested_item
+            )  ## Enqueue to self.request as dict.
+
+            ## Dequeue that item from self._queue as its response form has been enqueued from the self._response.
+            self._queue.pop(self._queue.index(loaded_request))
+            logger.debug(
+                f"Wrapped Request '{loaded_request.name}' has been enqueued. | Wrapped Object Info: {requested_item}"
             )
-
-    @property
-    def queue_state(self) -> bool:
-        return self._queue_running
-
-    def _set_queue_state(self, *, to: bool) -> None:
-        logger.debug(f"HTTP client queue has been set to {to}.")
-        self._queue_running = to
-
-    async def _sync_state_to_database(
-        self,
-    ) -> None:
-        logger.debug("Syncing unfinished tasks to the database (if there is any)...")
-        raise HTTPClientFeatureUnavailable
-
-    async def close(self, *, should_destroy: bool = False) -> None:
-        while True:
-            if self._queue:
-                logger.info(
-                    f"Attempting to %s all ({len(self._queue)}) request/s left..."
-                    % ("finish" if not should_destroy else "destroy")
-                )
-                if should_destroy:
-                    for each_left_task in self._queue:
-                        each_left_task.cancel()
-                        self._queue.pop()
-
-                    break
-
-            await sleep(1)
-
-        logger.info("All requests done! HTTP client sessions will close.")
-        return await self._session.close()
 
     async def get_finished_task(
         self, *, task_name: str, raise_on_not_ok: bool = False
@@ -194,6 +181,7 @@ class HTTPClient:
                     task_name=task_name, result=fetched_task.result()
                 )
 
+            self._response.pop(task_name)
             return fetched_task.result()
 
         else:
@@ -201,11 +189,35 @@ class HTTPClient:
                 f"The mentioned task '{task_name}' does not exist from the queue. Please try agian."
             )
 
-        # * Nevertheless of the condition, pop this request from the queue.
-        self._queue.pop(self._queue.index(fetched_task))
+    async def close(self, *, should_destroy: bool = False) -> None:
+        while True:
+            if self._response:
+                logger.info(
+                    f"Attempting to %s all ({len(self._response)}) request/s left..."
+                    % ("finish" if not should_destroy else "destroy")
+                )
 
-    # This is just an extra.
-    def get_current_queue(
+                if should_destroy:
+                    for each_left_task in self._response.values():
+                        each_left_task.cancel()
+                        self._response.popitem()
+                    break
+
+                await sleep(1)
+                continue
+
+            break
+
+        logger.info("All requests done! HTTP client sessions will close.")
+        return await self._session.close()
+
+    async def _sync_state_to_database(
+        self,
+    ) -> None:
+        logger.debug("Syncing unfinished tasks to the database (if there is any)...")
+        raise HTTPClientFeatureUnavailable
+
+    def get_current_queue(  # * This is just an extra.
         self, format: HTTPQueueResponseFormat = HTTPQueueResponseFormat.AS_OBJECT
     ) -> HTTPRequestPayload | RequestPayloadContext | bytes | None:
 
@@ -225,7 +237,17 @@ class HTTPClient:
         return self._is_ready
 
     @property
-    def get_remaining_requests(self) -> list[Task]:
+    def get_remaining_requests(self) -> RequestPayloadContext:
+        logger.warning(
+            "Function requested to get a view of the remaining request from the HTTP client."
+        )
+        return self._response
+
+    @property
+    def get_remaining_queue(self) -> list[Task]:
+        logger.warning(
+            "Function requested to get a view of the remaining queue from the HTTP client."
+        )
         return self._queue
 
 
