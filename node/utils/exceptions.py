@@ -88,10 +88,15 @@ class NamedNonAwaitedResponseRequired(ValueError):
         super().__init__()
 
 
-class ResponseNotOkay(AssertionError):
+class HTTPResponseNotOkay(AssertionError):
     def __init__(self, *, task_name: str, result: Any) -> None:
 
         message: str = f"The following request '{task_name}' returned an error response. | Context: {result}"
         logger.exception(message)
 
         super().__init__()
+
+
+class HTTPClientFeatureUnavailable(NotImplementedError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)

@@ -1,20 +1,24 @@
 from asyncio import Task, create_task, sleep
 from logging import Logger, getLogger
+from secrets import token_urlsafe
 from typing import Any
 
 from aiohttp import ClientSession
+from blueprint.schemas import HTTPRequestPayload
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    HTTPQueueTaskType,
     HTTPQueueMethods,
+    HTTPQueueResponseFormat,
+    HTTPQueueTaskType,
+    RequestPayloadContext,
+    URLAddress,
 )
 
-from core.constants import RequestPayloadContext, URLAddress
-from blueprint.schemas import HTTPRequestPayload
-from node.core.constants import HTTPQueueResponseFormat
-from secrets import token_urlsafe
-
-from node.utils.exceptions import HTTPResponseNotOkay, NamedNonAwaitedResponseRequired
+from utils.exceptions import (
+    HTTPClientFeatureUnavailable,
+    HTTPResponseNotOkay,
+    NamedNonAwaitedResponseRequired,
+)
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -130,7 +134,7 @@ class HTTPClient:
         self,
     ) -> None:
         logger.debug("Syncing unfinished tasks to the database (if there is any)...")
-        raise NotImplemented  # ! Will not complicate this one as SonarLint requires me to subclass this one to create a new exception class.
+        raise HTTPClientFeatureUnavailable
 
     async def close(self, *, should_destroy: bool = False) -> None:
         while True:
