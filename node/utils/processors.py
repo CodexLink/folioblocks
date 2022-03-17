@@ -37,6 +37,8 @@ from core.constants import (
     CredentialContext,
     CryptFileAction,
     HashedData,
+    IPAddress,
+    IPPort,
     KeyContext,
     NodeRoles,
     RawData,
@@ -47,7 +49,6 @@ from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
-from node.core.constants import IPAddress, IPPort
 
 from utils.decorators import assert_instance
 from utils.exceptions import NoKeySupplied

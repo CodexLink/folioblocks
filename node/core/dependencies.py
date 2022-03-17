@@ -17,6 +17,7 @@ from os import environ as env
 from random import randint
 from secrets import token_hex
 from sqlite3 import IntegrityError
+
 from aioconsole import ainput
 from aiohttp import (
     BasicAuth,
@@ -33,23 +34,23 @@ from databases import Database
 from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
 from sqlalchemy import select
+from utils.http import get_http_client_instance
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
+    AUTH_CODE_MAX_CONTEXT,
+    AUTH_CODE_MIN_CONTEXT,
     AUTH_ENV_FILE_NAME,
     AddressUUID,
     CredentialContext,
-    HashedData,
+    HTTPQueueMethods,
     JWTToken,
     NodeRoles,
-    RawData,
     TokenStatus,
+    URLAddress,
     UserEntity,
 )
 from core.email import get_email_instance
-from core.constants import AUTH_CODE_MAX_CONTEXT, AUTH_CODE_MIN_CONTEXT
-from node.core.constants import HTTPQueueMethods, URLAddress
-from utils.http import get_http_client_instance
 
 identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database

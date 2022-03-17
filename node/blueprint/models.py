@@ -11,11 +11,10 @@ you should have received a copy of the gnu general public license along with Fol
 """
 
 from typing import Final
+
 from core.constants import (
     BlacklistDuration,
     GroupType,
-    QueueStatus,
-    QueueTaskType,
     TokenStatus,
     UserActivityState,
     UserEntity,
