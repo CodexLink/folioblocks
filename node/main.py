@@ -109,8 +109,6 @@ async def pre_initialize() -> None:
     await database_instance.connect()  # Initialize the database.
     await get_http_client_instance().initialize()  # Initialize the HTTP client for such requests.
 
-    logger.info("Step 1.2 (Instance) | HTTP client session initialized ...")
-
     # * NodeRoles.MASTER requires special handling for initial instance.
     if parsed_args.prefer_role == NodeRoles.MASTER.name:
         master_user_count_stmt = select([func.count()]).where(
@@ -124,8 +122,8 @@ async def pre_initialize() -> None:
             await get_email_instance().connect(is_immediate=True)
     else:
         # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
-
-        get_http_client_instance().enqueue_request()
+        pass
+        # create_task(get_http_client_instance().enqueue_request())
 
     create_task(post_initialize())
 
@@ -172,7 +170,7 @@ async def terminate() -> None:
     """
     TODO: Ensure on services like blockchain, remove or finish any request or finish the consensus.
     """
-    create_task(get_http_client_instance().close())
+    await get_http_client_instance().close()  # * Shutdown the HTTP client module.
     await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
     await database_instance.disconnect()  # * Shutdown the database instance.
 

@@ -48,6 +48,8 @@ from core.constants import (
 )
 from core.email import get_email_instance
 from core.constants import AUTH_CODE_MAX_CONTEXT, AUTH_CODE_MIN_CONTEXT
+from node.core.constants import HTTPQueueMethods, URLAddress
+from utils.http import get_http_client_instance
 
 identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database
@@ -159,14 +161,14 @@ async def authenticate_node_client(
                 enable_async=True,
             )
 
-        # Create a session for this request.
-        login_session = ClientSession()
-
         # Ensure that ENV will be covered here.
         try:
-            login_req = await login_session.post(
-                f"http://{instances[0].host}:{instances[0].port}/entity/login",
-                json={
+            login_req = await get_http_client_instance().enqueue_request(
+                url=URLAddress(
+                    f"http://{instances[0].host}:{instances[0].port}/entity/login"
+                ),
+                method=HTTPQueueMethods.POST,
+                data={
                     "username": env.get("NODE_USERNAME", None)
                     if user_credentials is None
                     else user_credentials[0],
@@ -176,7 +178,7 @@ async def authenticate_node_client(
                 },
             )
 
-            if login_req.ok:
+            if login_req:
                 # Resolve via pydantic.
                 resolved_model = EntityLoginResult.parse_obj(await login_req.json())
 
@@ -199,8 +201,6 @@ async def authenticate_node_client(
                         )
 
                     logger.info(f"Authenticated as {resolved_model.user_address}.")
-
-                await login_session.close()
 
             else:
                 logger.error(
