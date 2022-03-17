@@ -16,8 +16,6 @@ from core.constants import (
 
 from utils.exceptions import (
     HTTPClientFeatureUnavailable,
-    HTTPResponseNotOkay,
-    NamedNonAwaitedResponseRequired,
 )
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -45,7 +43,10 @@ class HTTPClient:
 
         self._is_ready = True
         logger.info("HTTP client is ready to take some requests...")
-        create_task(self._queue_iterator_runtime())
+        create_task(
+            name=f"{HTTPClient.__name__}_queue_iterator",
+            coro=self._queue_iterator_runtime(),
+        )
 
     async def enqueue_request(
         self,
@@ -72,29 +73,50 @@ class HTTPClient:
                                         ! With the name being required when the request is not `await_result_immediate`, in the case of `await_result_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_result_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
                                         # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
         """
-        if not self.is_ready:
-            logger.warning(
-                "Enqueued requests is not possible to be executed unless this instance executes its initialize() method."  # TODO: Shall we ignore such request on outbound is_ready?
-            )
-
         response_name: str = ""
 
-        if name is None and not await_result_immediate:
-            raise NamedNonAwaitedResponseRequired
+        # # First, resolve the request name before handling the condition if its allowed to be retrieved or enqueued basesd on self.is_ready.
+        if name:
+            if await_result_immediate:
+                logger.error(
+                    f"This request is named as '{name}' will not save its result / resposne in the queue for result caching, please catch the result instead, ignore this message if the response is catched."
+                )
+        else:
+            if not await_result_immediate:
+                request_payload = HTTPRequestPayload(
+                    url=url,
+                    data=data,
+                    method=method,
+                    task_type=task_type,
+                    await_result_immediate=await_result_immediate,
+                    name=name,
+                )
+                logger.error(
+                    f"An unnamed response requires to have a name as this request is not awaited-immediate. Please add a name even when you don't need its response. | Response Context: {request_payload}"
+                )
+                return
 
-        elif name is None and await_result_immediate:
-            response_name = f"response_{token_urlsafe(8)}"
-            logger.debug(
-                f"This request doesn't have a name and is awaited (`await_result_immediate`). Named as {response_name} (generated) for log clarity."
-            )
-
-        elif name is not None and await_result_immediate:
-            logger.warning(
-                f"This request is named as '{name}' will not save its result / resposne in the queue for result caching, please catch the result instead."
-            )
+            else:
+                response_name = f"response_{token_urlsafe(8)}"
+                logger.debug(
+                    f"This request doesn't have a name and is awaited (`await_result_immediate`). Named as {response_name} (generated) for log clarity."
+                )
 
         # Resolve conflict references as one.
-        name = name if name is not None else response_name
+        name = name if name else response_name
+
+        if not self._is_ready:
+            logger.warning(
+                f"Enqueued requests ('{name}' in particular) is not possible to be executed unless this instance executes its initialize() method.%s"
+                % (
+                    f" This request is invalidated and was not inserted from the queue due to `await_result_immediate` is set to {await_result_immediate}."
+                    if await_result_immediate
+                    else " This request will be inserted from the queue and retrieve it when this instance is ready."
+                )
+            )
+
+            if await_result_immediate:
+                return
 
         if self._response.get(name, None) is not None:
             logger.error(
@@ -111,10 +133,21 @@ class HTTPClient:
             name=name,
         )
 
+        logger.info(
+            f"The following request '{wrapped_request.name}' has been appended from the queue."
+        )
         self._queue.append(wrapped_request)
 
         if await_result_immediate and self._is_ready:
-            await self.get_finished_task(task_name=name)
+            logger.debug(
+                f"Await-immediate enabled on the following task name '{name}' ..."
+            )
+            while True:
+                res_req_equiv = self.get_remaining_responses.get(name, None)
+                if res_req_equiv is not None:
+                    return await self.get_finished_task(task_name=name)
+
+                await sleep(0)
 
         elif await_result_immediate and not self._is_ready:
             logger.critical(
@@ -130,8 +163,11 @@ class HTTPClient:
 
         while True:
             if self._queue:
-                create_task(self._run_request())
-            await sleep(1)
+                create_task(
+                    name=f"{HTTPClient.__name__}_{self._queue_iterator_runtime.__name__}",
+                    coro=self._run_request(),
+                )
+            await sleep(0)
 
     async def _run_request(self) -> None:
         if not self._is_ready:
@@ -145,7 +181,7 @@ class HTTPClient:
                 url=loaded_request.url, data=loaded_request.data
             )
             logger.debug(
-                f"Request {loaded_request.name} (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
+                f"Unwrapped Request (to Task) '{loaded_request.name}' (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
             )
 
             self._response[loaded_request.name] = create_task(
@@ -155,11 +191,13 @@ class HTTPClient:
             ## Dequeue that item from self._queue as its response form has been enqueued from the self._response.
             self._queue.pop(self._queue.index(loaded_request))
             logger.debug(
-                f"Wrapped Request '{loaded_request.name}' has been enqueued. | Wrapped Object Info: {requested_item}"
+                f"Task-Wrapped Request '{loaded_request.name}' has been enqueued. | Wrapped Object Info: {requested_item}"
             )
 
     async def get_finished_task(
-        self, *, task_name: str, raise_on_not_ok: bool = False
+        self,
+        *,
+        task_name: str,
     ) -> Any:
         fetched_task = self._response.get(task_name, None)
 
@@ -176,17 +214,24 @@ class HTTPClient:
                 )
                 await fetched_task
 
-            if raise_on_not_ok and not fetched_task.result().ok:
-                raise HTTPResponseNotOkay(
-                    task_name=task_name, result=fetched_task.result()
+            if not fetched_task.result().ok:
+                logger.error(
+                    f"The following request '{task_name}' returned an error response. | Context: {fetched_task}"
                 )
 
             self._response.pop(task_name)
+            logger.debug(f"This request '{task_name}' has been popped.")
             return fetched_task.result()
 
         else:
             logger.error(
-                f"The mentioned task '{task_name}' does not exist from the queue. Please try agian."
+                f"The mentioned task '{task_name}' does not exist from the queue. Please try again."
+            )
+            logger.debug(
+                f"Currently at Queue (Request), Length: {len(self.get_remaining_enqueued_items)} | {self.get_remaining_enqueued_items}"
+            )
+            logger.debug(
+                f"Currently at Response (Request), Length: {len(self.get_remaining_responses)} | {self.get_remaining_responses}"
             )
 
     async def close(self, *, should_destroy: bool = False) -> None:
@@ -198,12 +243,17 @@ class HTTPClient:
                 )
 
                 if should_destroy:
-                    for each_left_task in self._response.values():
-                        each_left_task.cancel()
-                        self._response.popitem()
+                    _cached = (
+                        self._response.copy()
+                    )  # ! We need to copy the last state to avoid mutation change during iteration.
+
+                    for each_left_task in _cached.values():
+                        if self._response.get(each_left_task, None) is not None:
+                            # Compare the last state with the currently async-mutated dictionary and remove the element if they are still existing, otherwise ignore it.
+                            each_left_task.cancel()
+                            self._response.popitem()
                     break
 
-                await sleep(1)
                 continue
 
             break
@@ -237,17 +287,11 @@ class HTTPClient:
         return self._is_ready
 
     @property
-    def get_remaining_requests(self) -> RequestPayloadContext:
-        logger.warning(
-            "Function requested to get a view of the remaining request from the HTTP client."
-        )
+    def get_remaining_responses(self) -> RequestPayloadContext:
         return self._response
 
     @property
-    def get_remaining_queue(self) -> list[Task]:
-        logger.warning(
-            "Function requested to get a view of the remaining queue from the HTTP client."
-        )
+    def get_remaining_enqueued_items(self) -> list[Task]:
         return self._queue
 
 
