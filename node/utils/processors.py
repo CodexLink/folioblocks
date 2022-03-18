@@ -50,14 +50,12 @@ from databases import Database
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
 
-from utils.decorators import assert_instance
-from utils.exceptions import NoKeySupplied
+from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
 
 # # File Handlers, Cryptography — START
-@assert_instance
 async def acrypt_file(
     *,
     afilename: str,
@@ -69,6 +67,10 @@ async def acrypt_file(
     An async version of the crypt_file method (declared on top). This function exists for preventing the async loop from getting blocked on CPU-bound instructions. This function will use aiofiles instead of conventional open() method for writing and reading files. Please refer to the crypt_file() for more information about the context of this function.
 
     """
+
+    if not isinstance(aprocess, CryptFileAction):
+        raise UnsatisfiedClassType(aprocess, CryptFileAction)
+
     afile_content: bytes = b""
     aprocessed_content: bytes = b""
 
@@ -117,7 +119,6 @@ async def acrypt_file(
         _exit(1)
 
 
-@assert_instance
 def crypt_file(
     *,
     filename: str,
@@ -128,6 +129,9 @@ def crypt_file(
     """
     A Non-async function that processes a file with `to` under `filename` that uses `key` for decrypt and encrypt processes. This function exists for providing anti-redundancy over calls for preparing the files that has to be initialized for the session. This function is not compatible during async process, please refer to the acrypt_file for the implementation of async version.
     """
+
+    if not isinstance(process, CryptFileAction):
+        raise UnsatisfiedClassType(process, CryptFileAction)
 
     file_content: bytes = b""
     processed_content: bytes = b""
@@ -304,7 +308,11 @@ async def initialize_resources_and_return_db_context(
                 initial_json_context: dict[str, list[Any]] = {"chain": []}
                 json_export(initial_json_context, temp_writer)
 
-            crypt_file(BLOCKCHAIN_RAW_PATH, auth_key, CryptFileAction.TO_ENCRYPT)
+            crypt_file(
+                filename=BLOCKCHAIN_RAW_PATH,
+                key=auth_key,
+                process=CryptFileAction.TO_ENCRYPT,
+            )
 
             logger.info("Encrypting resources done.")
 
@@ -372,12 +380,10 @@ async def close_resources(*, key: KeyContext) -> None:
 
 
 def validate_file_keys(
-    *,
     context: KeyContext | None,
 ) -> tuple[KeyContext, KeyContext]:
 
     file_ref = f"{Path(__file__).cwd()}/{context}"
-
     # Validate if the given context is a path first.
     if Path(file_ref).is_file():
 
