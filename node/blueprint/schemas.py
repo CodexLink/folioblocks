@@ -302,7 +302,7 @@ class EntityLoginResult(BaseModel):
         ...,
         description="The JWT token for authenticating your session in the blockchain network. Invoke this in the header to authorize yourself.",
     )
-    expiration: datetime = Field(
+    expiration: datetime | None = Field(
         ...,
         description="The date and time from where this token will expire. When expired, you need to fetch by re-login.",
     )
@@ -425,7 +425,8 @@ class NodeNegotiationProcess(BaseModel):
 # * Note that this class is not used in the API system! Meaning they are used internally.
 class HTTPRequestPayload(BaseModel):
     url: str
-    data: RequestPayloadContext
+    data: RequestPayloadContext | None
+    headers: RequestPayloadContext | None
     method: HTTPQueueMethods
     task_type: HTTPQueueTaskType
     await_result_immediate: bool

@@ -44,6 +44,7 @@ from core.constants import (
 from core.dependencies import get_db_instance
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
+from core.constants import NodeRoles
 from utils.exceptions import MaxJWTOnHold
 from utils.processors import hash_context, verify_hash_context
 
@@ -149,15 +150,17 @@ async def login_entity(
 ) -> EntityLoginResult:  # * We didn't use aiohttp.BasicAuth because frontend has a form, and we don't need a prompt.
 
     credential_to_look = users.select().where(users.c.username == credentials.username)
-    fetched_data = await db.fetch_one(credential_to_look)
+    fetched_credential_data = await db.fetch_one(credential_to_look)
 
     # TODO: Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
     # - This is implementable when we have the capability to lock out users due to suspicious activities.
 
-    if fetched_data is not None:
+    if fetched_credential_data is not None:
 
         # We cannot use pydantic model because we need to do some modification that violates use-case of pydantic.
-        payload: dict[str, Any] = dict(zip(fetched_data._fields, fetched_data))
+        payload: dict[str, Any] = dict(
+            zip(fetched_credential_data._fields, fetched_credential_data)
+        )
 
         # Adjust the payload to be compatible with JWT encoding.
         # Since there are several enum.Enum, we need to convert them to literal values for the JWT to encode it.
@@ -170,10 +173,11 @@ async def login_entity(
 
         if verify_hash_context(
             real_pwd=RawData(credentials.password),
-            hashed_pwd=HashedData(fetched_data.password),
+            hashed_pwd=HashedData(fetched_credential_data.password),
         ):
             other_tokens_stmt = tokens.select().where(
-                (tokens.c.from_user == fetched_data.unique_address) & tokens.c.state
+                (tokens.c.from_user == fetched_credential_data.unique_address)
+                & tokens.c.state
                 != TokenStatus.EXPIRED.name
             )
 
@@ -183,25 +187,27 @@ async def login_entity(
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
                 raise MaxJWTOnHold(
                     (
-                        fetched_data.unique_address,
-                        CredentialContext(fetched_data.username),
+                        fetched_credential_data.unique_address,
+                        CredentialContext(fetched_credential_data.username),
                     ),
                     len(other_tokens),
                 )
 
             # If all other conditions are clear, then create the JWT token.
-            jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
+            jwt_expire_at: datetime | None = None
+            if fetched_credential_data.type == NodeRoles.SIDE:
+                jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
-            payload[
-                "expire_at"
-            ] = jwt_expire_at.isoformat()  # Make it different per request.
+                payload[
+                    "expire_at"
+                ] = jwt_expire_at.isoformat()  # Make it different per request.
 
             token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
 
             # Put a new token to the database.
 
             new_token = tokens.insert().values(
-                from_user=fetched_data.unique_address,
+                from_user=fetched_credential_data.unique_address,
                 token=token,
                 expiration=jwt_expire_at,
             )
@@ -210,7 +216,7 @@ async def login_entity(
                 await db.execute(new_token)
 
                 return EntityLoginResult(
-                    user_address=fetched_data.unique_address,
+                    user_address=fetched_credential_data.unique_address,
                     jwt_token=JWTToken(token),
                     expiration=jwt_expire_at,
                 )

@@ -11,6 +11,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from asyncio import get_event_loop
 from getpass import getpass
 from json import dump as json_export
 from logging import Logger, getLogger
@@ -461,37 +462,35 @@ async def ensure_input_prompt(
         if isinstance(input_context, list) and isinstance(hide_fields, list):
             for field_idx, each_context_to_input in enumerate(input_context):
                 while True:
-                    _input = (
-                        (
-                            input(f"{each_context_to_input}{delimiter} ")
-                            if not enable_async
-                            else await ainput(f"{each_context_to_input}{delimiter} ")
-                        )
-                        if not hide_fields[field_idx]
-                        else getpass(f"{each_context_to_input}{delimiter} ")
+                    _item_input = await handle_input_function(
+                        awaited=enable_async,
+                        input_hidden=hide_fields[field_idx],
+                        message=f"{each_context_to_input}{delimiter} ",
                     )
 
-                    if not _input:
+                    if not _item_input:
                         logger.critical(
                             f"One of the inputs for the {generalized_context} is empty! Please try again."
                         )
                         continue
 
                     if isinstance(input_s, list):
-                        input_s.append(_input)
+                        input_s.append(_item_input)
 
                     break
 
         else:
-            input_s = (
-                (
-                    input(f"{input_context}{delimiter} ")
-                    if not enable_async
-                    else await ainput(f"{input_context}{delimiter} ")
+            if isinstance(hide_fields, bool):
+                input_s = await handle_input_function(
+                    awaited=enable_async,
+                    input_hidden=hide_fields,
+                    message=f"{input_context}{delimiter} ",
                 )
-                if not hide_fields
-                else getpass(str(f"{input_context}{delimiter} "))
-            )
+            else:
+                logger.exception(
+                    f"Assertion Error: Input hidden is not a type 'bool'. This condition scope does not expect type {type(hide_fields)}."
+                )
+                exit(-1)
 
             if not input_s:
                 logger.critical(
@@ -511,6 +510,36 @@ async def ensure_input_prompt(
             continue
 
         return input_s
+
+
+async def handle_input_function(
+    *, awaited: bool, input_hidden: bool, message: str
+) -> str:
+    """
+    Technically a handler to the input that is being called by ensure_input_prompt.
+
+    Seperated since list form and singleton parameter uses the same mechanism.
+
+    Args:
+        awaited (bool): Is the input being awaited `was async` or not?
+        input_hidden (bool): Is the input hidden or not?
+        message (str): The message to display incorporated with the input.
+    """
+    event_loop_ref = get_event_loop()
+
+    if not input_hidden and not awaited:
+        _ireturned: str = input(message)
+
+    elif input_hidden and awaited:
+        _ireturned = await event_loop_ref.run_in_executor(None, getpass, message)
+
+    elif not input_hidden and awaited:
+        _ireturned = await ainput(message)
+
+    else:  # ! Resolves to `input_hidden` and not `awaited`.
+        _ireturned = getpass(message)
+
+    return _ireturned
 
 
 # # Variable Password Crypt Handlers — END

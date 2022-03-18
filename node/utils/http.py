@@ -13,7 +13,6 @@ from core.constants import (
     RequestPayloadContext,
     URLAddress,
 )
-
 from utils.exceptions import (
     HTTPClientFeatureUnavailable,
 )
@@ -52,15 +51,16 @@ class HTTPClient:
         self,
         *,
         url: URLAddress,
-        data: RequestPayloadContext,
         method: HTTPQueueMethods,
         task_type: HTTPQueueTaskType = HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST,
+        data: RequestPayloadContext | None = None,
+        headers: RequestPayloadContext | None = None,
         await_result_immediate: bool = True,
         name: str | None = None,
     ) -> None:
         """
         A method that enqueues request payload to the LIFO list container to execute in burst or for the latter.
-
+        ! Docs OUTDATED.
         Args:
                                         - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
                                         - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
@@ -86,6 +86,7 @@ class HTTPClient:
                 request_payload = HTTPRequestPayload(
                     url=url,
                     data=data,
+                    headers=headers,
                     method=method,
                     task_type=task_type,
                     await_result_immediate=await_result_immediate,
@@ -127,6 +128,7 @@ class HTTPClient:
         wrapped_request = HTTPRequestPayload(
             url=url,
             data=data,
+            headers=headers,
             method=method,
             task_type=task_type,
             await_result_immediate=await_result_immediate,
@@ -178,7 +180,9 @@ class HTTPClient:
 
         for loaded_request in self._queue:
             requested_item = getattr(self._session, loaded_request.method.name.lower())(
-                url=loaded_request.url, data=loaded_request.data
+                url=loaded_request.url,
+                headers=loaded_request.headers,
+                json=loaded_request.data,
             )
             logger.debug(
                 f"Unwrapped Request (to Task) '{loaded_request.name}' (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
@@ -216,11 +220,11 @@ class HTTPClient:
 
             if not fetched_task.result().ok:
                 logger.error(
-                    f"The following request '{task_name}' returned an error response. | Context: {fetched_task}"
+                    f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}"
                 )
 
             self._response.pop(task_name)
-            logger.debug(f"This request '{task_name}' has been popped.")
+            logger.debug(f"Request '{task_name}' has been popped.")
             return fetched_task.result()
 
         else:

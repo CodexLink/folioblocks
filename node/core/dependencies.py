@@ -17,6 +17,7 @@ from os import environ as env
 from random import randint
 from secrets import token_hex
 from sqlite3 import IntegrityError
+from typing import Any
 
 from aioconsole import ainput
 from aiohttp import (
@@ -86,7 +87,7 @@ def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
 def generate_auth_token() -> str:
     generated: str = token_hex(randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT))
     logger.debug(
-        f"Auth token generated with min {AUTH_CODE_MIN_CONTEXT} and max {AUTH_CODE_MAX_CONTEXT}. | Context: {generated}"
+        f"Auth token generated with the following constraints: Min Length is {AUTH_CODE_MIN_CONTEXT}, Max Length is {AUTH_CODE_MAX_CONTEXT}. | Context: {generated}"
     )
     return generated
 
@@ -124,6 +125,8 @@ async def authenticate_node_client(
                 )
 
                 generated_token: str = generate_auth_token()
+
+                print(email_address)
                 insert_generated_token_stmt = auth_codes.insert().values(
                     code=generated_token,
                     account_type=UserEntity.NODE_USER,
@@ -164,7 +167,7 @@ async def authenticate_node_client(
 
         # Ensure that ENV will be covered here.
         try:
-            login_req = await get_http_client_instance().enqueue_request(
+            login_req: Any = await get_http_client_instance().enqueue_request(
                 url=URLAddress(
                     f"http://{instances[0].host}:{instances[0].port}/entity/login"
                 ),
@@ -179,7 +182,7 @@ async def authenticate_node_client(
                 },
             )
 
-            if login_req:
+            if login_req.ok:
                 # Resolve via pydantic.
                 resolved_model = EntityLoginResult.parse_obj(await login_req.json())
 
@@ -202,12 +205,13 @@ async def authenticate_node_client(
                         )
 
                     logger.info(f"Authenticated as {resolved_model.user_address}.")
+                break
 
             else:
                 logger.error(
-                    f"Credentials are incorrect! Please try again... | Info: {login_req.content}"
+                    f"Credentials are incorrect! Please try again. | Object: {login_req} | Info: {login_req.content}"
                 )
-                await sleep(2)
+                await sleep(1.5)
                 continue
 
         # * Should cover the following exceptions: (ClientConnectorError, ClientConnectorSSLError, ClientConnectorCertificateError, and ClientConnectionError)
@@ -215,7 +219,7 @@ async def authenticate_node_client(
             logger.critical(
                 f"There was an error during request. Please try again. | Context: {e}"
             )
-            await sleep(2)
+            await sleep(1.5)
             continue
 
 

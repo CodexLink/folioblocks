@@ -32,12 +32,15 @@ from core.args import args_handler as ArgsHandler
 from core.constants import (
     ASGI_APP_TARGET,
     ASYNC_TARGET_LOOP,
+    HTTPQueueMethods,
+    JWTToken,
     LoggerLevelCoverage,
     NodeRoles,
     RuntimeLoopContext,
     TokenStatus,
+    URLAddress,
 )
-from core.dependencies import authenticate_node_client
+from core.dependencies import authenticate_node_client, get_identity_tokens
 from core.email import get_email_instance
 from core.logger import LoggerHandler
 from utils.http import get_http_client_instance
@@ -170,16 +173,29 @@ async def terminate() -> None:
     """
     TODO: Ensure on services like blockchain, remove or finish any request or finish the consensus.
     """
+    if parsed_args.prefer_role == NodeRoles.MASTER.name:
+        get_email_instance().close()  # * Shutdown email service instance.
+        # Remove the token related to this master.
+        token_to_invalidate_stmt = (
+            tokens.update()
+            .where(tokens.c.token == get_identity_tokens()[1])
+            .values(state=TokenStatus.LOGGED_OUT)
+        )
+
+        await database_instance.execute(token_to_invalidate_stmt)
+        logger.info(f"Master Node's token has been invalidated due to Logout session.")
+    else:
+        await get_http_client_instance().enqueue_request(
+            url=URLAddress(
+                f"http://{parsed_args.host}:{parsed_args.port}/entity/logout"
+            ),
+            method=HTTPQueueMethods.POST,
+            headers={"X-Token": JWTToken(get_identity_tokens()[1])},
+        )
+
     await get_http_client_instance().close()  # * Shutdown the HTTP client module.
     await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
     await database_instance.disconnect()  # * Shutdown the database instance.
-
-    if parsed_args.prefer_role == NodeRoles.MASTER.name:
-        get_email_instance().close()  # * Shutdown email service instance.
-    else:
-        # TODO: Create an http.py that can be used across for the request.
-        # - Note that we need to await it here instead of create_task().
-        pass
 
     await close_resources(
         key=parsed_args.key_file[0]
@@ -226,7 +242,7 @@ if parsed_args.prefer_role == NodeRoles.MASTER.name:
                     .values(state=TokenStatus.EXPIRED)
                 )  ## Change the state of the token when past through expiration.
 
-                await database_instance.fetch_one(token_to_del)
+                await database_instance.execute(token_to_del)
 
                 logger.info(
                     f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."

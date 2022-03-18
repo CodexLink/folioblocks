@@ -270,6 +270,7 @@ class TokenStatus(Enum):
     EXPIRED = "Token Expired"
     RECENTLY_CREATED = "Token Recently Created"
     ON_USE = "Token On Use"
+    LOGGED_OUT = "Token Disposed: Logged Out"
 
 
 class UserActivityState(Enum):
