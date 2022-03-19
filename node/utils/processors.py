@@ -14,19 +14,17 @@ You should have received a copy of the GNU General Public License along with Fol
 from asyncio import get_event_loop
 from getpass import getpass
 from hashlib import sha256
-from io import TextIOWrapper
 from json import dump as json_export
 from logging import Logger, getLogger
 from os import _exit
 from pathlib import Path
 from secrets import token_hex
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any, Literal
+from typing import Any
 
-import aiofiles
 from aioconsole import ainput
-from blueprint.models import model_metadata
-from blueprint.schemas import Block
+from aiofiles import open as aopen
+from blueprint.models import file_signatures, model_metadata
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_ENV_FILE_NAME,
@@ -47,9 +45,10 @@ from core.constants import (
     RawData,
     RuntimeLoopContext,
 )
-from core.dependencies import store_db_instance
+from core.dependencies import get_db_instance, store_db_instance
 from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
+from fastapi import Depends
 from passlib.context import CryptContext
 from sqlalchemy import create_engine
 
@@ -139,7 +138,7 @@ async def process_crpyt_file(
     resolved_fn_name: str = "read" if mode == "rb" else "write"
 
     if is_async:
-        async with aiofiles.open(filename, mode) as acontent_buffer:
+        async with aopen(filename, mode) as acontent_buffer:
             file_content: str | bytes = await getattr(
                 acontent_buffer, resolved_fn_name
             )(content_to_write if mode == "wb" else None)
@@ -518,7 +517,7 @@ async def handle_input_function(
     return _ireturned
 
 
-# # Variable Password Crypt Handlers — END
+# # Variable Password Crypt Han1dlers — END
 
 
 # # Blockchain
@@ -528,6 +527,40 @@ async def look_for_nodes(*, role: NodeRoles, host: IPAddress, port: IPPort) -> N
         f"Step 2.1 | Attempting to look {'for the master node' if role == NodeRoles.MASTER.name else 'at other nodes'} at host {host}, port {port}..."
     )
 
+# TODO: Function to below is just a prototype. TO BE TESTED.
+async def verify_hash_blockchain(
+    *, blockchain_contents: str | bytes, db: Database = Depends(get_db_instance)
+) -> bool:
+    verify_hash_stmt = file_signatures.select(file_signatures.c.file == BLOCKCHAIN_NAME)
+    blockchain_file_hash = await db.execute(verify_hash_stmt)
 
-def update_hash_blockchain(self, blockchain_contents):
-    pass
+    resolve_type_contents: bytes = (
+        blockchain_contents.encode("utf-8")
+        if isinstance(blockchain_contents, str)
+        else blockchain_contents
+    )
+
+    return sha256(resolve_type_contents).hexdigest() == blockchain_file_hash
+
+
+def process_blockchain_hash_state(
+    *,
+    blockchain_contents: str | bytes,
+    should_update: bool = False,
+) -> None:
+
+    resolved_blockchain_contents: bytes = (
+        blockchain_contents.encode("utf-8")
+        if isinstance(blockchain_contents, str)
+        else blockchain_contents
+    )
+
+    if should_update:
+        file_signatures.update().where(
+            file_signatures.c.file == BLOCKCHAIN_NAME
+        ).values(signature=sha256(resolved_blockchain_contents))
+
+    else:
+        file_signatures.insert().values(
+            filename=BLOCKCHAIN_NAME, signature=sha256(resolved_blockchain_contents)
+        )
