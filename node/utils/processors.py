@@ -13,13 +13,15 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from asyncio import get_event_loop
 from getpass import getpass
+from hashlib import sha256
+from io import TextIOWrapper
 from json import dump as json_export
 from logging import Logger, getLogger
 from os import _exit
 from pathlib import Path
 from secrets import token_hex
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any
+from typing import Any, Literal
 
 import aiofiles
 from aioconsole import ainput
@@ -57,75 +59,13 @@ logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
 
 # # File Handlers, Cryptography — START
-async def acrypt_file(
-    *,
-    afilename: str,
-    akey: KeyContext,
-    aprocess: CryptFileAction,
-    return_new_key: bool = False,
-) -> bytes | None:
-    """
-    An async version of the crypt_file method (declared on top). This function exists for preventing the async loop from getting blocked on CPU-bound instructions. This function will use aiofiles instead of conventional open() method for writing and reading files. Please refer to the crypt_file() for more information about the context of this function.
-
-    """
-
-    if not isinstance(aprocess, CryptFileAction):
-        raise UnsatisfiedClassType(aprocess, CryptFileAction)
-
-    afile_content: bytes = b""
-    aprocessed_content: bytes = b""
-
-    # Open the file first.
-    async with aiofiles.open(afilename, "rb") as acontent_buffer:
-        afile_content = await acontent_buffer.read()
-
-    try:
-        logger.debug(
-            f"Async: {'Decrypting' if aprocess is CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
-        )
-        if aprocess.TO_DECRYPT:
-
-            if akey is None:
-                raise NoKeySupplied(
-                    acrypt_file, "Async: Decryption doesn't have a key."
-                )
-
-            acrypt_context: Fernet = Fernet(akey.encode("utf-8"))
-
-        else:
-            if akey is None:
-                akey = Fernet.generate_key()
-            acrypt_context = Fernet(akey)
-
-        aprocessed_content = getattr(
-            acrypt_context,
-            "decrypt" if aprocess is CryptFileAction.TO_DECRYPT else "encrypt",
-        )(afile_content)
-
-        # Then write to the file for the final effect.
-        async with aiofiles.open(afilename, "wb") as content_buffer:
-            await content_buffer.write(aprocessed_content)
-
-        logger.debug(
-            f"Async: Successfully {'decrypted' if aprocess is CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
-        )
-
-        if return_new_key:
-            return akey
-
-    except InvalidToken:
-        logger.critical(
-            f"Async: {'Decryption' if aprocess is CryptFileAction.TO_DECRYPT else 'Encryption'} failed. Please check your argument and try again. This may be a developer's problem, please report the issue at the repository (CodexLink/folioblocks)."
-        )
-        _exit(1)
-
-
-def crypt_file(
+async def crypt_file(
     *,
     filename: str,
-    key: KeyContext | None,
+    key: KeyContext,
     process: CryptFileAction,
     return_new_key: bool = False,
+    enable_async: bool = False,
 ) -> bytes | None:
     """
     A Non-async function that processes a file with `to` under `filename` that uses `key` for decrypt and encrypt processes. This function exists for providing anti-redundancy over calls for preparing the files that has to be initialized for the session. This function is not compatible during async process, please refer to the acrypt_file for the implementation of async version.
@@ -134,17 +74,18 @@ def crypt_file(
     if not isinstance(process, CryptFileAction):
         raise UnsatisfiedClassType(process, CryptFileAction)
 
-    file_content: bytes = b""
     processed_content: bytes = b""
     crypt_context: Fernet | None = None
+    file_content: str | bytes = ""
 
     # Open the file first.
-    with open(filename, "rb") as content_buffer:
-        file_content = content_buffer.read()
+    file_content = await process_crpyt_file(
+        is_async=enable_async, filename=filename, mode="rb"
+    )
 
     try:
         logger.debug(
-            f"{'Decrypting' if process is CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
+            f"{'Async:' if enable_async else ''}{'Decrypting' if process is CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
         )
         if process is CryptFileAction.TO_DECRYPT:
 
@@ -157,7 +98,6 @@ def crypt_file(
         else:
             if key is None:
                 key = Fernet.generate_key()
-
             crypt_context = Fernet(key)
 
         processed_content = getattr(
@@ -166,8 +106,12 @@ def crypt_file(
         )(file_content)
 
         # Then write to the file for the final effect.
-        with open(filename, "wb") as content_buffer:
-            content_buffer.write(processed_content)
+        await process_crpyt_file(
+            content_to_write=processed_content,
+            filename=filename,
+            is_async=enable_async,
+            mode="wb",
+        )
 
         logger.info(
             f"Successfully {'decrypted' if process is CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
@@ -181,6 +125,31 @@ def crypt_file(
             f"{'Decryption' if process is CryptFileAction.TO_DECRYPT else 'Encryption'} failed. Please check your argument and try again. This may be a developer's problem, please report the issue at the repository (CodexLink/folioblocks)."
         )
         _exit(1)
+
+
+async def process_crpyt_file(
+    *,
+    is_async: bool,
+    filename: str,
+    mode: Any,  # Cannot import Literals for the aiofiles.mode here.
+    content_to_write: Any = None,
+) -> str | bytes:
+
+    # * In the near future, we can do something about this one.
+    resolved_fn_name: str = "read" if mode == "rb" else "write"
+
+    if is_async:
+        async with aiofiles.open(filename, mode) as acontent_buffer:
+            file_content: str | bytes = await getattr(
+                acontent_buffer, resolved_fn_name
+            )(content_to_write if mode == "wb" else None)
+    else:
+        with open(filename, mode) as content_buffer:
+            file_content = getattr(content_buffer, resolved_fn_name)(
+                content_to_write if mode == "wb" else None
+            )
+
+    return file_content
 
 
 # # File Handlers, Cryptography — END
@@ -227,7 +196,7 @@ async def initialize_resources_and_return_db_context(
             con: Connection | None = None
 
             logger.info("Decrypting the database...")
-            crypt_file(
+            await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
@@ -251,13 +220,15 @@ async def initialize_resources_and_return_db_context(
             logger.debug("Database instance has been saved for access later.")
 
             logger.info("Decrypting a blockchain file ...")
-            crypt_file(
+            await crypt_file(
                 filename=BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
             )
             logger.info("Blockchain file decrypted.")
 
+            logger.info("Checking integration of the blockchain file...")
+            # TODO
             return db_instance
 
         # This may not be tested.
@@ -288,7 +259,7 @@ async def initialize_resources_and_return_db_context(
             )
 
             logger.info("Encrypting a new database ...")
-            auth_key = crypt_file(
+            auth_key = await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
@@ -305,11 +276,10 @@ async def initialize_resources_and_return_db_context(
             logger.info("Encrypting a new blockchain file ...")
 
             with open(BLOCKCHAIN_RAW_PATH, "w") as temp_writer:
-
                 initial_json_context: dict[str, list[Any]] = {"chain": []}
                 json_export(initial_json_context, temp_writer)
 
-            crypt_file(
+            await crypt_file(
                 filename=BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
@@ -370,11 +340,17 @@ async def close_resources(*, key: KeyContext) -> None:
     """
     logger.warn("Closing database and blockchain files by encryption...")
 
-    await acrypt_file(
-        afilename=DATABASE_RAW_PATH, akey=key, aprocess=CryptFileAction.TO_ENCRYPT
+    await crypt_file(
+        filename=DATABASE_RAW_PATH,
+        key=key,
+        process=CryptFileAction.TO_ENCRYPT,
+        enable_async=True,
     )
-    await acrypt_file(
-        afilename=BLOCKCHAIN_RAW_PATH, akey=key, aprocess=CryptFileAction.TO_ENCRYPT
+    await crypt_file(
+        filename=BLOCKCHAIN_RAW_PATH,
+        key=key,
+        process=CryptFileAction.TO_ENCRYPT,
+        enable_async=True,
     )
 
     logger.info("Database and blockchain successfully closed and encrypted.")
@@ -551,3 +527,7 @@ async def look_for_nodes(*, role: NodeRoles, host: IPAddress, port: IPPort) -> N
     logger.info(
         f"Step 2.1 | Attempting to look {'for the master node' if role == NodeRoles.MASTER.name else 'at other nodes'} at host {host}, port {port}..."
     )
+
+
+def update_hash_blockchain(self, blockchain_contents):
+    pass
