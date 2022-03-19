@@ -7,7 +7,7 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
-from asyncio import create_task
+from asyncio import create_task, gather
 from datetime import datetime, timedelta
 from enum import EnumMeta
 from http import HTTPStatus
@@ -37,14 +37,15 @@ from core.constants import (
     EntityAPI,
     HashedData,
     JWTToken,
+    NodeRoles,
     RawData,
     TokenStatus,
+    UserActivityState,
     UserEntity,
 )
 from core.dependencies import get_db_instance
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
-from core.constants import NodeRoles
 from utils.exceptions import MaxJWTOnHold
 from utils.processors import hash_context, verify_hash_context
 
@@ -80,7 +81,9 @@ async def register_entity(
     get_auth_token_stmt = auth_codes.select().where(
         (auth_codes.c.code == credentials.auth_code)
         & (auth_codes.c.to_email == credentials.email)
-        & (auth_codes.c.is_used == "False")
+        & (
+            auth_codes.c.is_used == "False"
+        )  # ! Not sure why, but I have to arbitrary convert this bool to str, I guess there's no resolve.
         & (auth_codes.c.expiration >= datetime.now())
     )
 
@@ -108,9 +111,14 @@ async def register_entity(
             password=hash_context(pwd=RawData(credentials.password))
             # association=, # I'm not sure on what to do with this one, as of now.
         )
+        dispose_auth_code = (
+            auth_codes.update()
+            .where(auth_codes.c.code == auth_token.code)
+            .values(is_used=True)
+        )
 
         try:
-            await db.execute(data)
+            await gather(db.execute(dispose_auth_code), db.execute(data))
             create_task(
                 get_email_instance().send(
                     content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
@@ -182,6 +190,8 @@ async def login_entity(
             )
 
             other_tokens = await db.fetch_all(other_tokens_stmt)
+            print(other_tokens)
+            input()
 
             # Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
@@ -204,16 +214,20 @@ async def login_entity(
 
             token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
 
-            # Put a new token to the database.
-
+            # Put a new token to the database then update the user as it receives the token.
             new_token = tokens.insert().values(
                 from_user=fetched_credential_data.unique_address,
                 token=token,
                 expiration=jwt_expire_at,
             )
+            logged_user = (
+                users.update()
+                .where(users.c.unique_address == fetched_credential_data.unique_address)
+                .values(user_activity=UserActivityState.ONLINE)
+            )
 
             try:
-                await db.execute(new_token)
+                await gather(db.execute(logged_user), db.execute(new_token))
 
                 return EntityLoginResult(
                     user_address=fetched_credential_data.unique_address,
