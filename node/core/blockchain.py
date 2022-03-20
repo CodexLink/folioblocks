@@ -1,8 +1,7 @@
 from asyncio import create_task, gather, get_event_loop
+from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
-from orjson import dumps as export_to_json
-from orjson import loads as import_raw_json_to_dict
 from logging import Logger, getLogger
 from random import randint
 from sys import maxsize as MAX_INT_PYTHON
@@ -14,12 +13,14 @@ from blueprint.schemas import (
     Block,
     Blockchain,
     Blocks,
+    HashableBlock,
     SearchContext,
     Transaction,
     Transactions,
 )
 from frozendict import frozendict
-from copy import deepcopy
+from orjson import dumps as export_to_json
+from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
 
 from core.consensus import AdaptedPoETConsensus
@@ -29,6 +30,7 @@ from core.constants import (
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
     BLOCKCHAIN_NODE_JSON_TEMPLATE,
     BLOCKCHAIN_RAW_PATH,
+    BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     AddressUUID,
     BlockchainIOAction,
     HashUUID,
@@ -38,8 +40,6 @@ from core.constants import (
 )
 from core.dependencies import get_identity_tokens
 from core.tasks import AsyncTaskQueue
-from blueprint.schemas import HashableBlock
-from copy import copy
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -54,169 +54,173 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
         # TODO: After finalization, seperate some methods and attributes for the SIDE and MASTER.
         # Required since this class will be invoked no matter what the role of the client instance is.
+
+        # * Required Variables for the Blockchain Operaetion.
         self.client_role = client_role
         self.auth_token = auth_tokens
+
         self.consensus_timer: datetime = (
             datetime.now()
         )  # TODO: This will be computed based on the information by the MASTER node on how much is being participated, along with its computed value based on the average mining and iteration.
-        self.blockchain_ready = False
+
+        # * State and Variable References
         self.node_ready = False
         self.current_block_id: int = 1
-
-        # TODO: Add implementation for when there's a concurrency of new data, then await all of them then sort then insert.
 
         super().__init__()
 
     async def initialize(self) -> None:
-        # First check for the file if it is valid de-serializable.
-        # ! Raise error if it contains nothing. The processor of the file for the blockchain should already have a context.
+        """
+        A method that initialize resources needed for the blockchain system to work.
 
-        # If client_role is SIDE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER node that is available. Also consider checking for unfinished tasks.
+        TODO
+        * If client_role is SIDE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER node that is available. Also consider checking for unfinished tasks.
+        """
+
+        # Load the blockchain.
+
+        self._chain: frozendict | None = await self._process_file_state(
+            operation=BlockchainIOAction.TO_READ
+        )
 
         # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
-        # If everything is okay, then load the blockchain.
-        self._chain: frozendict = frozendict(
-            deepcopy(BLOCKCHAIN_NODE_JSON_TEMPLATE)
-        )  # Also classified as type: dict[str, list[frozendict]]
-        self._file_chain: dict = deepcopy(BLOCKCHAIN_NODE_JSON_TEMPLATE)
+        if (
+            self._chain is not None
+            and "chain" in self._chain
+            and not self._chain["chain"]
+        ):
+            for _ in range(BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
+                await self.create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
 
-        # print("INITIAL LOAD:", self._chain)
-
-        # self._chain = await self._process_file_state(
-        #     operation=BlockchainIOAction.TO_READ, chain=self._chain
-        # )
-
-        # print("AFTER LOADING:", self._chain)
-
-        # TODO: try running this if we were able to finish most parts of the blockchain. 3 to 5 times.
-        for _ in range(10):
-            await self.create_genesis_block()  # # We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
-
-    # Write to file or write_to_buffer.
     async def _append(
         self,
         *,
         context: Block | Transaction,
         auth_context: tuple[AddressUUID, JWTToken],
     ) -> None:
-        # I handle only the context at this moment for now.
+        """
+        A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
 
-        # TODO: Add security mechanism here.
-        # * We may use this and compute its hash for comparing context and also length.
+        Args:
+            context (Block | Transaction): The context of the block as is.
+            auth_context (tuple[AddressUUID, JWTToken]): Authentication attribute, not sure what to do on this one yet.
 
-        # TODO: Add it in the file or something idk.
-        self._chain["chain"].append(frozendict(context.dict()))
-        await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
+        TODO
+        * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
+        """
+        if self._chain is not None:
+            block_context = context.dict()
+            block_context["contents"] = frozendict(block_context["contents"])
+            self._chain["chain"].append(frozendict(block_context))
+            await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
+
+        else:
+            logger.exception(
+                "There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please execute 'CTRL + BREAK' as possible and report to the developers as soon as possible!"
+            )
+            input()
 
     # Overwrites existing buffer from the frozendict if consensus has been established.
-    # TODO: Make the existing file loaded and deserialize it.
-    # TODO: Create an attribute that tells if we are ready to do some processing or not. | PREPARED.
-    # TODO: This is gonna be useful for asnyc tasks queue that we have for the consensus implementation.
     async def _process_file_state(
         self,
         *,
         operation: BlockchainIOAction,
-    ) -> Any | None:  # ! TYPES HAS BEEN COMPLICATED, WILL RESOLVE LATER.
+    ) -> frozendict | None:
         if operation in BlockchainIOAction:
             async with aopen(
                 BLOCKCHAIN_RAW_PATH,
                 "w" if operation == BlockchainIOAction.TO_WRITE else "r",
             ) as content_buffer:
 
-                if block and operation == BlockchainIOAction.TO_WRITE:
+                if operation == BlockchainIOAction.TO_WRITE:
                     await content_buffer.write(
                         export_to_json(
-                            self._chain, default=self.serialize_frozendict
+                            self._chain, default=self.serialize_to_file_blockchain
                         ).decode("utf-8")
                     )
                     return None
 
                 else:
-                    # First we fetch something form the file.
                     raw_data = await content_buffer.read()
-                    print("FILE_READ:", raw_data)
-                    serialized_data = import_raw_json_to_dict(raw_data)
-
-                    # Then we deserialize it to something that represents the default of self._chain.
-                    logger.info("Chain has been loaded from the file to the in-memory!")
-                    return await self.deserialize_blockchain(
-                        action=ObjectProcessAction.TO_DESERIALIZE,
-                        context=serialized_data,
+                    partial_deserialized_data = import_raw_json_to_dict(raw_data)
+                    deserialized_data = self.load_deserialized_blockchain(
+                        partial_deserialized_data
                     )
+                    logger.info(
+                        f"Chain has been loaded from the file to the in-memory!"
+                    )
+                    return deserialized_data
 
         logger.exception(
             f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead."
         )
+        return None
 
-    def serialize_frozendict(self, o: frozendict) -> dict[str, Any]:
-        if isinstance(o, frozendict):
-            return dict(o)
-        raise TypeError
-
-    async def deserialize_blockchain(
-        self,
-        *,
-        action: ObjectProcessAction,
-        context: dict[str, Any],
-    ) -> Any:  # TODO: Annotate this.
-
+    def serialize_to_file_blockchain(self, o: frozendict) -> dict[str, Any]:
         """
-        An async function that deserialize or serialize objects for process. Probably used a lot by the _overwrite_or_read_file_state.
+        A method that serializes the python objects to the blockchain file. This represents the JSON form of the blockchain.
 
         Args:
-            action (ObjectProcessAction): _description_
-            context (dict[str, list[frozendict]]): _description_
+            o (frozendict): The whole chain, wrapped in frozendict.
+
+        Raises:
+            TypeError: Cast TypeError when the constraint from the `o` is not followed.
+
+        Returns:
+            dict[str, Any]: Returns the JSON form of the blockchain that is in-memory.
+
+        Note:
+        *  By this point, I still haven't consider for scalability and its impact from processing such data.
+        * Until there's an impact, I will implement in-memory caching to reduce processing time and insert only data that is missing from the data pool.
         """
-        if action in ObjectProcessAction and isinstance(context, dict):
-            # * Check the structure in the initial phase before processing.
-            # - Ensure that the wrapped object is 'dict' regardless of their recent forms. Please process it before feeding it from this function.
 
-            # * We need to copy the class container since we are going to modify its contents for serialization. Not copying it will result in references sharing the same changes.
+        if isinstance(o, frozendict):  # * Cast mutability on the whole chain.
+            _o = dict(deepcopy(o))
+            for block_idx, each_block in enumerate(_o["chain"]):
+                # * Then cast mutability from the whole block of the chain.
+                _o["chain"][block_idx] = dict(each_block)
 
-            # TODO: Since it automatically appends then we can just process this function to do it per thing.
-            # TODO: Then we ensure that this dictionary knows about it. We need to compare it to the self._chain for integrity purposes, which means, we get two seperate copies.
+                # * Lastly, cast mutability to the content of the whole block of the chain.
+                _o["chain"][block_idx]["contents"] = dict(each_block["contents"])
 
-            # Set up initial run before treating other objects.
-            out_serialized_data = deepcopy(BLOCKCHAIN_NODE_JSON_TEMPLATE)
-            print("out_init", out_serialized_data)
+            return _o
 
-            ref_container = (
-                context.copy()
-                if action == ObjectProcessAction.TO_SERIALIZE
-                else context
-            )
+        raise TypeError
 
-            resolved_shadow_block = (
-                frozendict(ref_container)
-                if isinstance(ref_container, dict)
-                and action == ObjectProcessAction.TO_DESERIALIZE
-                else dict(ref_container)
-            )
+    def load_deserialized_blockchain(
+        self,
+        context: dict[str, Any],
+    ) -> frozendict:
+        """
+        A method that deserializes the blockchain into an immutable dictionary (frozendict) from the outsourced-data of the blockchain file.
 
-            print("ref:", out_serialized_data, resolved_shadow_block, ref_container)
-            input()
+        Args:
+            context (dict[str, Any]): The consumable data (type-compatible) that is loaded by the orjson.
 
-            if action == ObjectProcessAction.TO_SERIALIZE:
-                logger.debug(
-                    f"Block #{resolved_shadow_block['id']} has been appended to the temporary blockchain."
+        Returns:
+            frozendict: Returns the immutable version of the given `context`.
+        """
+
+        # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
+        if isinstance(context, dict):
+
+            for dict_idx, dict_data in enumerate(context["chain"]):
+                # * For every block, we have to deserialize (1) timestamps to `datetime`, (2) `content` to immutable 'dict' (frozendict) and transactions.
+
+                context["chain"][dict_idx]["contents"] = frozendict(
+                    dict_data["contents"]
                 )
-                out_serialized_data["chain"].append(resolved_shadow_block)
-                print("Appended:", out_serialized_data)
-                input()
-            else:
-                logger.debug(
-                    f"Block #{resolved_shadow_block['id']} has been inserted to the actual blockchain context."
-                )
-                ref_container["chain"][dict_idx] = resolved_shadow_block
+                # * Then, make the whole block immutable and insert it as reference from the blockchain.
+                context["chain"][dict_idx] = frozendict(dict_data)
 
-            if action == ObjectProcessAction.TO_SERIALIZE:
-                return out_serialized_data
-            else:
-                # * When a function contains `TO_DESERIALIZE`, do some additional work by wrapping the processed data with frozendict().E:
-                ref_container = frozendict(ref_container)
-                return ref_container
+            logger.info(
+                "The blockchain context from the file has been loadede in-memory and is secured by immutability!"
+            )
+            return frozendict(context)
 
-        print("There something wrong.")  # TODO: Create an exception of this.
+        logger.exception(
+            f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)})."
+        )
 
     async def create_genesis_block(self) -> None:
         """
@@ -266,7 +270,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 validator=get_identity_tokens()[0],
                 prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH)
                 if self.get_last_block is None
-                else HashUUID(self.get_last_block.hash_block),
+                else HashUUID(self.get_last_block.hash_block),  # type: ignore
                 transactions=transactions,
                 timestamp=datetime.now(),
             ),
@@ -318,10 +322,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     # Ensure to follow the rule that we made last time.
     async def search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         pass
-
-    @property
-    def is_blockchain_ready(self) -> bool:
-        return self.blockchain_ready
 
     @property
     def get_last_block(self) -> Block | None:
