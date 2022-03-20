@@ -24,6 +24,7 @@ node_router = APIRouter(
 )
 
 
+# TODO: ADD A HEADER WHERE WE VERIFY THE REQUESTOR, IT MUST BE A MASTER NODE. ALSO ADD DATABASE FROM THIS IF POSSIBLE.
 @node_router.get(
     "/info",
     tags=[

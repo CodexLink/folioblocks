@@ -49,5 +49,14 @@
       "justMyCode": false,
       "args": ["--local", "--prefer-role", "SIDE"]
     }
+    {
+      "name": "Folioblocks Node Backend: Debug BLOCKCHAIN Special",
+      "type": "python",
+      "request": "launch",
+      "program": "node/main.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["--prefer-role", "MASTER", "--log-level", "DEBUG"]
+    }
   ]
 }
