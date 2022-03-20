@@ -29,6 +29,7 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_ENV_FILE_NAME,
     BLOCKCHAIN_NAME,
+    BLOCKCHAIN_NODE_JSON_TEMPLATE,
     BLOCKCHAIN_RAW_PATH,
     DATABASE_NAME,
     DATABASE_RAW_PATH,
@@ -138,15 +139,22 @@ async def process_crpyt_file(
     resolved_fn_name: str = "read" if mode == "rb" else "write"
 
     if is_async:
+        # * I cannot deduce this by DRY.
         async with aopen(filename, mode) as acontent_buffer:
-            file_content: str | bytes = await getattr(
-                acontent_buffer, resolved_fn_name
-            )(content_to_write if mode == "wb" else None)
+            if mode == "wb":
+                file_content: str | bytes = await getattr(
+                    acontent_buffer, resolved_fn_name
+                )(content_to_write)
+            else:
+                file_content = await getattr(acontent_buffer, resolved_fn_name)()
     else:
         with open(filename, mode) as content_buffer:
-            file_content = getattr(content_buffer, resolved_fn_name)(
-                content_to_write if mode == "wb" else None
-            )
+            if mode == "wb":
+                file_content = getattr(content_buffer, resolved_fn_name)(
+                    content_to_write
+                )
+            else:
+                file_content = getattr(content_buffer, resolved_fn_name)()
 
     return file_content
 
@@ -191,9 +199,7 @@ async def initialize_resources_and_return_db_context(
 
         # This is just an additional checking.
         if (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is not None:
-
             con: Connection | None = None
-
             logger.info("Decrypting the database...")
             await crypt_file(
                 filename=DATABASE_RAW_PATH,
@@ -275,7 +281,9 @@ async def initialize_resources_and_return_db_context(
             logger.info("Encrypting a new blockchain file ...")
 
             with open(BLOCKCHAIN_RAW_PATH, "w") as temp_writer:
-                initial_json_context: dict[str, list[Any]] = {"chain": []}
+                initial_json_context: dict[
+                    str, list[Any]
+                ] = BLOCKCHAIN_NODE_JSON_TEMPLATE
                 json_export(initial_json_context, temp_writer)
 
             await crypt_file(
@@ -526,6 +534,7 @@ async def look_for_nodes(*, role: NodeRoles, host: IPAddress, port: IPPort) -> N
     logger.info(
         f"Step 2.1 | Attempting to look {'for the master node' if role == NodeRoles.MASTER.name else 'at other nodes'} at host {host}, port {port}..."
     )
+
 
 # TODO: Function to below is just a prototype. TO BE TESTED.
 async def verify_hash_blockchain(

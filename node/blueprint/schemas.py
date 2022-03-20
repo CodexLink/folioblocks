@@ -194,17 +194,20 @@ class Transaction(BaseModel):
     stored_at_block: int
 
 
+class HashableBlock(BaseModel):
+    nonce: int | None
+    validator: AddressUUID
+    prev_hash_block: HashUUID
+    transactions: list[Transaction] | None
+    timestamp: datetime
+
+
 class Block(BaseModel):
     # Note: Variables that is None is determined first before doing something.
     id: int
-    nonce: int | None
     block_size: int | None
-    validator: AddressUUID
-    prev_hash_block: HashUUID
     hash_block: HashUUID | None
-    next_hash_block: HashUUID | None
-    transactions: List[Transaction] | None
-    timestamp: datetime
+    contents: HashableBlock
 
 
 # This was dissected.
@@ -373,7 +376,7 @@ class Users(BaseModel):
     type: UserEntity = Field(
         ..., description="A classifier that represents the entity of this data."
     )
-    user_activity: UserActivityState = Field(
+    activity: UserActivityState = Field(
         ..., description="Describes the current state of this entity."
     )
     date_registered: datetime = Field(

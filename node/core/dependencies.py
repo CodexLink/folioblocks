@@ -71,15 +71,20 @@ def get_db_instance() -> Database:
 
 
 def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
-    logger.debug(f"Identity tokens were stored. | Context: {_tokens}")
+    logger.debug(
+        f"Identity tokens were stored. | Context: (Address: {_tokens[0]}, JWT Token:{_tokens[1]})"
+    )
     global identity_tokens
     identity_tokens = _tokens
 
 
 def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
     logger.debug(f"Identity tokens were fetched.")
-    global identity_tokens
-    return identity_tokens
+    try:
+        global identity_tokens
+        return identity_tokens
+    except NameError:
+        pass
 
 
 # TODO: Not sure why we have this function signature.
@@ -126,7 +131,6 @@ async def authenticate_node_client(
 
                 generated_token: str = generate_auth_token()
 
-                print(email_address)
                 insert_generated_token_stmt = auth_codes.insert().values(
                     code=generated_token,
                     account_type=UserEntity.NODE_USER,
@@ -149,10 +153,8 @@ async def authenticate_node_client(
                 )
 
             logger.info(
-                f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint. Once done, press any key to continue and put your credentials to login."
+                f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint and login with your credentials on the next prompt."
             )
-            input()
-
             break
 
     while True:
@@ -209,7 +211,7 @@ async def authenticate_node_client(
 
             else:
                 logger.error(
-                    f"Credentials are incorrect! Please try again. | Object: {login_req} | Info: {login_req.content}"
+                    f"Credentials are incorrect! Please try again. | Object: {login_req} | Info: {await login_req.json()}"
                 )
                 await sleep(1.5)
                 continue

@@ -123,10 +123,7 @@ BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 # # Constants, Template Models with Pydantic
 # ! These are used when initializing new resources.
 
-# BLOCKCHAIN_BLOCK_TEMPLATE = {}
-# BLOCKCHAIN_TRANSACTION_TEMPLATE = {}
-
-# BLOCKCHAIN_
+BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
 
 # # Constraints — Node Operation Parameter
 NODE_LIMIT_NETWORK: Final[
@@ -268,8 +265,7 @@ class GroupType(Enum):
 
 class TokenStatus(Enum):
     EXPIRED = "Token Expired"
-    RECENTLY_CREATED = "Token Recently Created"
-    ON_USE = "Token On Use"
+    CREATED_FOR_USE = "Token Recently Created"
     LOGGED_OUT = "Token Disposed: Logged Out"
 
 

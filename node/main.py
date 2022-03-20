@@ -39,6 +39,7 @@ from core.constants import (
     RuntimeLoopContext,
     TokenStatus,
     URLAddress,
+    UserActivityState,
 )
 from core.dependencies import authenticate_node_client, get_identity_tokens
 from core.email import get_email_instance
@@ -175,15 +176,21 @@ async def terminate() -> None:
     """
     if parsed_args.prefer_role == NodeRoles.MASTER.name:
         get_email_instance().close()  # * Shutdown email service instance.
-        # Remove the token related to this master.
-        token_to_invalidate_stmt = (
-            tokens.update()
-            .where(tokens.c.token == get_identity_tokens()[1])
-            .values(state=TokenStatus.LOGGED_OUT)
-        )
+        # Remove the token related to this master, as well as, change the state of this master account to Offline.
+        if get_identity_tokens() is not None:
+            token_to_invalidate_stmt = (
+                tokens.update()
+                .where(tokens.c.token == get_identity_tokens()[1])
+                .values(state=TokenStatus.LOGGED_OUT)
+            )
+            users.update().where(
+                users.c.unique_address == get_identity_tokens()[0]
+            ).values(activity=UserActivityState.OFFLINE)
 
-        await database_instance.execute(token_to_invalidate_stmt)
-        logger.info(f"Master Node's token has been invalidated due to Logout session.")
+            await database_instance.execute(token_to_invalidate_stmt)
+            logger.info(
+                f"Master Node's token has been invalidated due to Logout session."
+            )
     else:
         await get_http_client_instance().enqueue_request(
             url=URLAddress(
@@ -193,8 +200,12 @@ async def terminate() -> None:
             headers={"X-Token": JWTToken(get_identity_tokens()[1])},
         )
 
-    await get_http_client_instance().close()  # * Shutdown the HTTP client module.
-    await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
+    if get_http_client_instance() is not None:
+        await get_http_client_instance().close()  # * Shutdown the HTTP client module.
+
+    if get_blockchain_instance() is not None:
+        await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
+
     await database_instance.disconnect()  # * Shutdown the database instance.
 
     await close_resources(

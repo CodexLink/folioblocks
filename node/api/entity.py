@@ -175,7 +175,7 @@ async def login_entity(
 
         for each_item in payload:
             if isinstance(type(payload[each_item]), EnumMeta):
-                payload[each_item] = payload["user_activity"].name
+                payload[each_item] = payload["activity"].name
 
         payload["date_registered"] = payload["date_registered"].isoformat()
 
@@ -185,13 +185,10 @@ async def login_entity(
         ):
             other_tokens_stmt = tokens.select().where(
                 (tokens.c.from_user == fetched_credential_data.unique_address)
-                & tokens.c.state
-                != TokenStatus.EXPIRED.name
+                & (tokens.c.state == TokenStatus.CREATED_FOR_USE.name)
             )
 
             other_tokens = await db.fetch_all(other_tokens_stmt)
-            print(other_tokens)
-            input()
 
             # Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
@@ -223,7 +220,7 @@ async def login_entity(
             logged_user = (
                 users.update()
                 .where(users.c.unique_address == fetched_credential_data.unique_address)
-                .values(user_activity=UserActivityState.ONLINE)
+                .values(activity=UserActivityState.ONLINE)
             )
 
             try:
@@ -235,10 +232,10 @@ async def login_entity(
                     expiration=jwt_expire_at,
                 )
 
-            except IntegrityError:
+            except IntegrityError as e:
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
-                    detail="For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible.",
+                    detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Info: {e}",
                 )
 
     raise HTTPException(

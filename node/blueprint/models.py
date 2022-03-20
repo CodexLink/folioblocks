@@ -69,11 +69,11 @@ users = Table(
     # TODO: I'm not sure if ths would work.
     # association =
     Column("username", String(24), unique=True, nullable=False),
-    Column("password", String(64), nullable=False),  # ! Expects hashed.
+    Column("password", String(64), nullable=False),
     Column("email", String(128), unique=True, nullable=False),
     Column("type", SQLEnum(UserEntity), server_default=UserEntity.DASHBOARD_USER.name),
     Column(
-        "user_activity",
+        "activity",
         SQLEnum(UserActivityState),
         server_default=UserActivityState.OFFLINE.name,
     ),
@@ -105,11 +105,13 @@ tokens = Table(
     model_metadata,
     Column("id", Integer, primary_key=True),
     Column("from_user", String(38), ForeignKey(user_id_ref), nullable=False),
-    Column("token", Text, nullable=False),
+    Column(
+        "token", Text, nullable=False
+    ),  # ! For some reason, SQL doesn't like anything more than 128 when asserting its UNIQUE.
     Column(
         "state",
         SQLEnum(TokenStatus),
-        server_default=TokenStatus.RECENTLY_CREATED.name,
+        server_default=TokenStatus.CREATED_FOR_USE.name,
         nullable=False,
     ),
     Column("expiration", DateTime, nullable=True),

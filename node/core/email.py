@@ -14,8 +14,7 @@ You should have received a copy of the GNU General Public License along with Fol
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from logging import Logger, getLogger
-from os import environ as env
-
+from os import environ as env, _exit
 from aiosmtplib import (
     SMTP,
     SMTPAuthenticationError,
@@ -81,7 +80,7 @@ class EmailService:
                     f"SMTP send EHLO packets to {self.url} to initiate service ..."
                 )
                 logger.info(
-                    f"SMTP email service acknowledged and ready.{' (by immediate call.)' if is_immediate else ''}"
+                    f"SMTP email service acknowledged and ready.{' (by immediate call)' if is_immediate else ''}"
                 )
                 return
 
@@ -92,14 +91,13 @@ class EmailService:
             ) as e:
                 # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.
                 logger.critical(
-                    f"Failed to connect at email services.| Additional Info: {e}."
+                    f"Failed to connect at email services. | Additional Info: {e}."
                 )
 
                 if retries_count >= self.max_retries:
                     logger.critical(
-                        "Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again o system restart."
+                        "Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment."
                     )
-                    return
 
                 logger.warning(
                     f"Attempting to reconnect email services... | Attempt #{retries_count + 1} out of {self.max_retries}"
