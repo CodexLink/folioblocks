@@ -53,7 +53,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from fastapi import Depends
 from passlib.context import CryptContext
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 
@@ -66,9 +66,10 @@ async def crypt_file(
     filename: str,
     key: KeyContext,
     process: CryptFileAction,
-    return_new_key: bool = False,
+    return_key: bool = False,
+    return_file_hash: bool = False,
     enable_async: bool = False,
-) -> bytes | None:
+) -> bytes | str | None:
     """
     A Non-async function that processes a file with `to` under `filename` that uses `key` for decrypt and encrypt processes. This function exists for providing anti-redundancy over calls for preparing the files that has to be initialized for the session. This function is not compatible during async process, please refer to the acrypt_file for the implementation of async version.
     """
@@ -119,8 +120,21 @@ async def crypt_file(
             f"Successfully {'decrypted' if process is CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
         )
 
-        if return_new_key and isinstance(key, bytes):
+        if return_key and not return_file_hash and isinstance(key, bytes):
             return key
+
+        elif not return_key and return_file_hash:
+            _file_content: bytes | str = (
+                file_content
+                if process is CryptFileAction.TO_READ
+                else processed_content
+            )
+
+            if isinstance(_file_content, str):
+                _file_content = _file_content.encode("utf-8")
+
+            if isinstance(_file_content, bytes):
+                return sha256(_file_content).hexdigest()
 
     except InvalidToken:
         logger.critical(
@@ -223,8 +237,35 @@ async def initialize_resources_and_return_db_context(
                 if con is not None:
                     con.close()
 
+            await db_instance.connect()
+            logger.warning(
+                "Temporarily opened database connection from instance to check integrity of blockchain."
+            )
+
+            blockchain_validate_hash_stmt = select(
+                [file_signatures.c.hash_signature]
+            ).where(file_signatures.c.filename == BLOCKCHAIN_NAME)
+            blockchain_retrieved_hash = await db_instance.fetch_val(
+                blockchain_validate_hash_stmt
+            )
+
+            # @o This is just a work around, I cannot expand `crypt_file` further to make this one compatible in a mean of making things looking better.
+            with open(BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
+                blockchain_context = blockchain_content.read()
+
+            blockchain_hash_from_raw = sha256(blockchain_context)
+
+            if blockchain_hash_from_raw != blockchain_retrieved_hash:
+                logger.critical(
+                    f"Blockchain's file signature mismatched! Database: {blockchain_retrieved_hash} | Computed: {blockchain_hash_from_raw}"
+                )
+
+            logger.info("Blockchain file signature validated!")
+
             store_db_instance(db_instance)
-            logger.debug("Database instance has been saved for access later.")
+            logger.debug("Database instance has been saved.")
+
+            await db_instance.disconnect()
 
             logger.info("Decrypting a blockchain file ...")
             await crypt_file(
@@ -234,8 +275,6 @@ async def initialize_resources_and_return_db_context(
             )
             logger.info("Blockchain file decrypted.")
 
-            logger.info("Checking integration of the blockchain file...")
-            # TODO
             return db_instance
 
         # This may not be tested.
@@ -270,7 +309,7 @@ async def initialize_resources_and_return_db_context(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
-                return_new_key=True,
+                return_key=True,
             )
 
             if auth_key is None:
@@ -278,6 +317,13 @@ async def initialize_resources_and_return_db_context(
                     initialize_resources_and_return_db_context,
                     "This part of the function should have a returned new auth key. This was not intended! Please report this issue as soon as possible!",
                 )
+
+            logger.warning("Temporarily decrypted database to insert import data.")
+            await crypt_file(
+                filename=DATABASE_RAW_PATH,
+                key=auth_key,
+                process=CryptFileAction.TO_DECRYPT,
+            )
 
             # Since encrypting the database also returns a new generated key, used that as a reference for the second argument.
             logger.info("Encrypting a new blockchain file ...")
@@ -288,8 +334,20 @@ async def initialize_resources_and_return_db_context(
                 ] = BLOCKCHAIN_NODE_JSON_TEMPLATE
                 json_export(initial_json_context, temp_writer)
 
-            await crypt_file(
+            blockchain_hash = await crypt_file(
                 filename=BLOCKCHAIN_RAW_PATH,
+                key=auth_key,
+                process=CryptFileAction.TO_ENCRYPT,
+            )
+
+            blockchain_hash_stmt = file_signatures.insert().values(
+                filename=BLOCKCHAIN_NAME, hash_signature=blockchain_hash
+            )
+            await db_instance.connect()
+            await db_instance.execute(blockchain_hash_stmt)
+
+            await crypt_file(
+                filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
             )
@@ -335,7 +393,9 @@ async def initialize_resources_and_return_db_context(
     return db_instance
 
 
-async def close_resources(*, key: KeyContext) -> None:
+async def close_resources(
+    *, key: KeyContext, db: Database = Depends(get_db_instance)
+) -> None:
     """
     Asynchronous Database Close Function.
 
@@ -347,21 +407,37 @@ async def close_resources(*, key: KeyContext) -> None:
         key (KeyContext): The key that is recently used for decrypting the SQLite database.
 
     """
-    logger.warn("Closing database and blockchain files by encryption...")
+    logger.warning(
+        f"Ensuring encode process of computed hash-signature for the {BLOCKCHAIN_NAME}."
+    )
 
+    logger.warning("Closing blockchain by encryption...")
+    raw_blockchain_encrypt = await crypt_file(
+        filename=BLOCKCHAIN_RAW_PATH,
+        key=key,
+        process=CryptFileAction.TO_ENCRYPT,
+        enable_async=True,
+        return_file_hash=True,
+    )
+
+    raw_blockchain_encrypt_hash = sha256(raw_blockchain_encrypt)  # What???
+
+    blockchain_hash_update_stmt = (
+        file_signatures.update()
+        .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
+        .values(hash_signature=raw_blockchain_encrypt_hash)
+    )
+    await db.execute(blockchain_hash_update_stmt)
+
+    logger.warning("Closing database by encryption...")
     await crypt_file(
         filename=DATABASE_RAW_PATH,
         key=key,
         process=CryptFileAction.TO_ENCRYPT,
         enable_async=True,
     )
-    await crypt_file(
-        filename=BLOCKCHAIN_RAW_PATH,
-        key=key,
-        process=CryptFileAction.TO_ENCRYPT,
-        enable_async=True,
-    )
 
+    await db.disconnect()  # * Shutdown the database instance.    db.execute()
     logger.info("Database and blockchain successfully closed and encrypted.")
 
 

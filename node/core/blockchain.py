@@ -434,7 +434,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         logger.warning("There's no block inside blockchain.")
 
     async def close(self) -> None:
-        pass
+        return
 
 
 # # This approach was (not completely) taken from stackoverflow.

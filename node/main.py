@@ -206,11 +206,9 @@ async def terminate() -> None:
     if get_blockchain_instance() is not None:
         await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
 
-    await database_instance.disconnect()  # * Shutdown the database instance.
-
     await close_resources(
         key=parsed_args.key_file[0]
-    )  # * When necessary services finished, close the resource to go back from their malformed structure.
+    )  # * When necessary services finished, close the resource, as well as the database to go back from their malformed structure.
 
     logger.info("Wait for 3 seconds to ensure that all processes closed down...")
     await sleep(3)
