@@ -16,9 +16,11 @@ from getpass import getpass
 from hashlib import sha256
 from json import dump as json_export
 from logging import Logger, getLogger
-from os import _exit
+from os import _exit, getpid
+from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
+from signal import CTRL_C_EVENT
 from sqlite3 import Connection, OperationalError, connect
 from typing import Any
 
@@ -470,10 +472,9 @@ async def ensure_input_prompt(
                     message=f"{input_context}{delimiter} ",
                 )
             else:
-                logger.exception(
-                    f"Assertion Error: Input hidden is not a type 'bool'. This condition scope does not expect type {type(hide_fields)}."
+                logger_exception_handler(
+                    message=f"Assertion Error: Input hidden is not a type 'bool'. This condition scope does not expect type {type(hide_fields)}."
                 )
-                exit(-1)
 
             if not input_s:
                 logger.critical(
@@ -573,3 +574,31 @@ def process_blockchain_hash_state(
         file_signatures.insert().values(
             filename=BLOCKCHAIN_NAME, signature=sha256(resolved_blockchain_contents)
         )
+
+
+# # Input Stoppers — START
+def logger_exception_handler(
+    *,
+    message: str,
+    press_enter_to_continue: bool = False,
+) -> None:
+    """Recursive infinite by doing nothing after displaying a message that suggests hitting `CTRL+BREAK`.
+
+    Args:
+        message (str): The message to display under `logging.exception(<context>).`
+    """
+    logger.exception(
+        f"{message}{' | Press CTRL + C or CTRL + BREAK or ENTER to continue.' if press_enter_to_continue else ''}"
+    )
+
+    try:
+        if press_enter_to_continue:
+            input("")
+    except EOFError:
+        pass
+
+    finally:
+        kill_process(getpid(), CTRL_C_EVENT)
+
+
+# # Input Stoppers — END

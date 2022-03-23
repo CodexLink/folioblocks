@@ -6,7 +6,7 @@ from logging import Logger, getLogger
 from random import randint
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
-from typing import Any
+from typing import Any, Callable
 
 from aiofiles import open as aopen
 from blueprint.schemas import (
@@ -22,6 +22,7 @@ from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
+from utils.processors import logger_exception_handler
 
 from core.consensus import AdaptedPoETConsensus
 from core.constants import (
@@ -58,16 +59,34 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # * Required Variables for the Blockchain Operaetion.
         self.client_role = client_role
         self.auth_token = auth_tokens
-
         self.consensus_timer: datetime = (
             datetime.now()
         )  # TODO: This will be computed based on the information by the MASTER node on how much is being participated, along with its computed value based on the average mining and iteration.
 
         # * State and Variable References
-        self.node_ready = False
-        self.current_block_id: int = 1
+        self.node_ready = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
+        self.blockchain_ready = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
+        self.cached_block_id: int = (
+            1  # * The current ID of the block to be rendered from the blockchain.
+        )
 
         super().__init__()
+
+    # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
+    def ensure_blockchain_ready(message: str) -> Callable:  # type: ignore
+        def deco(fn: Callable) -> Callable:
+            def instance(
+                self: Any, *args: list[Any], **kwargs: dict[Any, Any]
+            ) -> Callable | None:
+                if self.is_blockchain_ready:
+                    return fn(self, *args, **kwargs)
+
+                logger_exception_handler(message=message, press_enter_to_continue=True)
+                return None
+
+            return instance
+
+        return deco
 
     async def initialize(self) -> None:
         """
@@ -83,6 +102,12 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             operation=BlockchainIOAction.TO_READ
         )
 
+        # Test
+        print(
+            "\n\n\n Test #1 - Load the blockchain on file and render at least one block to see if its going to abort. \n\n\n"
+        )
+        await self.create_genesis_block()
+
         # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
         if (
             self._chain is not None
@@ -91,6 +116,10 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         ):
             for _ in range(BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
                 await self.create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
+
+            logger.info(
+                "Genesis block generation has been finished! Blockchain system ready."
+            )
 
     async def _append(
         self,
@@ -115,10 +144,10 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
 
         else:
-            logger.exception(
-                "There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please execute 'CTRL + BREAK' as possible and report to the developers as soon as possible!"
+            logger_exception_handler(
+                message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
+                press_enter_to_continue=True,
             )
-            input()
 
     # Overwrites existing buffer from the frozendict if consensus has been established.
     async def _process_file_state(
@@ -149,10 +178,12 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                     logger.info(
                         f"Chain has been loaded from the file to the in-memory!"
                     )
+
                     return deserialized_data
 
-        logger.exception(
-            f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead."
+        logger_exception_handler(
+            message=f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead. This is an internal error.",
+            press_enter_to_continue=True,
         )
         return None
 
@@ -170,7 +201,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             dict[str, Any]: Returns the JSON form of the blockchain that is in-memory.
 
         Note:
-        *  By this point, I still haven't consider for scalability and its impact from processing such data.
+        TODO By this point, I still haven't consider for scalability and its impact from processing such data.
         * Until there's an impact, I will implement in-memory caching to reduce processing time and insert only data that is missing from the data pool.
         """
 
@@ -190,7 +221,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     def load_deserialized_blockchain(
         self,
         context: dict[str, Any],
-    ) -> frozendict:
+    ) -> frozendict | None:
         """
         A method that deserializes the blockchain into an immutable dictionary (frozendict) from the outsourced-data of the blockchain file.
 
@@ -213,13 +244,55 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 # * Then, make the whole block immutable and insert it as reference from the blockchain.
                 context["chain"][dict_idx] = frozendict(dict_data)
 
+                # @o Check backward reference from the current block to recent block.
+                if dict_idx:  # ! Mind the zero-based list access.
+                    if (
+                        dict_data["contents"]["prev_hash_block"]
+                        != context["chain"][dict_idx - 1]["hash_block"]
+                    ):
+                        logger.critical(
+                            f"Block #{dict_data['id']}'s backward reference to Block #{dict_data['id'] - 1} is invalid! | Expects (from Current Block): {dict_data['hash_block']}, got {context['chain'][dict_idx - 1]['contents']['prev_hash_block']} instead."
+                        )
+
+                        logger.critical(
+                            "Due to potential fraudalent local blockchain file, please wait for the MASTER node to acknowledge your replacement of blockchain file."
+                        )
+                        self.blockchain_ready = False
+                        # TODO: Create a task that waits for it to do something to fetch a valid blockchain file.
+
+                        return None
+
+                    logger.info(
+                        f"Block #{dict_idx} backward reference to Block# {dict_idx - 1} is valid!"
+                    )
+                else:
+                    logger.debug(
+                        f"Block #{dict_data['id']} doesn't have a prev or leading block to compare reference, probably the latest block."
+                    )
+
+                # @o If cached_block_id is equal to dict_data["id"]. Then increment it easily.
+                if self.cached_block_id == dict_data["id"]:
+                    self.cached_block_id += 1
+                    logger.debug(
+                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.cached_block_id}, Recent Block ID (Decremented by 1): {dict_data['id']}"
+                    )
+
+                # @o However, when its not equal then then something is wrong.
+                else:
+                    logger_exception_handler(
+                        message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {dict_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
+                        press_enter_to_continue=True,
+                    )
+
             logger.info(
-                "The blockchain context from the file has been loadede in-memory and is secured by immutability!"
+                f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
             )
+            self.blockchain_ready = True
             return frozendict(context)
 
-        logger.exception(
-            f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)})."
+        logger_exception_handler(
+            message=f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)}). This is a logic error, please report to the developers as soon as possible.",
+            press_enter_to_continue=True,
         )
 
     async def create_genesis_block(self) -> None:
@@ -238,19 +311,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             context=mined_genesis_block, auth_context=get_identity_tokens()
         )
 
-    def get_sizeof(self, *, block: Block) -> int:
-        return asizeof(block)
-
-    def calculate_sleep_time(
-        self, *, mine_duration: float | int, mine_iteration: int
-    ) -> None:
-        self.consensus_timer = datetime.now() + timedelta(
-            seconds=mine_duration + (mine_iteration / 1000)
-        )
-
-    def set_node_state(self) -> None:
-        self.node_ready = True if datetime.now() >= self.consensus_timer else False
-
     def create_block(
         self,
         *,
@@ -262,7 +322,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
 
         _block: Block = Block(
-            id=self.current_block_id,
+            id=self.cached_block_id,
             block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
             contents=HashableBlock(
@@ -277,7 +337,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         )
 
         _block.block_size = asizeof(_block.contents.json())
-        self.current_block_id += 1
+        self.cached_block_id += 1
 
         return _block
 
@@ -290,7 +350,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         prev: float = time()
         nth: int = 1
 
-        logger.debug(f"Attempting to mine the block #{block.id} ...")
+        logger.debug(f"Attempting to mine a Block #{block.id} ...")
 
         while True:
             # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
@@ -315,8 +375,45 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
             nth += 1
 
+    def get_sizeof(self, *, block: Block) -> int | None:
+        if self.is_blockchain_ready:
+            return asizeof(block)
+
+        logger_exception_handler(
+            message="Houston, we have a problem. Calling this method is not possible unless blockchain is ready! You may be attempting to perform operations that is beyond acceptable. We cannot continue from this.",
+            press_enter_to_continue=True,
+        )
+
+    @ensure_blockchain_ready(
+        message="Houston, we have a problem. This is illegal! There are no blocks to mine and you have parameters for this? This may be a developer-issue in regards to logic error. Though, we cannot recover from this due to some reason."
+    )
+    def calculate_sleep_time(
+        self, *, mine_duration: float | int, mine_iteration: int
+    ) -> None:
+        if not self.is_blockchain_ready:
+            self.consensus_timer = datetime.now() + timedelta(
+                seconds=mine_duration + (mine_iteration / 1000)
+            )
+            return
+
+    def set_node_state(self) -> None:
+        self.node_ready = (
+            True
+            if datetime.now() >= self.consensus_timer and self.is_blockchain_ready
+            else False
+        )
+
+    @property
+    def is_node_ready(self) -> bool:
+        return self.node_ready and self.is_blockchain_ready
+
+    @property
+    def is_blockchain_ready(self) -> bool:
+        return self.blockchain_ready
+
     # I think this should work only on miner nodes.
     async def update_chain(self) -> None:
+        # TODO: This should trigger when blockchain_ready is not True.
         pass
 
     # Ensure to follow the rule that we made last time.
@@ -324,6 +421,9 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         pass
 
     @property
+    @ensure_blockchain_ready(
+        message="Blockchain is not ready! It may have halted due to fraudalent actions which may have resulted to integrity loss. Please read back on the logs to see of what would have caused it."
+    )
     def get_last_block(self) -> Block | None:
         # ! This return seems confusing but I have to sacrafice for my own sake of readability.
         # @o First we access the list by calling the key 'chain'.

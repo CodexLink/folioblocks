@@ -3,8 +3,9 @@
   "Description": "Technically, I created this to reduce my time on looking up the commands.",
   "scripts": {
     "remove-node-files": "pwsh -Command 'Remove-Item -Force -Path ./folioblocks-chain.json, ./folioblocks-node.db, .env'",
-    "load-new": "pwsh -Command cls; npm run remove-node-files; cp backup/new/** .; npm run run_backend",
-    "load-chain": "pwsh -Command cls; npm run remove-node-files; cp backup/with_chain/** .; npm run run_backend",
+    "reload-new": "pwsh -Command clear; npm run remove-node-files; cp backup/new/** .; npm run run_backend",
+    "reload-chain": "pwsh -Command clear; npm run remove-node-files; cp backup/with_chain/** .; npm run run_backend",
+    "node": "pwsh -Command clear; npm run run_backend;",
     "run_backend": "python node/main.py -pr MASTER -ll DEBUG",
     "clean-logs": "rmdir /s /q logs"
   }

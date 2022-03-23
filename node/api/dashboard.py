@@ -9,8 +9,6 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import List
-
 from blueprint.schemas import (
     Applicant,
     Applicants,
@@ -63,8 +61,6 @@ async def get_data_to_dashboard(*, context: DashboardContext) -> None:
 @dashboard_router.get(
     "/applicants",
     tags=[DashboardAPI.EMPLOYER_API.value],
-    response_model=List[Applicants],
-    summary="Obtains a list of individuals who opted from the employer's company.",
     description="An API-exclusive to employers that obtains a list of individuals (applicants) who applies to them.",
 )
 async def get_applicants(
@@ -103,8 +99,6 @@ async def get_applicant(*, applicant_id: AddressUUID) -> None:
         DashboardAPI.EMPLOYER_API.value,
         DashboardAPI.INSTITUTION_API.value,
     ],
-    response_model=List[Requests],
-    summary="Obtains all requests associated to this client-individual.",
     description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
 )
 async def get_all_requests() -> None:  # TODO.

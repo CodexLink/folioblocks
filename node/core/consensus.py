@@ -14,7 +14,7 @@ class AdaptedPoETConsensus:
             object
         ] = []  # TODO: Create pydantic model of a NodeEntity (as Node).
 
-        self._consensus_http_session: ClientSession = ClientSession()
+        # self._consensus_http_session: ClientSession = ClientSession()
 
         logger.info("Attempting to what...")
 

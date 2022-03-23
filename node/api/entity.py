@@ -68,15 +68,15 @@ async def register_entity(
     *, credentials: EntityRegisterCredentials, db: Any = Depends(get_db_instance)
 ) -> EntityRegisterResult:
 
+    # TODO: Check for the association only when the entry has been labelled as non-node.
     # If there are no association then push that first.
     # db.execute(Association(name="Test"))
 
     unique_address_ref: AddressUUID = AddressUUID(f"{UUID_KEY_PREFIX}:{uuid4().hex}")
     dict_credentials: dict[str, Any] = credentials.dict()
 
-    # TODO
-    # Our auth code should contain the information if that is applicable at certain role.
-    # Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
+    # - Our auth code should contain the information if that is applicable at certain role.
+    # - Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
 
     get_auth_token_stmt = auth_codes.select().where(
         (auth_codes.c.code == credentials.auth_code)
