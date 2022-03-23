@@ -487,7 +487,7 @@ async def ensure_input_prompt(
         )
 
         ensure: str = input(
-            f"[Press any key to continue / N or n to re-type {generalized_context}] > "
+            f"[Press ENTER to continue / type 'N' or 'n' to re-type {generalized_context}] > "
         )
 
         if ensure == "n" or ensure == "N":

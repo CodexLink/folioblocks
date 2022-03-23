@@ -102,20 +102,17 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             operation=BlockchainIOAction.TO_READ
         )
 
-        # Test
-        print(
-            "\n\n\n Test #1 - Load the blockchain on file and render at least one block to see if its going to abort. \n\n\n"
-        )
-        await self.create_genesis_block()
-
         # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
         if (
             self._chain is not None
             and "chain" in self._chain
             and not self._chain["chain"]
         ):
-            for _ in range(BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
+            for _ in range(0, BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
                 await self.create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
+
+            # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
+            self.blockchain_ready = True
 
             logger.info(
                 "Genesis block generation has been finished! Blockchain system ready."
@@ -375,14 +372,11 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
             nth += 1
 
+    @ensure_blockchain_ready(
+        message="Houston, we have a problem. Calling this method is not possible unless blockchain is ready! You may be attempting to perform operations that is beyond acceptable. We cannot continue from this.",
+    )
     def get_sizeof(self, *, block: Block) -> int | None:
-        if self.is_blockchain_ready:
-            return asizeof(block)
-
-        logger_exception_handler(
-            message="Houston, we have a problem. Calling this method is not possible unless blockchain is ready! You may be attempting to perform operations that is beyond acceptable. We cannot continue from this.",
-            press_enter_to_continue=True,
-        )
+        return asizeof(block)
 
     @ensure_blockchain_ready(
         message="Houston, we have a problem. This is illegal! There are no blocks to mine and you have parameters for this? This may be a developer-issue in regards to logic error. Though, we cannot recover from this due to some reason."
