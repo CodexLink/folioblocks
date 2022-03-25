@@ -3,13 +3,13 @@ from typing import Coroutine
 
 from aiohttp import BasicAuth, ClientResponse, ClientSession
 
-from core.constants import ASYNC_TARGET_LOOP, NodeRoles
+from core.constants import ASYNC_TARGET_LOOP, NodeType
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 # There should be a feature where we lock other functions after knowing their role.
 class AdaptedPoETConsensus:
-    def __init__(self, role: NodeRoles, credentials=dict[str, str]) -> None:
+    def __init__(self, role: NodeType, credentials=dict[str, str]) -> None:
         self.adjacent_nodes: list[
             object
         ] = []  # TODO: Create pydantic model of a NodeEntity (as Node).

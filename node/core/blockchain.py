@@ -37,7 +37,7 @@ from core.constants import (
     BlockchainIOAction,
     HashUUID,
     JWTToken,
-    NodeRoles,
+    NodeType,
 )
 from core.dependencies import get_db_instance, get_identity_tokens
 from core.tasks import AsyncTaskQueue
@@ -50,10 +50,10 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         self,
         *,
         auth_tokens: tuple[AddressUUID, JWTToken],
-        client_role: NodeRoles,
+        client_role: NodeType,
     ) -> None:
 
-        # TODO: After finalization, seperate some methods and attributes for the SIDE and MASTER.
+        # TODO: After finalization, seperate some methods and attributes for the ARCHIVAL_MINER and MASTER_NODE.
         # Required since this class will be invoked no matter what the role of the client instance is.
 
         # * Required Variables for the Blockchain Operaetion.
@@ -61,7 +61,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         self.auth_token = auth_tokens
         self.consensus_timer: datetime = (
             datetime.now()
-        )  # TODO: This will be computed based on the information by the MASTER node on how much is being participated, along with its computed value based on the average mining and iteration.
+        )  # TODO: This will be computed based on the information by the MASTER_NODE node on how much is being participated, along with its computed value based on the average mining and iteration.
 
         # * State and Variable References
         self.node_ready = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
@@ -93,7 +93,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         A method that initialize resources needed for the blockchain system to work.
 
         TODO
-        * If client_role is SIDE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER node that is available. Also consider checking for unfinished tasks.
+        * If client_role is ARCHIVAL_MINER, then fetch or call update from the AdaptedPoERTConsensus to the MASTER_NODE node that is available. Also consider checking for unfinished tasks.
         """
 
         # Load the blockchain.
@@ -142,7 +142,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             logger.info(f"{block_context['id']} | {self.cached_block_id }")
             if block_context["id"] != self.cached_block_id:
                 logger.error(
-                    f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER node. This block will be DISREGARDED."
+                    f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
                 return
 
@@ -276,7 +276,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                         )
 
                         logger.critical(
-                            "Due to potential fraudalent local blockchain file, please wait for the MASTER node to acknowledge your replacement of blockchain file."
+                            "Due to potential fraudalent local blockchain file, please wait for the MASTER_NODE node to acknowledge your replacement of blockchain file."
                         )
                         self.blockchain_ready = False
                         # TODO: Create a task that waits for it to do something to fetch a valid blockchain file.
@@ -473,7 +473,7 @@ blockchain_service: BlockchainMechanism | None = None
 
 def get_blockchain_instance(
     *,
-    role: NodeRoles | None = None,
+    role: NodeType | None = None,
 ) -> BlockchainMechanism:
 
     global blockchain_service
@@ -482,7 +482,7 @@ def get_blockchain_instance(
     logger.debug("Initializing or returning blockchain instance ...")
 
     if role and blockchain_service is None and token_ref is not None:
-        # # Note that this will create an issue later when we tried SIDE node mode later on.
+        # # Note that this will create an issue later when we tried ARCHIVAL_MINER node mode later on.
         blockchain_service = BlockchainMechanism(
             auth_tokens=token_ref,
             client_role=role,

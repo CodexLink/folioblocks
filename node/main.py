@@ -35,7 +35,7 @@ from core.constants import (
     HTTPQueueMethods,
     JWTToken,
     LoggerLevelCoverage,
-    NodeRoles,
+    NodeType,
     RuntimeLoopContext,
     TokenStatus,
     URLAddress,
@@ -92,10 +92,10 @@ my time more than making other features, which I still haven't done.
 """
 api_handler: FastAPI = FastAPI()
 
-api_handler.include_router(entity_router)  # # WARNING REGARDING SIDE NODE.
+api_handler.include_router(entity_router)  # # WARNING REGARDING ARCHIVAL_MINER NODE.
 api_handler.include_router(node_router)  # * Email can be used here.
 
-if parsed_args.prefer_role is not NodeRoles.SIDE:
+if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER:
     api_handler.include_router(admin_router)
     api_handler.include_router(dashboard_router)  # * Email can be used here.
     api_handler.include_router(explorer_router)
@@ -104,7 +104,7 @@ if parsed_args.prefer_role is not NodeRoles.SIDE:
 @api_handler.on_event("startup")
 async def pre_initialize() -> None:
     logger.info(
-        f"Step 0 (Argument Check) | Detected as {NodeRoles.MASTER.name if parsed_args.prefer_role == NodeRoles.MASTER.name else NodeRoles.SIDE.name} ..."
+        f"Step 0 (Argument Check) | Detected as {NodeType.MASTER_NODE.name if parsed_args.prefer_role == NodeType.MASTER_NODE.name else NodeType.ARCHIVAL_MINER.name} ..."
     )
 
     await get_http_client_instance().initialize()  # Initialize the HTTP client for such requests.
@@ -118,14 +118,14 @@ async def pre_initialize() -> None:
 
     await initialize_resources_and_return_db_context(
         runtime=RuntimeLoopContext(__name__),
-        role=NodeRoles(parsed_args.prefer_role),
+        role=NodeType(parsed_args.prefer_role),
         auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
     ),
 
     await get_db_instance().connect()  # Initialize the database.
 
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
-    if parsed_args.prefer_role == NodeRoles.SIDE.name:
+    if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER.name:
         pass
         # create_task(get_http_client_instance().enqueue_request())
 
@@ -144,20 +144,20 @@ async def post_initialize() -> None:
     """
 
     await authenticate_node_client(
-        role=NodeRoles(parsed_args.prefer_role),
+        role=NodeType(parsed_args.prefer_role),
         instances=(parsed_args, get_db_instance()),
     )
 
     if (  ## Ensure that the email services were activated.
-        parsed_args.prefer_role == NodeRoles.MASTER.name
+        parsed_args.prefer_role == NodeType.MASTER_NODE.name
     ):
         await look_for_nodes(
             role=parsed_args.prefer_role, host=parsed_args.host, port=parsed_args.port
         )
 
-    # * In the end, both NodeRoles.MASTER and NodeRoles.SIDE will initialize their local or universal (depending on the role) blockchain file.
+    # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER will initialize their local or universal (depending on the role) blockchain file.
     create_task(
-        get_blockchain_instance(role=NodeRoles(parsed_args.prefer_role)).initialize()
+        get_blockchain_instance(role=NodeType(parsed_args.prefer_role)).initialize()
     )
 
     # * We also need to check for other parts if this instance has any other task to send with the master node. Otherwise, have to resolve that before we able to send some data.
@@ -171,7 +171,7 @@ async def terminate() -> None:
     """
     TODO: Ensure on services like blockchain, remove or finish any request or finish the consensus.
     """
-    if parsed_args.prefer_role == NodeRoles.MASTER.name:
+    if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         if get_email_instance().is_connected:
             get_email_instance().close()  # * Shutdown email service instance.
         # Remove the token related to this master, as well as, change the state of this master account to Offline.
@@ -219,8 +219,8 @@ async def terminate() -> None:
 TODO: Consensus Method (Remember, that we need the consensus dependency or something.)
 """
 
-if parsed_args.prefer_role == NodeRoles.MASTER.name:
-    logger.debug(f"Several functions for the {NodeRoles.MASTER} were imported.")
+if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
+    logger.debug(f"Several functions for the {NodeType.MASTER_NODE} were imported.")
 
     @api_handler.on_event("startup")
     @repeat_every(seconds=120, wait_first=True)

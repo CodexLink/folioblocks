@@ -30,7 +30,7 @@ from core.constants import (  # TODO: To be moved later. This will be used for t
     NODE_IP_PORT_FLOOR,
     ArgumentParameter,
     LoggerLevelCoverage,
-    NodeRoles,
+    NodeType,
 )
 
 args_handler = ArgumentParser(
@@ -44,7 +44,7 @@ args_handler = ArgumentParser(
 
 # Prep the RegExpr.
 compiled_pattern: Pattern[str] = compile(ENUM_NAME_PATTERN)
-for each_enum in [LoggerLevelCoverage, NodeRoles]:
+for each_enum in [LoggerLevelCoverage, NodeType]:
     temp_choice: list[str] = []
     re_matched: list[str] = compiled_pattern.findall(
         each_enum.__name__,

@@ -239,9 +239,9 @@ class LoggerLevelCoverage(Enum):
     TRACE = "TRACE"
 
 
-class NodeRoles(Enum):
-    MASTER = "MASTER"
-    SIDE = "SIDE"
+class NodeType(Enum):
+    MASTER_NODE = "MASTER_NODE"
+    ARCHIVAL_MINER = "ARCHIVAL_MINER"
 
 
 # # Enums, Database
@@ -254,9 +254,9 @@ class BlacklistDuration(Enum):  # TODO: These may not be official.
 
 
 class GroupType(Enum):
-    ORGANIZATION = "Organization"  # This covers Employer or any other organization.
+    ORGANIZATION = "Organization Member"
     COMPANY_EMPLOYER = "Company Employer"
-    APPLICANTS = "Applicants"
+    APPLICANTS = "Applicants / Course Graduate"
 
 
 class TokenStatus(Enum):
@@ -347,6 +347,6 @@ FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
         "Specify the port for this instance. Ensure that this instance is not conflicted with other instances as it will cause to fail before it can get to running its ASGI instance."
     ),
     ArgumentParameter("PREFER_ROLE"): ArgumentDescription(
-        f"Assigns a role supplied from this parameter. The role {NodeRoles.MASTER.name} can be enforced once. If there's a node that has a role of {NodeRoles.MASTER.name} before this node, then assign {NodeRoles.SIDE.name} to this node."
+        f"Assigns a role supplied from this parameter. The role {NodeType.MASTER_NODE.name} can be enforced once. If there's a node that has a role of {NodeType.MASTER_NODE.name} before this node, then assign {NodeType.ARCHIVAL_MINER.name} to this node."
     ),
 }

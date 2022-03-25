@@ -34,7 +34,7 @@ from core.constants import (
     DEFAULT_SMTP_URL,
     CredentialContext,
     IPPort,
-    NodeRoles,
+    NodeType,
     URLAddress,
 )
 

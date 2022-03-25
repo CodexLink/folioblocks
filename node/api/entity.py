@@ -37,7 +37,7 @@ from core.constants import (
     EntityAPI,
     HashedData,
     JWTToken,
-    NodeRoles,
+    NodeType,
     RawData,
     TokenStatus,
     UserActivityState,
@@ -56,7 +56,7 @@ entity_router = APIRouter(
     tags=[BaseAPI.ENTITY.value],
 )
 
-# # WARNING: When this was SIDE mode, use endpoints instead of using it's own SQL database.
+# # WARNING: When this was ARCHIVAL_MINER mode, use endpoints instead of using it's own SQL database.
 @entity_router.post(
     "/register",
     tags=[EntityAPI.REGISTRATION_API.value],
@@ -202,7 +202,7 @@ async def login_entity(
 
             # If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
-            if fetched_credential_data.type == NodeRoles.SIDE:
+            if fetched_credential_data.type == NodeType.ARCHIVAL_MINER:
                 jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
                 payload[

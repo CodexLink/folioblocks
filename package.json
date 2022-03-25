@@ -2,7 +2,7 @@
   "name": "folioblocks-out-of-scope-script",
   "Description": "Technically, I created this to reduce my time on looking up the commands.",
   "scripts": {
-    "_backend": "python node/main.py -pr MASTER -ll DEBUG",
+    "_backend": "python node/main.py -pr MASTER_NODE -ll DEBUG",
     "clear-node-files": "pwsh -Command Remove-Item -Force -Path ./folioblocks-chain.json, ./folioblocks-node.db, .env",
     "frontend": "echo NotImplemented",
     "backend": "pwsh -Command clear; npm run _backend;",

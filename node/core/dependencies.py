@@ -46,7 +46,7 @@ from core.constants import (
     CredentialContext,
     HTTPQueueMethods,
     JWTToken,
-    NodeRoles,
+    NodeType,
     TokenStatus,
     URLAddress,
     UserEntity,
@@ -100,7 +100,7 @@ def generate_auth_token() -> str:
 # ! Implement blacklisted users!
 async def authenticate_node_client(
     *,
-    role: NodeRoles,
+    role: NodeType,
     instances: tuple[Namespace, Database],
 ) -> None:  # Create a pydantic model from this.
 
@@ -117,7 +117,7 @@ async def authenticate_node_client(
         )
 
         logger.info(
-            f"The system will create an `auth_token` for you to register yourself as a {NodeRoles.MASTER.name}. Please enter your email address."
+            f"The system will create an `auth_token` for you to register yourself as a {NodeType.MASTER_NODE.name}. Please enter your email address."
         )
 
         while True:
@@ -149,7 +149,7 @@ async def authenticate_node_client(
             # ! Assumes email service is running, so unhandled it for now because complexity rises.
             except IntegrityError as e:
                 logger.critical(
-                    f"Your input matches one of the records for `{NodeRoles.MASTER.name} registration.` Are you attempting to restart instance? Please delete the generated files and try again."
+                    f"Your input matches one of the records for `{NodeType.MASTER_NODE.name} registration.` Are you attempting to restart instance? Please delete the generated files and try again."
                 )
 
             logger.info(

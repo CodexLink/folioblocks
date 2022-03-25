@@ -44,7 +44,7 @@ from core.constants import (
     IPAddress,
     IPPort,
     KeyContext,
-    NodeRoles,
+    NodeType,
     RawData,
     RuntimeLoopContext,
 )
@@ -182,7 +182,7 @@ async def process_crpyt_file(
 async def initialize_resources_and_return_db_context(
     *,
     runtime: RuntimeLoopContext,
-    role: NodeRoles,
+    role: NodeType,
     auth_key: KeyContext = None,
 ) -> Database:
     """
@@ -303,7 +303,7 @@ async def initialize_resources_and_return_db_context(
             logger.info("Database structure applied...")
 
             logger.warning(
-                f"The system detects the invocation of a role as a {NodeRoles.MASTER.name}."
+                f"The system detects the invocation of a role as a {NodeType.MASTER_NODE.name}."
             )
 
             logger.info("Encrypting a new database ...")
@@ -357,9 +357,9 @@ async def initialize_resources_and_return_db_context(
 
             logger.info("Encrypting resources done.")
 
-            if role is NodeRoles.MASTER:
+            if role is NodeType.MASTER_NODE:
                 logger.warning(
-                    f"The system detects the invocation of role as a {NodeRoles.MASTER.name}. Please insert email address and password for the email services."
+                    f"The system detects the invocation of role as a {NodeType.MASTER_NODE.name}. Please insert email address and password for the email services."
                 )
                 logger.warning(
                     "Please ENSURE that credentials are correct. Don't worry, it will be hashed along with the `auth_key` that is generated here."
@@ -621,9 +621,9 @@ async def handle_input_function(
 
 # # Blockchain
 # TODO: We need to import the HTTP here.
-async def look_for_nodes(*, role: NodeRoles, host: IPAddress, port: IPPort) -> None:
+async def look_for_nodes(*, role: NodeType, host: IPAddress, port: IPPort) -> None:
     logger.info(
-        f"Step 2.1 | Attempting to look {'for the master node' if role == NodeRoles.MASTER.name else 'at other nodes'} at host {host}, port {port}..."
+        f"Step 2.1 | Attempting to look {'for the master node' if role == NodeType.MASTER_NODE.name else 'at other nodes'} at host {host}, port {port}..."
     )
 
 
