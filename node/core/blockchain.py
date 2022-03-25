@@ -1,4 +1,4 @@
-from asyncio import create_task, gather, get_event_loop
+from asyncio import create_task, gather, get_event_loop, wait
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -118,11 +118,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 "Genesis block generation has been finished! Blockchain system ready."
             )
 
-        print(
-            "\n\n\n Test #2 | Append another block, and check if hash is the same as previously inserted."
-        )
-        await self.create_genesis_block()
-
     async def _append(
         self,
         *,
@@ -142,7 +137,17 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         if self._chain is not None:
             block_context = context.dict()
             block_context["contents"] = frozendict(block_context["contents"])
+
+            # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
+            logger.info(f"{block_context['id']} | {self.cached_block_id }")
+            if block_context["id"] != self.cached_block_id:
+                logger.error(
+                    f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER node. This block will be DISREGARDED."
+                )
+                return
+
             self._chain["chain"].append(frozendict(block_context))
+            self.cached_block_id += 1
             await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
 
         else:
@@ -177,7 +182,9 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                         .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
                         .values(hash_signature=new_blockchain_hash)
                     )
-                    logger.debug(f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}")
+                    logger.debug(
+                        f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
+                    )
 
                     await get_db_instance().execute(blockchain_hash_update_stmt)
 
@@ -296,6 +303,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                     unconventional_terminate(
                         message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {dict_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
                     )
+                    return None
 
             logger.info(
                 f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
@@ -316,7 +324,9 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # TODO: We may need to use create_block since we have an unallocated_block.
 
         mined_genesis_block = await get_event_loop().run_in_executor(
-            None, self.mine_block, self.create_block(transactions=None)
+            None,
+            self.mine_block,
+            self.create_block(transactions=None),
         )
 
         await self._append(
@@ -327,11 +337,17 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         self,
         *,
         transactions: list[Transaction] | None,
-    ) -> Block:
+    ) -> Block | None:
 
         # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size, and hash_block.
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
+
+        if self.get_last_block.id >= self.cached_block_id:
+            logger.critical(
+                f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {self.get_last_block.id} | Currently Cached: {self.cached_block_id}"
+            )
+            return None
 
         _block: Block = Block(
             id=self.cached_block_id,
@@ -349,8 +365,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         )
 
         _block.block_size = asizeof(_block.contents.json())
-        self.cached_block_id += 1
-
         return _block
 
     async def create_transaction(self) -> None:

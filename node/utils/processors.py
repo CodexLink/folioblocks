@@ -424,7 +424,6 @@ async def close_resources(*, key: KeyContext) -> None:
         enable_async=True,
         return_file_hash=True,
     )
-    print("Returned: ", raw_blockchain_encrypt)
 
     ensure_blockchain_hash_diff_stmt = file_signatures.select().where(
         file_signatures.c.hash_signature == raw_blockchain_encrypt
