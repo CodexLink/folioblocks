@@ -53,7 +53,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         client_role: NodeType,
     ) -> None:
 
-        # TODO: After finalization, seperate some methods and attributes for the ARCHIVAL_MINER and MASTER_NODE.
+        # TODO: After finalization, seperate some methods and attributes for the ARCHIVAL_MINER_NODE and MASTER_NODE.
         # Required since this class will be invoked no matter what the role of the client instance is.
 
         # * Required Variables for the Blockchain Operaetion.
@@ -93,7 +93,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         A method that initialize resources needed for the blockchain system to work.
 
         TODO
-        * If client_role is ARCHIVAL_MINER, then fetch or call update from the AdaptedPoERTConsensus to the MASTER_NODE node that is available. Also consider checking for unfinished tasks.
+        * If client_role is ARCHIVAL_MINER_NODE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER_NODE node that is available. Also consider checking for unfinished tasks.
         """
 
         # Load the blockchain.
@@ -482,7 +482,7 @@ def get_blockchain_instance(
     logger.debug("Initializing or returning blockchain instance ...")
 
     if role and blockchain_service is None and token_ref is not None:
-        # # Note that this will create an issue later when we tried ARCHIVAL_MINER node mode later on.
+        # # Note that this will create an issue later when we tried ARCHIVAL_MINER_NODE node mode later on.
         blockchain_service = BlockchainMechanism(
             auth_tokens=token_ref,
             client_role=role,

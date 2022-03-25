@@ -41,13 +41,13 @@
       "args": ["--prefer-role", "MASTER_NODE"]
     },
     {
-      "name": "Folioblocks Node Backend: Debug as ARCHIVAL_MINER",
+      "name": "Folioblocks Node Backend: Debug as ARCHIVAL_MINER_NODE",
       "type": "python",
       "request": "launch",
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": false,
-      "args": ["--local", "--prefer-role", "ARCHIVAL_MINER"]
+      "args": ["--local", "--prefer-role", "ARCHIVAL_MINER_NODE"]
     }
     {
       "name": "Folioblocks Node Backend: Debug BLOCKCHAIN Special",

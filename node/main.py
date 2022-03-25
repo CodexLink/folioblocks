@@ -92,10 +92,12 @@ my time more than making other features, which I still haven't done.
 """
 api_handler: FastAPI = FastAPI()
 
-api_handler.include_router(entity_router)  # # WARNING REGARDING ARCHIVAL_MINER NODE.
+api_handler.include_router(
+    entity_router
+)  # # WARNING REGARDING ARCHIVAL_MINER_NODE NODE.
 api_handler.include_router(node_router)  # * Email can be used here.
 
-if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER:
+if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER_NODE:
     api_handler.include_router(admin_router)
     api_handler.include_router(dashboard_router)  # * Email can be used here.
     api_handler.include_router(explorer_router)
@@ -104,7 +106,7 @@ if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER:
 @api_handler.on_event("startup")
 async def pre_initialize() -> None:
     logger.info(
-        f"Step 0 (Argument Check) | Detected as {NodeType.MASTER_NODE.name if parsed_args.prefer_role == NodeType.MASTER_NODE.name else NodeType.ARCHIVAL_MINER.name} ..."
+        f"Step 0 (Argument Check) | Detected as {NodeType.MASTER_NODE.name if parsed_args.prefer_role == NodeType.MASTER_NODE.name else NodeType.ARCHIVAL_MINER_NODE.name} ..."
     )
 
     await get_http_client_instance().initialize()  # Initialize the HTTP client for such requests.
@@ -125,7 +127,7 @@ async def pre_initialize() -> None:
     await get_db_instance().connect()  # Initialize the database.
 
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
-    if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER.name:
+    if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
         pass
         # create_task(get_http_client_instance().enqueue_request())
 
@@ -155,7 +157,7 @@ async def post_initialize() -> None:
             role=parsed_args.prefer_role, host=parsed_args.host, port=parsed_args.port
         )
 
-    # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER will initialize their local or universal (depending on the role) blockchain file.
+    # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER_NODE will initialize their local or universal (depending on the role) blockchain file.
     create_task(
         get_blockchain_instance(role=NodeType(parsed_args.prefer_role)).initialize()
     )
