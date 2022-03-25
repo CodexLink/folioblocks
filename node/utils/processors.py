@@ -433,6 +433,7 @@ async def close_resources(*, key: KeyContext) -> None:
     ensure_blockchain_hash = False if ensure_blockchain_hash == -1 else True  # Resolve.
 
     if not ensure_blockchain_hash:
+        logger.info("Blockchain file's hash upon close has been updated!")
         blockchain_hash_update_stmt = (
             file_signatures.update()
             .where(file_signatures.c.filename == BLOCKCHAIN_NAME)

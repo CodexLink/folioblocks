@@ -9,6 +9,7 @@ from time import time
 from typing import Any, Callable
 
 from aiofiles import open as aopen
+from blueprint.models import file_signatures
 from blueprint.schemas import (
     Block,
     Blockchain,
@@ -29,7 +30,7 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
-    BLOCKCHAIN_NODE_JSON_TEMPLATE,
+    BLOCKCHAIN_NAME,
     BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     AddressUUID,
@@ -37,9 +38,8 @@ from core.constants import (
     HashUUID,
     JWTToken,
     NodeRoles,
-    ObjectProcessAction,
 )
-from core.dependencies import get_identity_tokens
+from core.dependencies import get_db_instance, get_identity_tokens
 from core.tasks import AsyncTaskQueue
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -118,6 +118,11 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 "Genesis block generation has been finished! Blockchain system ready."
             )
 
+        print(
+            "\n\n\n Test #2 | Append another block, and check if hash is the same as previously inserted."
+        )
+        await self.create_genesis_block()
+
     async def _append(
         self,
         *,
@@ -158,11 +163,25 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             ) as content_buffer:
 
                 if operation == BlockchainIOAction.TO_WRITE:
-                    await content_buffer.write(
-                        export_to_json(
-                            self._chain, default=self.serialize_to_file_blockchain
-                        ).decode("utf-8")
+                    byte_json_content: bytes = export_to_json(
+                        self._chain, default=self.serialize_to_file_blockchain
                     )
+
+                    logger.debug(
+                        f"Updating blockchain file's hash signature on database. | Targets: {BLOCKCHAIN_RAW_PATH}"
+                    )
+                    new_blockchain_hash: str = sha256(byte_json_content).hexdigest()
+
+                    blockchain_hash_update_stmt = (
+                        file_signatures.update()
+                        .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
+                        .values(hash_signature=new_blockchain_hash)
+                    )
+                    logger.debug(f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}")
+
+                    await get_db_instance().execute(blockchain_hash_update_stmt)
+
+                    await content_buffer.write(byte_json_content.decode("utf-8"))
                     return None
 
                 else:

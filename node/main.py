@@ -16,7 +16,6 @@ from logging.config import dictConfig
 from typing import Any
 
 import uvicorn
-from databases import Database
 from fastapi import FastAPI
 from fastapi_utils.tasks import repeat_every
 from sqlalchemy import func, select

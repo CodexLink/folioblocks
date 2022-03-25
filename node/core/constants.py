@@ -218,11 +218,6 @@ class BlockchainIOAction(IntEnum):
     TO_OVERWRITE = auto()
 
 
-class ObjectProcessAction(IntEnum):
-    TO_SERIALIZE = auto()
-    TO_DESERIALIZE = auto()
-
-
 # # Enums, Constraints
 # ! Blockchain (Explorer) Query
 # These are the min and max constraint for querying blockchain data.
