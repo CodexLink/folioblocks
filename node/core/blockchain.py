@@ -22,7 +22,7 @@ from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
-from utils.processors import logger_exception_handler
+from utils.processors import unconventional_terminate
 
 from core.consensus import AdaptedPoETConsensus
 from core.constants import (
@@ -81,7 +81,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 if self.is_blockchain_ready:
                     return fn(self, *args, **kwargs)
 
-                logger_exception_handler(message=message, press_enter_to_continue=True)
+                unconventional_terminate(message=message)
                 return None
 
             return instance
@@ -141,9 +141,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
 
         else:
-            logger_exception_handler(
+            unconventional_terminate(
                 message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
-                press_enter_to_continue=True,
             )
 
     # Overwrites existing buffer from the frozendict if consensus has been established.
@@ -178,9 +177,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
                     return deserialized_data
 
-        logger_exception_handler(
+        unconventional_terminate(
             message=f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead. This is an internal error.",
-            press_enter_to_continue=True,
         )
         return None
 
@@ -276,9 +274,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
                 # @o However, when its not equal then then something is wrong.
                 else:
-                    logger_exception_handler(
+                    unconventional_terminate(
                         message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {dict_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
-                        press_enter_to_continue=True,
                     )
 
             logger.info(
@@ -287,9 +284,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             self.blockchain_ready = True
             return frozendict(context)
 
-        logger_exception_handler(
+        unconventional_terminate(
             message=f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)}). This is a logic error, please report to the developers as soon as possible.",
-            press_enter_to_continue=True,
         )
 
     async def create_genesis_block(self) -> None:
@@ -347,7 +343,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         prev: float = time()
         nth: int = 1
 
-        logger.debug(f"Attempting to mine a Block #{block.id} ...")
+        logger.info(f"Attempting to mine a Block #{block.id} ...")
 
         while True:
             # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.

@@ -22,8 +22,8 @@ from pathlib import Path
 from secrets import token_hex
 from signal import CTRL_C_EVENT
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any
-
+from typing import Any, Callable
+import sys
 from aioconsole import ainput
 from aiofiles import open as aopen
 from blueprint.models import file_signatures, model_metadata
@@ -54,7 +54,6 @@ from databases import Database
 from fastapi import Depends
 from passlib.context import CryptContext
 from sqlalchemy import create_engine, select
-
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -88,24 +87,26 @@ async def crypt_file(
 
     try:
         logger.debug(
-            f"{'Async:' if enable_async else ''}{'Decrypting' if process is CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
+            f"{'Async:' if enable_async else ''}{'Decrypting' if process == CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
         )
-        if process is CryptFileAction.TO_DECRYPT:
-
+        if process == CryptFileAction.TO_DECRYPT:
             if key is None:
-                raise NoKeySupplied(crypt_file, "Decryption doesn't have a key.")
+                raise NoKeySupplied(
+                    crypt_file,
+                    "Decryption operation cannot continue due to not having a key.",
+                )
 
-            if isinstance(key, str):
-                crypt_context = Fernet(key.encode("utf-8"))
+            crypt_context = Fernet(key.encode("utf-8") if isinstance(key, str) else key)
 
         else:
             if key is None:
                 key = Fernet.generate_key()
+
             crypt_context = Fernet(key)
 
         processed_content = getattr(
             crypt_context,
-            "decrypt" if process is CryptFileAction.TO_DECRYPT else "encrypt",
+            "decrypt" if process == CryptFileAction.TO_DECRYPT else "encrypt",
         )(file_content)
 
         # Then write to the file for the final effect.
@@ -117,7 +118,7 @@ async def crypt_file(
         )
 
         logger.info(
-            f"Successfully {'decrypted' if process is CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
+            f"Successfully {'decrypted' if process == CryptFileAction.TO_DECRYPT else 'encrypted'} a context."
         )
 
         if return_key and not return_file_hash and isinstance(key, bytes):
@@ -126,7 +127,7 @@ async def crypt_file(
         elif not return_key and return_file_hash:
             _file_content: bytes | str = (
                 file_content
-                if process is CryptFileAction.TO_READ
+                if process == CryptFileAction.TO_DECRYPT
                 else processed_content
             )
 
@@ -138,7 +139,7 @@ async def crypt_file(
 
     except InvalidToken:
         logger.critical(
-            f"{'Decryption' if process is CryptFileAction.TO_DECRYPT else 'Encryption'} failed. Please check your argument and try again. This may be a developer's problem, please report the issue at the repository (CodexLink/folioblocks)."
+            f"{'Decryption' if process == CryptFileAction.TO_DECRYPT else 'Encryption'} failed. Please check your argument and try again. This may be a developer's problem, please report the issue at the repository (CodexLink/folioblocks)."
         )
         _exit(1)
 
@@ -213,7 +214,7 @@ async def initialize_resources_and_return_db_context(
 
     if runtime == "__main__":
 
-        # This is just an additional checking.
+        # - This is just an additional checking.
         if (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is not None:
             con: Connection | None = None
             logger.info("Decrypting the database...")
@@ -253,14 +254,15 @@ async def initialize_resources_and_return_db_context(
             with open(BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
                 blockchain_context = blockchain_content.read()
 
-            blockchain_hash_from_raw = sha256(blockchain_context)
+            blockchain_hash_from_raw = sha256(blockchain_context).hexdigest()
 
             if blockchain_hash_from_raw != blockchain_retrieved_hash:
-                logger.critical(
-                    f"Blockchain's file signature mismatched! Database: {blockchain_retrieved_hash} | Computed: {blockchain_hash_from_raw}"
+                unconventional_terminate(
+                    message=f"Blockchain's file signature were mismatch! Database: {blockchain_retrieved_hash} | Computed: {blockchain_hash_from_raw}",
+                    early=True,
                 )
-
-            logger.info("Blockchain file signature validated!")
+            else:
+                logger.info("Blockchain file signature validated!")
 
             store_db_instance(db_instance)
             logger.debug("Database instance has been saved.")
@@ -294,14 +296,14 @@ async def initialize_resources_and_return_db_context(
 
         else:
             logger.warning(
-                f"Database and blockchain file does not exists. Creating a new database with a file name {DATABASE_NAME} and blockchain file named as {BLOCKCHAIN_NAME}"
+                f"Database and blockchain file does not exists. Creating a new database with a file name `{DATABASE_NAME}` and blockchain file named as `{BLOCKCHAIN_NAME}`."
             )
 
             model_metadata.create_all(sql_engine)
             logger.info("Database structure applied...")
 
             logger.warning(
-                f"The system detects the invocation of a role as a {NodeRoles.MASTER.name}, please create a "
+                f"The system detects the invocation of a role as a {NodeRoles.MASTER.name}."
             )
 
             logger.info("Encrypting a new database ...")
@@ -318,7 +320,7 @@ async def initialize_resources_and_return_db_context(
                     "This part of the function should have a returned new auth key. This was not intended! Please report this issue as soon as possible!",
                 )
 
-            logger.warning("Temporarily decrypted database to insert import data.")
+            logger.warning("Temporarily decrypted database to insert signature data.")
             await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
@@ -338,6 +340,7 @@ async def initialize_resources_and_return_db_context(
                 filename=BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
+                return_file_hash=True,
             )
 
             blockchain_hash_stmt = file_signatures.insert().values(
@@ -366,7 +369,7 @@ async def initialize_resources_and_return_db_context(
                 input_context=["Email Address", "Email Password"],
                 hide_fields=[False, True],
                 generalized_context="Server email credentials",
-                additional_context="There's no going back once proceeded.",
+                additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
             )
 
             # Override AUTH_FILE_NAME after encryption.
@@ -382,7 +385,9 @@ async def initialize_resources_and_return_db_context(
                 for each_context in env_context:
                     env_writer.write(each_context + "\n")
 
-            logger.info("Generation of new key file is done ...")
+            logger.info(
+                f"Generation of new key file is done! | Named as `{AUTH_ENV_FILE_NAME}`."
+            )
 
             logger.info(
                 f"Generation of resources is done! Please check the file {AUTH_ENV_FILE_NAME}. DO NOT SHARE THOSE CREDENTIALS. | You need to relaunch this program so that the program will load the generated keys from the file."
@@ -393,9 +398,7 @@ async def initialize_resources_and_return_db_context(
     return db_instance
 
 
-async def close_resources(
-    *, key: KeyContext, db: Database = Depends(get_db_instance)
-) -> None:
+async def close_resources(*, key: KeyContext) -> None:
     """
     Asynchronous Database Close Function.
 
@@ -407,6 +410,8 @@ async def close_resources(
         key (KeyContext): The key that is recently used for decrypting the SQLite database.
 
     """
+    db: Database = get_db_instance()
+
     logger.warning(
         f"Ensuring encode process of computed hash-signature for the {BLOCKCHAIN_NAME}."
     )
@@ -419,15 +424,22 @@ async def close_resources(
         enable_async=True,
         return_file_hash=True,
     )
+    print("Returned: ", raw_blockchain_encrypt)
 
-    raw_blockchain_encrypt_hash = sha256(raw_blockchain_encrypt)  # What???
-
-    blockchain_hash_update_stmt = (
-        file_signatures.update()
-        .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
-        .values(hash_signature=raw_blockchain_encrypt_hash)
+    ensure_blockchain_hash_diff_stmt = file_signatures.select().where(
+        file_signatures.c.hash_signature == raw_blockchain_encrypt
     )
-    await db.execute(blockchain_hash_update_stmt)
+    ensure_blockchain_hash = await db.execute(ensure_blockchain_hash_diff_stmt)
+    ensure_blockchain_hash = False if ensure_blockchain_hash == -1 else True  # Resolve.
+
+    if not ensure_blockchain_hash:
+        blockchain_hash_update_stmt = (
+            file_signatures.update()
+            .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
+            .values(hash_signature=raw_blockchain_encrypt)
+        )
+
+        await db.execute(blockchain_hash_update_stmt)
 
     logger.warning("Closing database by encryption...")
     await crypt_file(
@@ -502,6 +514,8 @@ async def ensure_input_prompt(
     additional_context: str | None = None,
     enable_async: bool = False,
     delimiter: str = ":",
+    validator: Callable | None = None,
+    validate_field: list[str] | str | None = None,
 ) -> Any:
 
     # * Assert in list form for all readable type.
@@ -548,7 +562,7 @@ async def ensure_input_prompt(
                     message=f"{input_context}{delimiter} ",
                 )
             else:
-                logger_exception_handler(
+                unconventional_terminate(
                     message=f"Assertion Error: Input hidden is not a type 'bool'. This condition scope does not expect type {type(hide_fields)}."
                 )
 
@@ -653,28 +667,22 @@ def process_blockchain_hash_state(
 
 
 # # Input Stoppers — START
-def logger_exception_handler(
-    *,
-    message: str,
-    press_enter_to_continue: bool = False,
-) -> None:
+def unconventional_terminate(*, message: str, early: bool = False) -> None:
     """Recursive infinite by doing nothing after displaying a message that suggests hitting `CTRL+BREAK`.
 
     Args:
         message (str): The message to display under `logging.exception(<context>).`
+        early (bool): Inidicates that this method were runnning BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
     """
-    logger.exception(
-        f"{message}{' | Press CTRL + C or CTRL + BREAK or ENTER to continue.' if press_enter_to_continue else ''}"
-    )
+    from contextlib import suppress
 
-    try:
-        if press_enter_to_continue:
-            input("")
-    except EOFError:
-        pass
+    logger.exception(message)
+    if early:
+        with suppress(BaseException):
+            sys.tracebacklimit = 0
+            exit(-1)
 
-    finally:
-        kill_process(getpid(), CTRL_C_EVENT)
+    kill_process(getpid(), CTRL_C_EVENT)
 
 
 # # Input Stoppers — END

@@ -11,10 +11,13 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
+from asyncio import sleep
+from asyncio.windows_events import INFINITE
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from logging import Logger, getLogger
-from os import environ as env, _exit
+from os import environ as env
+
 from aiosmtplib import (
     SMTP,
     SMTPAuthenticationError,
@@ -31,6 +34,7 @@ from core.constants import (
     DEFAULT_SMTP_URL,
     CredentialContext,
     IPPort,
+    NodeRoles,
     URLAddress,
 )
 
@@ -54,7 +58,7 @@ class EmailService:
         self.password: CredentialContext = CredentialContext(password)
         self.max_retries = max_retries
 
-    async def connect(self, *, is_immediate: bool = False) -> None:
+    async def connect(self) -> None:
 
         retries_count: int = 1  # Protect the constant for iteration purposes.
 
@@ -79,9 +83,7 @@ class EmailService:
                 logger.debug(
                     f"SMTP send EHLO packets to {self.url} to initiate service ..."
                 )
-                logger.info(
-                    f"SMTP email service acknowledged and ready.{' (by immediate call)' if is_immediate else ''}"
-                )
+                logger.info(f"SMTP email service acknowledged and ready.")
                 return
 
             except (
@@ -94,17 +96,23 @@ class EmailService:
                     f"Failed to connect at email services. | Additional Info: {e}."
                 )
 
-                if retries_count >= self.max_retries:
-                    logger.critical(
-                        "Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment."
+                if retries_count + 1 <= self.max_retries:
+                    logger.warning(
+                        f"Attempting to reconnect email services... | Attempt #{retries_count + 1} out of {self.max_retries}"
                     )
-
-                logger.warning(
-                    f"Attempting to reconnect email services... | Attempt #{retries_count + 1} out of {self.max_retries}"
-                )
 
                 retries_count += 1
                 continue
+
+        from utils.processors import (
+            unconventional_terminate,
+        )  # @o Circulate imports occur when implemented on the top.
+
+        unconventional_terminate(
+            message="Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
+            early=True,
+        )
+        await sleep(INFINITE)
 
     async def send(
         self,

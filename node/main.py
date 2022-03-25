@@ -32,6 +32,7 @@ from core.args import args_handler as ArgsHandler
 from core.constants import (
     ASGI_APP_TARGET,
     ASYNC_TARGET_LOOP,
+    AUTH_ENV_FILE_NAME,
     HTTPQueueMethods,
     JWTToken,
     LoggerLevelCoverage,
@@ -41,9 +42,14 @@ from core.constants import (
     URLAddress,
     UserActivityState,
 )
-from core.dependencies import authenticate_node_client, get_identity_tokens
+from core.dependencies import (
+    authenticate_node_client,
+    get_db_instance,
+    get_identity_tokens,
+)
 from core.email import get_email_instance
 from core.logger import LoggerHandler
+from utils.exceptions import InsufficientCredentials
 from utils.http import get_http_client_instance
 from utils.processors import (
     close_resources,
@@ -70,14 +76,6 @@ logger: logging.Logger = logging.getLogger(
     ASYNC_TARGET_LOOP
 )  # # Note that, uvicorn will override this in the main thread.
 
-
-database_instance: Database = get_event_loop().run_until_complete(
-    initialize_resources_and_return_db_context(
-        runtime=RuntimeLoopContext(__name__),
-        role=NodeRoles(parsed_args.prefer_role),
-        auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
-    ),
-)
 
 # * We need to delay this email instance, otherwise it will look for potentially non-existing .env file if this system was initially instantiated for the first time.
 from core.blockchain import get_blockchain_instance
@@ -110,22 +108,25 @@ async def pre_initialize() -> None:
         f"Step 0 (Argument Check) | Detected as {NodeRoles.MASTER.name if parsed_args.prefer_role == NodeRoles.MASTER.name else NodeRoles.SIDE.name} ..."
     )
 
-    await database_instance.connect()  # Initialize the database.
     await get_http_client_instance().initialize()  # Initialize the HTTP client for such requests.
 
-    # * NodeRoles.MASTER requires special handling for initial instance.
-    if parsed_args.prefer_role == NodeRoles.MASTER.name:
-        master_user_count_stmt = select([func.count()]).where(
-            users.c.type == NodeRoles.MASTER.name
-        )  ## Check first if there are no entries for the master node account.
+    try:
+        await get_email_instance().connect()
+    except InsufficientCredentials as e:
+        logger.warning(
+            f"There is no credentials due to non-existent environment file. ({AUTH_ENV_FILE_NAME}) | Info: {e}"
+        )
 
-        count = await database_instance.fetch_val(master_user_count_stmt)
+    await initialize_resources_and_return_db_context(
+        runtime=RuntimeLoopContext(__name__),
+        role=NodeRoles(parsed_args.prefer_role),
+        auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
+    ),
 
-        # * If None, we should technically initialize the email service for the self-account registration.
-        if not count:
-            await get_email_instance().connect(is_immediate=True)
-    else:
-        # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
+    await get_db_instance().connect()  # Initialize the database.
+
+    # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
+    if parsed_args.prefer_role == NodeRoles.SIDE.name:
         pass
         # create_task(get_http_client_instance().enqueue_request())
 
@@ -145,15 +146,12 @@ async def post_initialize() -> None:
 
     await authenticate_node_client(
         role=NodeRoles(parsed_args.prefer_role),
-        instances=(parsed_args, database_instance),
+        instances=(parsed_args, get_db_instance()),
     )
 
     if (  ## Ensure that the email services were activated.
         parsed_args.prefer_role == NodeRoles.MASTER.name
-        and not get_email_instance().is_connected
     ):
-        create_task(get_email_instance().connect())
-
         await look_for_nodes(
             role=parsed_args.prefer_role, host=parsed_args.host, port=parsed_args.port
         )
@@ -175,7 +173,8 @@ async def terminate() -> None:
     TODO: Ensure on services like blockchain, remove or finish any request or finish the consensus.
     """
     if parsed_args.prefer_role == NodeRoles.MASTER.name:
-        get_email_instance().close()  # * Shutdown email service instance.
+        if get_email_instance().is_connected:
+            get_email_instance().close()  # * Shutdown email service instance.
         # Remove the token related to this master, as well as, change the state of this master account to Offline.
         if get_identity_tokens() is not None:
             token_to_invalidate_stmt = (
@@ -187,7 +186,7 @@ async def terminate() -> None:
                 users.c.unique_address == get_identity_tokens()[0]
             ).values(activity=UserActivityState.OFFLINE)
 
-            await database_instance.execute(token_to_invalidate_stmt)
+            await get_db_instance().execute(token_to_invalidate_stmt)
             logger.info(
                 f"Master Node's token has been invalidated due to Logout session."
             )
@@ -230,7 +229,7 @@ if parsed_args.prefer_role == NodeRoles.MASTER.name:
 
         ## Query available tokens.
         token_query = tokens.select().where(tokens.c.state != TokenStatus.EXPIRED)
-        tokens_available = await database_instance.fetch_all(token_query)
+        tokens_available = await get_db_instance().fetch_all(token_query)
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")
@@ -251,7 +250,7 @@ if parsed_args.prefer_role == NodeRoles.MASTER.name:
                     .values(state=TokenStatus.EXPIRED)
                 )  ## Change the state of the token when past through expiration.
 
-                await database_instance.execute(token_to_del)
+                await get_db_instance().execute(token_to_del)
 
                 logger.info(
                     f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."
