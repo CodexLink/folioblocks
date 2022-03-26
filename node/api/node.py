@@ -37,9 +37,11 @@ node_router = APIRouter(
     response_model=NodeConsensusInformation,
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
-    dependencies=[Depends(
-        EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
-    ),]
+    dependencies=[
+        Depends(
+            EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
+        ),
+    ],
 )
 async def get_node_info() -> NodeConsensusInformation:
     blockchain_state: dict[
@@ -57,31 +59,28 @@ async def get_node_info() -> NodeConsensusInformation:
     )
 
 
+"""
+/consensus/echo | When received ensure its the master by fetching its info.
+/consensus/acknowledge | When acknowledging, give something, then it will return something.
+
+# Note that MASTER will have to do this command once! Miners who just finished will have to wait and keep on retrying.
+/consensus/negotiate | This is gonna be complex, on MASTER, if there's current negotiation then create a new one (token). Then return a consensus as initial from the computation of the consensus_timer.
+/consensus/negotiate | When there's already a negotiation, when called by MASTER, return the context of the consensus_timer and other properties that validates you of getting the block when you are selected.
+/consensus/negotiate | When block was fetched then acknowledge it.
+/consensus/negotiate | When the miner is done, call this one again but with a payload, and then keep on retrying, SHOULD BLOCK THIS ONE.
+/consensus/negotiate | When it's done, call this again for you to sleep by sending the calculated consensus, if not right then the MASTER will send a correct timer.
+/consensus/negotiate | Repeat.
+"""
+
+
 @node_router.post(
-    "/consensus",
+    "/consensus/negotiate",
     tags=[
         NodeAPI.NODE_TO_NODE_API.value,
     ],
-    summary="Initiates and finishes negotiation from master node to side node and vice versa.",
-    description="An API endpoint that handles the negotiations from node-to-node.",
-    dependencies=[Depends(
-        EnsureAuthorized(_as=UserEntity.NODE_USER)
-    )]
+    summary="Initiates and finishes negotiation for the consensus mechanism named as 'Proof-of-Elapsed-Time.'",
+    description="A special API endpoint that is called multiple times for the consensus mechanism from initial to final negotiation.",
+    dependencies=[Depends(EnsureAuthorized(_as=UserEntity.NODE_USER))],
 )
-async def consensus_negotiate(
-) -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
-    return
-
-
-@node_router.put(
-    "/negotiate/{negotiation_id}",  # Aside from client identification, we should have an identifier.
-    tags=[NodeAPI.NODE_TO_NODE_API.value],
-    # response_model=NodeNegotiationProcess,
-    summary="Execute and acknowledge payloads given from this endpoint.",
-    description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation.",
-)
-async def process_negotiate(
-    *,
-    deps: Any = Depends(ensure_past_negotiations),
-) -> None:  # Actions should be updating data for the master node to communicate.
+async def consensus_negotiate() -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     return

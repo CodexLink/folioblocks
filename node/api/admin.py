@@ -42,16 +42,3 @@ async def generate_auth_token(
     Use admin address, date to add, role type.
     """
     return
-
-
-# ! This may be inserted from the blockchain as a proof.
-# # Not sure if we ever need the deletion function.
-@admin_router.get(
-    "generated_tokens/",
-    # tags=[NodeAPI.GENERAL_NODE_API.value],
-    # response_model=NodeRegisterCredentials,
-    summary="Displays tokens that is unusued for registration.",
-    description="An exclusive API endpoint that shows the currently unused generated token.",
-)
-async def check_unused_tokens() -> None:
-    return
