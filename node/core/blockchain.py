@@ -15,6 +15,7 @@ from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
+from blueprint.schemas import BlockOverview
 from utils.processors import unconventional_terminate
 
 from core.consensus import AdaptedPoETConsensus
@@ -431,9 +432,31 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             "last_mined_block": self.get_last_block.id if self.get_last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
         }
 
-    def get_blocks(self, limit_to: int) -> None:
+    def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
         if self._chain is not None:
-            return self._chain["chain"][len(self._chain["chain"]) - limit_to :]
+            candidate_blocks: list[BlockOverview] = deepcopy(
+                self._chain["chain"][len(self._chain["chain"]) - limit_to :]
+            )
+            resolved_candidate_blocks: list[BlockOverview] | list = []
+
+            for each_block in candidate_blocks:
+                each_block = dict(each_block)
+                # - [1] Push validator outside.
+                each_block["validator"] = each_block["contents"]["validator"]
+
+                # -  [2] Remove the contents scope.
+                del each_block["contents"]
+
+                # - [3] Remove hash context.
+                del each_block["hash_block"]
+                del each_block["prev_hash_block"]
+
+                # - [4] Assign this to the indexed block.
+                resolved_candidate_blocks.append(BlockOverview.parse_obj(each_block))
+
+            # * Once done, return the list.
+            resolved_candidate_blocks.reverse()
+            return resolved_candidate_blocks
 
     @ensure_blockchain_ready(
         message="Houston, we have a problem. This is illegal! There are no blocks to mine and you have parameters for this? This may be a developer-issue in regards to logic error. Though, we cannot recover from this due to some reason."

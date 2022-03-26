@@ -146,7 +146,9 @@ class TransactionContent(BaseModel):
     payload: TransactionEmployeePayload | TransactionStudentPayload
 
 
-class Transaction(BaseModel):
+class Transaction(
+    BaseModel
+):  # TODO | We need TransactionDetail if we were able to fetch it.
     tx_hash: AddressUUID
     action: TransactionActions
     status: TransactionStatus
@@ -164,12 +166,19 @@ class HashableBlock(BaseModel):
     timestamp: datetime
 
 
-class Block(BaseModel):
+class BaseBlock(BaseModel):
     id: int
     block_size: int | None
+
+
+class Block(BaseBlock):
     contents: HashableBlock
     hash_block: HashUUID | None
     prev_hash_block: HashUUID
+
+
+class BlockOverview(BaseBlock):
+    validator: AddressUUID
 
 
 # # Block Structure — END
@@ -195,7 +204,7 @@ class NodeMasterInformation(
 
 
 class Blockchain(BaseModel):
-    block: list[Block] | None
+    block: list[BlockOverview] | None
     transactions: list[Transaction] | None
     node_info: NodeMasterInformation
 

@@ -17,8 +17,15 @@ if __name__ == "__main__":
     )
 
 from http import HTTPStatus
+from typing import Any
 
-from blueprint.schemas import Block, Blockchain, NodeMasterInformation, Transaction
+from blueprint.schemas import (
+    Block,
+    Blockchain,
+    BlockOverview,
+    NodeMasterInformation,
+    Transaction,
+)
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
@@ -66,7 +73,9 @@ explorer_router = APIRouter(
 )
 async def get_blockchain() -> Blockchain:
     blockchain_instance: BlockchainMechanism = get_blockchain_instance()
-    blockchain_blocks: list[Block] | None = blockchain_instance.get_blocks(limit_to=5)
+    blockchain_blocks: list[BlockOverview] | None = blockchain_instance.overview_blocks(
+        limit_to=5
+    )
 
     blockchain_state: NodeMasterInformation | None = (
         get_blockchain_instance().get_blockchain_public_state
