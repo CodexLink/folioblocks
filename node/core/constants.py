@@ -192,29 +192,6 @@ class NodeAPI(Enum):
     NODE_TO_NODE_API = f"{BaseAPI.NODE.value}: Node-to-Node"
 
 
-class TransactionStatus(IntEnum):
-    PENDING = auto()
-    SUCCESS = auto()
-    FAILED = auto()
-
-
-class TransactionActions(IntEnum):  # TODO: This will be expanded later on.
-    ACCOUNT_GENERATED = auto()
-    DATA_UPDATED = auto()
-    DATA_DISREGARDED = auto()
-    DATA_BATCH_MINTING = auto()
-    DOCUMENT_INSUANCE = auto()
-    GENESIS_INITIALIZATION = auto()
-    REQUEST_INITIATION = auto()
-    REQUEST_PROCESSING = auto()
-    REQUEST_MARKED_ENDED = auto()
-    REQUEST_SPECIFIC_DOC = auto()
-
-
-class TransactionActionString(Enum):
-    pass
-
-
 # # Enums, Blockchain
 class BlockchainIOAction(IntEnum):
     TO_WRITE = auto()
@@ -321,7 +298,67 @@ class HTTPQueueTaskType(Enum):
     CONSENSUS_MODE = "Consensus Mode, Block Sync"
 
 
-# Program Metadata
+# # Enums, Transaction models and beyond of a `Block` model.
+class StudentActivities(IntEnum):
+    AWARDS = auto()
+    PROJECTS = auto()
+    RECOGNITION = auto()
+
+class StudentStatus(IntEnum):
+    ACTIVE = auto()
+    INACTIVE = auto()
+    TRANSFERRED = auto()
+
+
+class EmploymentActivityType(IntEnum):
+    ACTIVITIES = auto()
+    PROJECTS = auto()
+    PROMOTION = auto()
+
+
+class EmploymentStatus(IntEnum):
+    ACTIVE = auto()
+    TERMINATED = auto()
+    RESIGNED = auto()
+    INACTIVE = auto()
+
+
+class TransactionContentCategory(IntEnum):
+    EMPLOYMENT = auto()
+    SCHOOL = auto()
+    ORGANIZATION = auto()
+
+
+class TransactionContentType(IntEnum):
+    pass
+
+
+class TransactionContentOperation(IntEnum):
+    INSERT = auto()
+    INVALIDATE = auto()
+    UPDATE = auto()
+
+
+class TransactionStatus(IntEnum):
+    SUCCESS = auto()
+    FAILED = auto()
+
+
+# TODO: This will be expanded later on.
+class TransactionActions(IntEnum):
+    ACCOUNT_GENERATED = auto()
+    DOCUMENT_INSUANCE = auto()
+    GENESIS_INITIALIZATION = auto()
+    REQUEST_INITIATION = auto()
+    REQUEST_MARKED_ENDED = auto()
+    REQUEST_SPECIFIC_DOC = auto()
+
+
+class TransactionActionString(Enum):
+    pass
+
+
+# # Program Metadata
 FOLIOBLOCKS_NODE_TITLE: Final[ProgramMetadata] = ProgramMetadata(
     "FolioBlocks - Blockchain Backend (Side | Master) Node API Service (node.py)"
 )

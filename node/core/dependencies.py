@@ -237,7 +237,7 @@ class EnsureAuthorized:
             ..., description="The token that is inferred for validation."
         ),
         db: Database = Depends(get_db_instance),
-    ) -> None:
+    ) -> None:  # TODO.
 
         if x_token:
             req_ref_token = tokens.select().where(
@@ -259,9 +259,8 @@ class EnsureAuthorized:
 
                 if isinstance(self._as, list):
                     for each_role in self._as:
-                        if user_role is not each_role:
-                            continue
-                        return
+                        if user_role is each_role:
+                            return
                 else:
                     if user_role is self._as:
                         return

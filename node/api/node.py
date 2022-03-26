@@ -34,14 +34,15 @@ node_router = APIRouter(
     ],
     response_model=NodeInfoContext,
     summary="Fetch information from the master node.",
-    description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",  # TODO
+    description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
 )
-async def get_chain_info(
+async def get_entity_info(
     *,
     auth: Any = Depends(
         EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
     ),
 ) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
+
     return
 
 

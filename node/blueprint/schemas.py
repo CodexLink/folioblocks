@@ -23,6 +23,8 @@ from core.constants import (
     DocumentMeta,
     DocumentProof,
     Documents,
+    EmploymentActivityType,
+    EmploymentStatus,
     GenericUUID,
     HashUUID,
     HTTPQueueMethods,
@@ -34,8 +36,13 @@ from core.constants import (
     RequestContext,
     RequestPayloadContext,
     RoleContext,
+    StudentActivities,
+    StudentStatus,
     TokenStatus,
     TransactionActions,
+    TransactionContentCategory,
+    TransactionContentOperation,
+    TransactionContentType,
     TransactionStatus,
     URLAddress,
     UserActivityState,
@@ -43,10 +50,7 @@ from core.constants import (
     UserRole,
     WorkExperience,
 )
-from httpx import URL
-from pydantic import BaseModel, EmailStr, Field, FilePath
-
-# ! Note that we can use one the exclude or include functionality upon returning the context of these models.
+from pydantic import BaseModel, EmailStr, Field
 
 # # Dashboard API — START
 
@@ -56,74 +60,6 @@ class DashboardContext(BaseModel):
     role: UserRole
     notifications: NotificationContext
     role_context: RoleContext
-
-
-class UserLogoutIn(BaseModel):
-    hash_session: JWTToken
-
-
-class Applicants(BaseModel):
-    id: int
-    address: AddressUUID
-    job_target: str
-    date_applied: datetime
-
-
-class Applicant(BaseModel):  # ! This is unconfirmed!
-    address: AddressUUID
-    academic: AcademicExperience
-    certificates: Certificates
-    intern_experience: InternExperience
-    other_documents: Documents
-    proof_documents: DocumentProof
-    work_experience: WorkExperience
-
-
-class Requests(BaseModel):
-    id: int
-    from_address: AddressUUID
-    summary: str
-
-
-class Request(BaseModel):
-    id: int
-    from_address: AddressUUID
-    description: str
-    request: DocRequestType  # This is indicated under Enums. Also this indicates ACCESS, not document.
-
-
-class RequestInput(BaseModel):
-    ref_id: int
-    title: RequestContext
-    message: RequestContext
-    doc_type: str | None = None  # I still cannot envision this part.
-
-
-class Issuances(BaseModel):
-    id: int
-    from_address: AddressUUID
-    to_address: AddressUUID
-    title: str
-    summary: str
-    date_issued: datetime
-
-
-class IssueToStudentIn(BaseModel):
-    to_student_addr: AddressUUID
-    doc_type: str | FilePath  # External document or
-    description: str
-    institution_reference: AddressUUID
-
-
-class IssueToStudentOut(BaseModel):
-    hash_ref: GenericUUID
-    date_created: datetime
-
-
-class Issuance(BaseModel):
-    title: DocumentMeta
-    description: str
-    context: str | FilePath  # Unconfirmed.
 
 
 class Students(BaseModel):
@@ -141,28 +77,8 @@ class Student(BaseModel):  # This may or may not be possible.
     address_equiv: AddressUUID
     program: str
     semester: str
-    applicant_data: Applicant  # Nested since students will become applicants later on.
+    # applicant_data: Applicant  # Nested since students will become applicants later on.
     date_created: datetime
-
-
-class NewStudentIn(BaseModel):  # TODO: We need to typed this one soon.
-    first_name: str
-    last_name: str
-    age: int
-    sex: str
-    year: int
-    semester: str
-    program: str
-    telephone: int
-    city_address: str
-    city_zip_code: int
-    email: EmailStr
-    telephone_no: str | int
-    cell_no: str | int
-    school_name: str
-    school_branch: str
-    year_started: int
-    year_ended: int
 
 
 class NewStudentOut(BaseModel):
@@ -170,28 +86,75 @@ class NewStudentOut(BaseModel):
     date_created: datetime
 
 
-# # Dashboard API — END
+"""
+# Block Structure
+- The following pydantic models are made out of the `Block`. Note that the fields for the `Block` and the `Blockchain` is here as well.
+@o Notice that the the declaration of the classes were done in descending form to the actual declaration of the `Block`.
+@o There are some fields were declared as `None` as they are defined during or after a certain processes.
+"""
 
-# # Explorer API — START
+
+class TransactionStudentActivities(BaseModel):
+    type: StudentActivities
+    name: str
+    description: str | None
+    duration_start: datetime
+    duration_end: datetime
+    document_rep: HashUUID | None
+    validated_by: AddressUUID
 
 
-class Transactions(BaseModel):
-    tx_hash: AddressUUID
-    action: TransactionActions
-    status: TransactionStatus
-    stored_at_block: int
-    date_executed: datetime
+class TransactionStudentOtherInfo(BaseModel):
+    title: str
+    description: str | None
+    inserted_by: AddressUUID
+
+
+class TransactionStudentPayload(BaseModel):
+    identity: AddressUUID
+    name: str
+    course: str
+    course_level: int
+    status: StudentStatus
+    activities: list[TransactionStudentActivities] | None
+    other_info: list[TransactionStudentOtherInfo] | None
+
+
+class TransactionEmployeeActivites(BaseModel):
+    type: EmploymentActivityType
+    name: str
+    deescription: str | None
+    duration_start: datetime
+    duration_end: datetime | None
+    document_rep: HashUUID | None
+    role: str
+    validated_by: AddressUUID
+
+
+class TransactionEmployeePayload(BaseModel):
+    identity: AddressUUID
+    company: AddressUUID
+    role: str
+    status: EmploymentStatus
+    activities: list[TransactionEmployeeActivites] | None
+
+
+class TransactionContent(BaseModel):
+    category: TransactionContentCategory
+    type: TransactionContentType
+    operation: TransactionContentOperation
+    payload: TransactionEmployeePayload | TransactionStudentPayload
 
 
 class Transaction(BaseModel):
     tx_hash: AddressUUID
     action: TransactionActions
-    date_executed: datetime
+    status: TransactionStatus
+    content: TransactionContent
     from_address: AddressUUID
     to_address: AddressUUID
-    context: Any  # TODO: We have to type this one as well. Or create an Enum that classifies those actions.
-    status: TransactionStatus
-    stored_at_block: int
+    prev_hash: HashUUID | None
+    timestamp: datetime
 
 
 class HashableBlock(BaseModel):
@@ -201,7 +164,6 @@ class HashableBlock(BaseModel):
     timestamp: datetime
 
 
-# @o Variables that is None is determined first before doing something.
 class Block(BaseModel):
     id: int
     block_size: int | None
@@ -210,42 +172,28 @@ class Block(BaseModel):
     prev_hash_block: HashUUID
 
 
-# This was dissected.
+# # Block Structure — END
+
+# # APIs
+
+
+class NodeInformation(BaseModel):
+    owner: AddressUUID  # * Same as validator.
+    is_sleeping: bool
+    consensus_timer: datetime
+    last_mined_block: Block
+    # ! Needs more information.
+
+
 class Blockchain(BaseModel):
-    block: list[Block]
-    transactions: list[Transaction]
-    status_reports: Any  # TODO: We have to return more than this, to provide insights about the current master node.
-
-
-class Blocks(BaseModel):
-    id: int
-    date_created: datetime
-    transaction_count: int
-    validator: AddressUUID
-
-
-class Addresses(BaseModel):
-    id: int
-    address: AddressUUID
-    date_created: datetime
-
-
-class Address(BaseModel):
-    id: int
-    address: AddressUUID
-    transactions: list[Transaction]
-    role: str
-
-
-class SearchContext(
-    BaseModel
-):  # ! Idk, is there something else? Maybe we will expand this when we have the web.
-    context: str
+    block: list[Block] | None
+    transactions: list[Transaction] | None
+    node: NodeInformation | None  # ! This will be resolved when a certain header is given.
 
 
 # # Explorer API — END
 
-# # Node API — START
+# # Entity API — START
 
 # Model for the Block Details
 class EntityRegisterCredentials(BaseModel):
@@ -290,9 +238,9 @@ class EntityRegisterResult(BaseModel):
         ...,
         description="The date and time from where this entity has been introduced from the system.",
     )
-    role: UserEntity = Field(  # TODO.
+    role: UserEntity = Field(
         ..., description="The role of this entity from the system."
-    )  # ! What?
+    )
 
 
 class EntityLoginResult(BaseModel):
@@ -309,7 +257,6 @@ class EntityLoginResult(BaseModel):
         ...,
         description="The date and time from where this token will expire. When expired, you need to fetch by re-login.",
     )
-    # time_elapsed: datetime # !!! This indicates the time before you can participate in the blockchain network, as per consensus condition. # NOT SURE for this one.
 
 
 class EntityLoginCredentials(BaseModel):
@@ -325,9 +272,6 @@ class EntityLoginCredentials(BaseModel):
     )
 
 
-# # Entity API — START
-
-# This is used inside! Not from the API system itself.
 class Tokens(BaseModel):
     id: int = Field(..., description="Reference ID for the token generated.")
     from_user: AddressUUID | str = Field(
@@ -347,9 +291,6 @@ class Tokens(BaseModel):
     )
 
 
-# TODO
-# This pydantic model should be flexible for other type of operations.
-# ! But this is not finalize because we can just do db.fetch_val().
 class Users(BaseModel):
     unique_address: AddressUUID | str = Field(
         ...,
@@ -386,42 +327,6 @@ class Users(BaseModel):
 
 
 # # Entity API — END
-
-# # AT THIS POINT, I CANNOT ADD THE FIELDS SINCE I STILL HAVE NO IDEA ON HOW TO IMPLEMENT THEM.
-# * There are other fields were I don't know if they are helpful or not.
-
-# Other NodeInfoXXX have to be expand later.
-class NodeInfoConfig(BaseModel):
-    pass
-
-
-class NodeInfoOthers(BaseModel):
-    pass
-
-
-class NodeInfoContext(BaseModel):  # This is the main context for the /info.
-    pass
-
-
-# As well as this one.
-class NodeNegotiationInit(BaseModel):
-    pass
-
-
-class NodeNegotiationEnd(BaseModel):
-    pass
-
-
-class NodeNegotiation(BaseModel):
-    negotiation: NodeNegotiationInit | NodeNegotiationEnd
-
-
-# During process, we also have to invoke other information as well.
-class NodeNegotiationProcess(BaseModel):
-    pass
-
-
-# # Node API — START # TODO: What?
 
 
 # # HTTP Methods — START
