@@ -43,7 +43,7 @@ from core.constants import (
     UserActivityState,
     UserEntity,
 )
-from core.dependencies import get_db_instance
+from core.dependencies import get_args_value, get_db_instance
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from utils.exceptions import MaxJWTOnHold
@@ -51,229 +51,256 @@ from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
-entity_router = APIRouter(
-    prefix="/entity",
-    tags=[BaseAPI.ENTITY.value],
-)
+evaluated_role: NodeType = NodeType(get_args_value().prefer_role)
 
-# # WARNING: When this was ARCHIVAL_MINER_NODE mode, use endpoints instead of using it's own SQL database.
-@entity_router.post(
-    "/register",
-    tags=[EntityAPI.REGISTRATION_API.value],
-    response_model=EntityRegisterResult,
-    summary="Registers a node from the blockchain network.",
-    description="An API endpoint that allows a node to be introduced to the blockchain network.",
-)
-async def register_entity(
-    *, credentials: EntityRegisterCredentials, db: Any = Depends(get_db_instance)
-) -> EntityRegisterResult:
-
-    # TODO: Check for the association only when the entry has been labelled as non-node.
-    # If there are no association then push that first.
-    # db.execute(Association(name="Test"))
-
-    unique_address_ref: AddressUUID = AddressUUID(f"{UUID_KEY_PREFIX}:{uuid4().hex}")
-    dict_credentials: dict[str, Any] = credentials.dict()
-
-    # - Our auth code should contain the information if that is applicable at certain role.
-    # - Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
-
-    get_auth_token_stmt = auth_codes.select().where(
-        (auth_codes.c.code == credentials.auth_code)
-        & (auth_codes.c.to_email == credentials.email)
-        & (
-            auth_codes.c.is_used == "False"
-        )  # ! Not sure why, but I have to arbitrary convert this bool to str, I guess there's no resolve.
-        & (auth_codes.c.expiration >= datetime.now())
-    )
-
-    auth_token = await db.fetch_one(get_auth_token_stmt)
-
-    if auth_token:
-        if not credentials.first_name or not credentials.last_name:
-            # Asserted that this entity must be NODE_USER.
-            del dict_credentials["first_name"], dict_credentials["last_name"]
-
-        dict_credentials["type"] = (
-            UserEntity.NODE_USER
-            if auth_token.account_type == UserEntity.NODE_USER.name
-            else UserEntity.DASHBOARD_USER
-        )  #  else SQLEntityUser.ADMIN_USER
-
-        del (
-            dict_credentials["password"],
-            dict_credentials["auth_code"],
-        )  # Remove other fields so that we can do the double starred expression for unpacking.
-
-        data = users.insert().values(
-            **dict_credentials,
-            unique_address=unique_address_ref,
-            password=hash_context(pwd=RawData(credentials.password))
-            # association=, # I'm not sure on what to do with this one, as of now.
-        )
-        dispose_auth_code = (
-            auth_codes.update()
-            .where(auth_codes.c.code == auth_token.code)
-            .values(is_used=True)
+if evaluated_role in NodeType:
+    if evaluated_role == NodeType.MASTER_NODE:
+        entity_router = APIRouter(
+            prefix="/entity",
+            tags=[BaseAPI.ENTITY.value],
         )
 
-        try:
-            await gather(db.execute(dispose_auth_code), db.execute(data))
-            create_task(
-                get_email_instance().send(
-                    content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                    subject="Welcome to Folioblocks!",
-                    to=credentials.email,
-                )
+        @entity_router.post(
+            "/register",
+            tags=[EntityAPI.REGISTRATION_API.value],
+            response_model=EntityRegisterResult,
+            summary="Registers a node from the blockchain network.",
+            description="An API endpoint that allows a node to be introduced to the blockchain network.",
+        )
+        async def register_entity(
+            *,
+            credentials: EntityRegisterCredentials,
+            db: Any = Depends(get_db_instance),
+        ) -> EntityRegisterResult:
+
+            # TODO: Check for the association only when the entry has been labelled as non-node.
+            # If there are no association then push that first.
+            # db.execute(Association(name="Test"))
+
+            unique_address_ref: AddressUUID = AddressUUID(
+                f"{UUID_KEY_PREFIX}:{uuid4().hex}"
+            )
+            dict_credentials: dict[str, Any] = credentials.dict()
+
+            # - Our auth code should contain the information if that is applicable at certain role.
+            # - Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
+
+            get_auth_token_stmt = auth_codes.select().where(
+                (auth_codes.c.code == credentials.auth_code)
+                & (auth_codes.c.to_email == credentials.email)
+                & (
+                    auth_codes.c.is_used == "False"
+                )  # ! Not sure why, but I have to arbitrary convert this bool to str, I guess there's no resolve.
+                & (auth_codes.c.expiration >= datetime.now())
             )
 
-        except IntegrityError:
+            auth_token = await db.fetch_one(get_auth_token_stmt)
+
+            if auth_token:
+                if not credentials.first_name or not credentials.last_name:
+                    # Asserted that this entity must be NODE_USER.
+                    del dict_credentials["first_name"], dict_credentials["last_name"]
+
+                dict_credentials["type"] = (
+                    UserEntity.NODE_USER
+                    if auth_token.account_type == UserEntity.NODE_USER.name
+                    else UserEntity.DASHBOARD_USER
+                )  #  else SQLEntityUser.ADMIN_USER
+
+                del (
+                    dict_credentials["password"],
+                    dict_credentials["auth_code"],
+                )  # Remove other fields so that we can do the double starred expression for unpacking.
+
+                data = users.insert().values(
+                    **dict_credentials,
+                    unique_address=unique_address_ref,
+                    password=hash_context(pwd=RawData(credentials.password))
+                    # association=, # I'm not sure on what to do with this one, as of now.
+                )
+                dispose_auth_code = (
+                    auth_codes.update()
+                    .where(auth_codes.c.code == auth_token.code)
+                    .values(is_used=True)
+                )
+
+                try:
+                    await gather(db.execute(dispose_auth_code), db.execute(data))
+                    create_task(
+                        get_email_instance().send(
+                            content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                            subject="Welcome to Folioblocks!",
+                            to=credentials.email,
+                        )
+                    )
+
+                except IntegrityError:
+                    raise HTTPException(
+                        status_code=HTTPStatus.CONFLICT,
+                        detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
+                    )
+
+                return EntityRegisterResult(
+                    user_address=unique_address_ref,
+                    username=credentials.username,
+                    date_registered=datetime.now(),
+                    role=dict_credentials["type"],
+                )
+
             raise HTTPException(
-                status_code=HTTPStatus.CONFLICT,
-                detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
+                status_code=HTTPStatus.NOT_ACCEPTABLE,
+                detail="The `auth code` you entered is not valid! Please check your input and try again. If persists, you may not be using the email that the code was sent on, or the code has expired.",
             )
 
-        return EntityRegisterResult(
-            user_address=unique_address_ref,
-            username=credentials.username,
-            date_registered=datetime.now(),
-            role=dict_credentials["type"],
+        @entity_router.post(
+            "/login",
+            tags=[EntityAPI.LOGIN_API.value],
+            response_model=EntityLoginResult,
+            summary="Logs an entity from the blockchain network.",
+            description="An API endpoint that logs an entity to the blockchain network.",
         )
+        async def login_entity(
+            *, credentials: EntityLoginCredentials, db: Any = Depends(get_db_instance)
+        ) -> EntityLoginResult:  # * We didn't use aiohttp.BasicAuth because frontend has a form, and we don't need a prompt.
 
-    raise HTTPException(
-        status_code=HTTPStatus.NOT_ACCEPTABLE,
-        detail="The `auth code` you entered is not valid! Please check your input and try again. If persists, you may not be using the email that the code was sent on, or the code has expired.",
-    )
-
-
-@entity_router.post(
-    "/login",
-    tags=[EntityAPI.LOGIN_API.value],
-    response_model=EntityLoginResult,
-    summary="Logs an entity from the blockchain network.",
-    description="An API endpoint that logs an entity to the blockchain network.",
-)
-async def login_entity(
-    *, credentials: EntityLoginCredentials, db: Any = Depends(get_db_instance)
-) -> EntityLoginResult:  # * We didn't use aiohttp.BasicAuth because frontend has a form, and we don't need a prompt.
-
-    credential_to_look = users.select().where(users.c.username == credentials.username)
-    fetched_credential_data = await db.fetch_one(credential_to_look)
-
-    # TODO: Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
-    # - This is implementable when we have the capability to lock out users due to suspicious activities.
-
-    if fetched_credential_data is not None:
-
-        # We cannot use pydantic model because we need to do some modification that violates use-case of pydantic.
-        payload: dict[str, Any] = dict(
-            zip(fetched_credential_data._fields, fetched_credential_data)
-        )
-
-        # Adjust the payload to be compatible with JWT encoding.
-        # Since there are several enum.Enum, we need to convert them to literal values for the JWT to encode it.
-
-        for each_item in payload:
-            if isinstance(type(payload[each_item]), EnumMeta):
-                payload[each_item] = payload["activity"].name
-
-        payload["date_registered"] = payload["date_registered"].isoformat()
-
-        if verify_hash_context(
-            real_pwd=RawData(credentials.password),
-            hashed_pwd=HashedData(fetched_credential_data.password),
-        ):
-            other_tokens_stmt = tokens.select().where(
-                (tokens.c.from_user == fetched_credential_data.unique_address)
-                & (tokens.c.state == TokenStatus.CREATED_FOR_USE.name)
+            credential_to_look = users.select().where(
+                users.c.username == credentials.username
             )
+            fetched_credential_data = await db.fetch_one(credential_to_look)
 
-            other_tokens = await db.fetch_all(other_tokens_stmt)
+            # TODO: Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
+            # - This is implementable when we have the capability to lock out users due to suspicious activities.
 
-            # Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
-            if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
-                raise MaxJWTOnHold(
-                    (
-                        fetched_credential_data.unique_address,
-                        CredentialContext(fetched_credential_data.username),
-                    ),
-                    len(other_tokens),
+            if fetched_credential_data is not None:
+
+                # We cannot use pydantic model because we need to do some modification that violates use-case of pydantic.
+                payload: dict[str, Any] = dict(
+                    zip(fetched_credential_data._fields, fetched_credential_data)
                 )
 
-            # If all other conditions are clear, then create the JWT token.
-            jwt_expire_at: datetime | None = None
-            if fetched_credential_data.type == NodeType.ARCHIVAL_MINER_NODE:
-                jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
+                # Adjust the payload to be compatible with JWT encoding.
+                # Since there are several enum.Enum, we need to convert them to literal values for the JWT to encode it.
 
-                payload[
-                    "expire_at"
-                ] = jwt_expire_at.isoformat()  # Make it different per request.
+                for each_item in payload:
+                    if isinstance(type(payload[each_item]), EnumMeta):
+                        payload[each_item] = payload["activity"].name
 
-            token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
+                payload["date_registered"] = payload["date_registered"].isoformat()
 
-            # Put a new token to the database then update the user as it receives the token.
-            new_token = tokens.insert().values(
-                from_user=fetched_credential_data.unique_address,
-                token=token,
-                expiration=jwt_expire_at,
+                if verify_hash_context(
+                    real_pwd=RawData(credentials.password),
+                    hashed_pwd=HashedData(fetched_credential_data.password),
+                ):
+                    other_tokens_stmt = tokens.select().where(
+                        (tokens.c.from_user == fetched_credential_data.unique_address)
+                        & (tokens.c.state == TokenStatus.CREATED_FOR_USE.name)
+                    )
+
+                    other_tokens = await db.fetch_all(other_tokens_stmt)
+
+                    # Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
+                    if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
+                        raise MaxJWTOnHold(
+                            (
+                                fetched_credential_data.unique_address,
+                                CredentialContext(fetched_credential_data.username),
+                            ),
+                            len(other_tokens),
+                        )
+
+                    # If all other conditions are clear, then create the JWT token.
+                    jwt_expire_at: datetime | None = None
+                    if fetched_credential_data.type == NodeType.ARCHIVAL_MINER_NODE:
+                        jwt_expire_at = datetime.now() + timedelta(
+                            days=JWT_DAY_EXPIRATION
+                        )
+
+                        payload[
+                            "expire_at"
+                        ] = jwt_expire_at.isoformat()  # Make it different per request.
+
+                    token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
+
+                    # Put a new token to the database then update the user as it receives the token.
+                    new_token = tokens.insert().values(
+                        from_user=fetched_credential_data.unique_address,
+                        token=token,
+                        expiration=jwt_expire_at,
+                    )
+                    logged_user = (
+                        users.update()
+                        .where(
+                            users.c.unique_address
+                            == fetched_credential_data.unique_address
+                        )
+                        .values(activity=UserActivityState.ONLINE)
+                    )
+
+                    try:
+                        await gather(db.execute(logged_user), db.execute(new_token))
+
+                        return EntityLoginResult(
+                            user_address=fetched_credential_data.unique_address,
+                            jwt_token=JWTToken(token),
+                            expiration=jwt_expire_at,
+                        )
+
+                    except IntegrityError as e:
+                        raise HTTPException(
+                            status_code=HTTPStatus.BAD_REQUEST,
+                            detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Info: {e}",
+                        )
+
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail="User is not found. Please check your credentials and try again.",
             )
-            logged_user = (
-                users.update()
-                .where(users.c.unique_address == fetched_credential_data.unique_address)
-                .values(activity=UserActivityState.ONLINE)
-            )
 
-            try:
-                await gather(db.execute(logged_user), db.execute(new_token))
-
-                return EntityLoginResult(
-                    user_address=fetched_credential_data.unique_address,
-                    jwt_token=JWTToken(token),
-                    expiration=jwt_expire_at,
-                )
-
-            except IntegrityError as e:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Info: {e}",
-                )
-
-    raise HTTPException(
-        status_code=HTTPStatus.NOT_FOUND,
-        detail="User is not found. Please check your credentials and try again.",
-    )
-
-
-@entity_router.post(
-    "/logout",
-    tags=[EntityAPI.ENTITY_GENERAL_API.value],
-    summary="Logs out the entity from the blockchain network.",
-    description="An API endpoint that logs out any entity to the blockchain network.",
-    status_code=HTTPStatus.ACCEPTED,
-)
-
-# TODO: Implement logout then we go implement the info for the header testing and then we go to the blockchain.
-async def logout_entity(
-    *,
-    x_token: JWTToken = Header(..., description="The acquired token to invalidate."),
-    db: Any = Depends(get_db_instance),
-) -> None:
-
-    fetched_token = tokens.select().where(
-        (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
-    )
-
-    if await db.fetch_one(fetched_token):
-        token_ref = (
-            tokens.update()
-            .where(tokens.c.token == x_token)
-            .values(state=TokenStatus.EXPIRED)
+        @entity_router.post(
+            "/logout",
+            tags=[EntityAPI.ENTITY_GENERAL_API.value],
+            summary="Logs out the entity from the blockchain network.",
+            description="An API endpoint that logs out any entity to the blockchain network.",
+            status_code=HTTPStatus.ACCEPTED,
         )
+        async def logout_entity(
+            *,
+            x_token: JWTToken = Header(
+                ..., description="The acquired token to invalidate."
+            ),
+            db: Any = Depends(get_db_instance),
+        ) -> None:
 
-        if await db.execute(token_ref):
-            return
+            fetched_token = tokens.select().where(
+                (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
+            )
 
-    raise HTTPException(
-        status_code=HTTPStatus.NOT_FOUND,
-        detail="The inferred token does not exist or is already labeled as expired!",
-    )
+            if await db.fetch_one(fetched_token):
+                token_ref = (
+                    tokens.update()
+                    .where(tokens.c.token == x_token)
+                    .values(state=TokenStatus.EXPIRED)
+                )
+
+                if await db.execute(token_ref):
+                    return
+
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND,
+                detail="The inferred token does not exist or is already labeled as expired!",
+            )
+
+    else:
+        """
+        # Implementation for the `ARCHIVAL_MINER_NODE`.
+
+        - The following implementation is still included under routes for the sake of location-of-implementation-wise.
+        - Technically what `ARCHIVAL_MINER_NODE` does was to call for request instead of taking those as endpoint or route.
+        ! Note that it will use HTTP client, so better track the `ARCHIVAL_MINER_NODE` instance in `pre_initialize()` and `post_initialize()` method @ main.py.
+        """
+
+        async def logout_as_miner_node() -> None:
+            return None
+
+        async def login_as_miner_node() -> None:
+            return None

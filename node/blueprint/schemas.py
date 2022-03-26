@@ -177,7 +177,7 @@ class Block(BaseModel):
 # # APIs
 
 
-class NodeInformation(BaseModel):
+class NodeConsensusInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
     is_mining: bool
@@ -185,17 +185,26 @@ class NodeInformation(BaseModel):
     last_mined_block: int
 
 
+class NodeMasterInformation(
+    BaseModel
+):  # TODO: We may remove transactions and addresses.
+    block_timer: int
+    total_blocks: int
+    total_transactions: int
+    total_addresses: int
+
+
 class Blockchain(BaseModel):
     block: list[Block] | None
     transactions: list[Transaction] | None
-    node: NodeInformation | None  # ! This will be resolved when a certain header is given.
+    node_info: NodeMasterInformation
 
 
 # # Explorer API — END
 
 # # Entity API — START
 
-# Model for the Block Details
+
 class EntityRegisterCredentials(BaseModel):
     username: CredentialContext | str = Field(
         ..., description="Unique-readable indicator of the entity.", max_length=24
@@ -215,8 +224,7 @@ class EntityRegisterCredentials(BaseModel):
         max_length=32,
     )
 
-    auth_code: str | bytes = Field(  # KeyContext is the key of this one.
-        ...,
+    auth_code: str | bytes = Field(  # typevar: KeyContext
         description="The authentication code that is used to authorize the registration.",
         min_length=AUTH_CODE_MIN_CONTEXT,
         max_length=AUTH_CODE_MAX_CONTEXT * 2,

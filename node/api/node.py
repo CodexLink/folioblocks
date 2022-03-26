@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from typing import Any
 
-from blueprint.schemas import NodeInformation
+from blueprint.schemas import NodeConsensusInformation
 from core.blockchain import get_blockchain_instance
 from core.constants import AddressUUID, BaseAPI, NodeAPI, UserEntity
 from core.dependencies import (
@@ -34,19 +34,19 @@ node_router = APIRouter(
         NodeAPI.NODE_TO_NODE_API.value,
         NodeAPI.MASTER_NODE_API.value,
     ],
-    response_model=NodeInformation,
+    response_model=NodeConsensusInformation,
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
-)
-async def get_node_info(
-    *,
-    auth: Any = Depends(
+    dependencies=[Depends(
         EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
-    ),
-) -> NodeInformation:
-    blockchain_state = get_blockchain_instance().get_blockchain_state
+    ),]
+)
+async def get_node_info() -> NodeConsensusInformation:
+    blockchain_state: dict[
+        str, Any
+    ] = get_blockchain_instance().get_blockchain_private_state
 
-    return NodeInformation(
+    return NodeConsensusInformation(
         owner=AddressUUID(
             get_identity_tokens()[0] if get_identity_tokens is not None else "0"
         ),
@@ -58,20 +58,17 @@ async def get_node_info(
 
 
 @node_router.post(
-    "/negotiate/{phase_state}",
+    "/consensus",
     tags=[
         NodeAPI.NODE_TO_NODE_API.value,
     ],
-    # response_model=NodeNegotiation,
-    summary="Initiates and finishes negotiation from mafster node to side node and vice versa.",
-    description="An API endpoint that handles the negotiations from node-to-node.",  # TODO: Add some test cases. This was intended to ensure that we really know wtf are we doing.
-)
-async def pre_post_negotiate(
-    *,
-    phase_state: str | None = None,
-    role: Any = Depends(
+    summary="Initiates and finishes negotiation from master node to side node and vice versa.",
+    description="An API endpoint that handles the negotiations from node-to-node.",
+    dependencies=[Depends(
         EnsureAuthorized(_as=UserEntity.NODE_USER)
-    ),  # TODO: # ! No TYPE!
+    )]
+)
+async def consensus_negotiate(
 ) -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     return
 

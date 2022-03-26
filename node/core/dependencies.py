@@ -53,10 +53,19 @@ from core.constants import (
 )
 from core.email import get_email_instance
 
+args_value: Namespace
 identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
+def store_args_value(args: Namespace) -> None:
+    logger.debug(f"Argument values from `Argparse` has been stored. | Context: {args}")
+    global args_value
+    args_value = args
+
+def get_args_value() -> Namespace:
+    global args_value
+    return args_value
 
 def store_db_instance(instance: Database) -> None:
     logger.debug(f"Database instance has been stored. | Context: {instance}")
@@ -65,7 +74,6 @@ def store_db_instance(instance: Database) -> None:
 
 
 def get_db_instance() -> Database:
-    logger.debug(f"Database instance has been fetched.")
     global db_instance
     return db_instance
 
@@ -79,7 +87,6 @@ def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
 
 
 def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
-    logger.debug(f"Identity tokens were fetched.")
     try:
         global identity_tokens
         return identity_tokens

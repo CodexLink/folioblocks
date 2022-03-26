@@ -6,11 +6,11 @@ from logging import Logger, getLogger
 from random import randint
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
-from typing import Any, Callable
+from typing import Any, Callable, Final
 
 from aiofiles import open as aopen
 from blueprint.models import file_signatures
-from blueprint.schemas import Block, HashableBlock, Transaction
+from blueprint.schemas import Block, HashableBlock, NodeMasterInformation, Transaction
 from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
@@ -41,6 +41,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     def __init__(
         self,
         *,
+        block_timer: int = 5,
         auth_tokens: tuple[AddressUUID, JWTToken],
         client_role: NodeType,
     ) -> None:
@@ -49,8 +50,9 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # Required since this class will be invoked no matter what the role of the client instance is.
 
         # * Required Variables for the Blockchain Operaetion.
-        self.client_role = client_role
-        self.auth_token = auth_tokens
+        self.node_role: NodeType = client_role
+        self.auth_token: tuple[AddressUUID, JWTToken] = auth_tokens
+        self.block_timer: Final[int] = block_timer
         self.consensus_timer: datetime = (
             datetime.now()
         )  # TODO: This will be computed based on the information by the MASTER_NODE node on how much is being participated, along with its computed value based on the average mining and iteration.
@@ -405,13 +407,33 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         return asizeof(block)
 
     @property
-    def get_blockchain_state(self) -> dict[str, Any]:
+    def get_blockchain_public_state(self) -> NodeMasterInformation | None:
+        if self.node_role == NodeType.MASTER_NODE:
+            return NodeMasterInformation(
+                block_timer=self.block_timer,
+                total_addresses=9999,
+                total_blocks=len(self._chain["chain"])
+                if self._chain is not None
+                else 0,
+                total_transactions=69420,
+            )
+        logger.critical(
+            f"This client node requests for the `public_state` when their role is {self.node_role}! | Expects: {NodeType.MASTER_NODE}."
+        )
+        return None
+
+    @property
+    def get_blockchain_private_state(self) -> dict[str, Any]:
         return {
             "sleeping": self.is_node_ready,
             "mining": self.is_blockchain_ready,
             "consensus_timer": self.consensus_timer,
             "last_mined_block": self.get_last_block.id if self.get_last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
         }
+
+    def get_blocks(self, limit_to: int) -> None:
+        if self._chain is not None:
+            return self._chain["chain"][len(self._chain["chain"]) - limit_to :]
 
     @ensure_blockchain_ready(
         message="Houston, we have a problem. This is illegal! There are no blocks to mine and you have parameters for this? This may be a developer-issue in regards to logic error. Though, we cannot recover from this due to some reason."

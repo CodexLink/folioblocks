@@ -16,11 +16,10 @@ if __name__ == "__main__":
         "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
     )
 
-from blueprint.schemas import (
-    Block,
-    Blockchain,
-    Transaction,
-)
+from http import HTTPStatus
+
+from blueprint.schemas import Block, Blockchain, NodeMasterInformation, Transaction
+from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     QUERY_CURRENT_INDEX_PAGE_NAME,
@@ -33,7 +32,7 @@ from core.constants import (
     ItemReturnCount,
     TxID,
 )
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, HTTPException, Query
 
 """
 # Regarding Dependency Injection on this endpoint.
@@ -54,11 +53,9 @@ explorer_router = APIRouter(
     tags=[BaseAPI.EXPLORER.value],
 )
 
-# ! Note: Most of these operations require the need of the original JSON of the master node. From there, we may be able to cache the output.
-
 
 @explorer_router.get(
-    "explorer/",
+    "/chain",
     tags=[
         ExplorerAPI.GENERAL_FETCH.value,
         ExplorerAPI.LIST_FETCH.value,
@@ -67,8 +64,24 @@ explorer_router = APIRouter(
     summary="Fetch the context of the blockchain, formatted for displaying in the web.",
     description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",
 )
-async def get_blockchain() -> None:
-    return
+async def get_blockchain() -> Blockchain:
+    blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+    blockchain_blocks: list[Block] | None = blockchain_instance.get_blocks(limit_to=5)
+
+    blockchain_state: NodeMasterInformation | None = (
+        get_blockchain_instance().get_blockchain_public_state
+    )
+
+    if blockchain_state is not None:
+        # TODO: Transaction fetching. This may be hard to do.
+        return Blockchain(
+            block=blockchain_blocks, transactions=None, node_info=blockchain_state
+        )
+
+    raise HTTPException(
+        detail="Unable to fetch information for the state of the MASTER node. This is a developer-issue, please report it to them as possible at CodexLink/folioblocks @ Github.",
+        status_code=HTTPStatus.FORBIDDEN,
+    )
 
 
 @explorer_router.get(

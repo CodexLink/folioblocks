@@ -9,7 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from logging import Logger, getLogger
-from typing import Any, Callable, Final
+from typing import Callable, Final
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
@@ -32,6 +32,21 @@ class ConversionUnequalLength(AssertionError):
             f"The left-hand item has a size of {left_size} while right-hand item has a size of {right_size}, thurs unequal.%s"
             % (f"| Additional Info: {context}" if context else "")
         )
+
+        logger.exception(message)
+        super().__init__()
+
+
+class HTTPClientFeatureUnavailable(NotImplementedError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class InsufficientCredentials(ValueError):
+    def __init__(
+        self, what_service: Callable | object, fields_require: list[str] | str
+    ) -> None:
+        message: str = f"This entity {what_service} requires the following credentals: {fields_require}."
 
         logger.exception(message)
         super().__init__()
@@ -67,18 +82,3 @@ class UnsatisfiedClassType(ValueError):
 
         logger.exception(message)
         super().__init__()
-
-
-class InsufficientCredentials(ValueError):
-    def __init__(
-        self, what_service: Callable | object, fields_require: list[str] | str
-    ) -> None:
-        message: str = f"This entity {what_service} requires the following credentals: {fields_require}."
-
-        logger.exception(message)
-        super().__init__()
-
-
-class HTTPClientFeatureUnavailable(NotImplementedError):
-    def __init__(self, *args: object) -> None:
-        super().__init__(*args)

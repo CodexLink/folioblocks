@@ -17,15 +17,12 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
-
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
 
 from api.admin import admin_router
 from api.dashboard import dashboard_router
-from api.entity import entity_router
 from api.explorer import explorer_router
-from api.node import node_router
 from blueprint.models import tokens, users
 from blueprint.schemas import Tokens
 from core.args import args_handler as ArgsHandler
@@ -50,6 +47,7 @@ from core.dependencies import (
     authenticate_node_client,
     get_db_instance,
     get_identity_tokens,
+    store_args_value,
 )
 from core.email import get_email_instance
 from core.logger import LoggerHandler
@@ -68,6 +66,16 @@ A set of initialized objects that runs before the uvicorn async context. These a
 
 """
 parsed_args: Namespace = ArgsHandler.parse_args()
+store_args_value(parsed_args)
+
+"""
+# About these late import of routers.
+@o Since these API endpoints require evaluation from the `parsed_args`, import them after storing `parsed_args` for them to access later.
+@o They need to access these so that certain endpoints will be excluded based on the `parsed_args.prefer_role`.
+! Note that their contents will change, so better understand the condition and its output as it may contain a router or just a set of functions to call for request to the `MASTER` node.
+"""
+from api.entity import entity_router
+from api.node import node_router
 
 logger_config: dict[str, Any] = LoggerHandler.init(
     base_config=uvicorn.config.LOGGING_CONFIG,  # type: ignore # ???
@@ -97,14 +105,12 @@ my time more than making other features, which I still haven't done.
 """
 api_handler: FastAPI = FastAPI()
 
-api_handler.include_router(
-    entity_router
-)  # # WARNING REGARDING ARCHIVAL_MINER_NODE NODE.
-api_handler.include_router(node_router)  # * Email can be used here.
+api_handler.include_router(node_router)
 
 if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER_NODE:
     api_handler.include_router(admin_router)
-    api_handler.include_router(dashboard_router)  # * Email can be used here.
+    api_handler.include_router(entity_router)
+    api_handler.include_router(dashboard_router)
     api_handler.include_router(explorer_router)
 
 api_handler.add_middleware(
