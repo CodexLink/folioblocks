@@ -17,14 +17,9 @@ if __name__ == "__main__":
     )
 
 from blueprint.schemas import (
-    Address,
-    Addresses,
     Block,
     Blockchain,
-    Blocks,
-    SearchContext,
     Transaction,
-    Transactions,
 )
 from core.constants import (
     QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
@@ -79,7 +74,7 @@ async def get_blockchain() -> None:
 @explorer_router.get(
     "/blocks",
     tags=[ExplorerAPI.LIST_FETCH.value, ExplorerAPI.BLOCK_FETCH.value],
-    response_model=Blocks,
+    response_model=list[Block],
     summary="Fetches all blocks from the blockchain.",
     description="An API endpoint that specifically obtains all blocks from the blockchain.",  # TODO: Search for the cached output.
 )
@@ -136,7 +131,7 @@ async def get_certain_block(
         ExplorerAPI.LIST_FETCH.value,
         ExplorerAPI.TRANSACTION_FETCH.value,
     ],
-    response_model=Transactions,
+    response_model=list[Transaction],
     summary="Fetch all transactions for all blocks.",
     description="An API endpoint that returns all transactions that recently entered in the blockchain.",
 )
@@ -178,7 +173,7 @@ async def get_particular_transaction(*, tx_id: TxID) -> None:
         ExplorerAPI.LIST_FETCH.value,
         ExplorerAPI.ADDRESS_FETCH.value,
     ],
-    response_model=Addresses,
+    # response_model=Addresses,
     summary="Fetch all addresses that has been recorded in blockchain.",
     description="An API endpoint that returns all addresses that is recorded in blockchain.",
 )
@@ -206,7 +201,7 @@ async def get_addresses(
         ExplorerAPI.SPECIFIC_FETCH.value,
         ExplorerAPI.ADDRESS_FETCH.value,
     ],
-    response_model=Address,
+    # response_model=Address,
     summary="Fetch a specific address recorded in blockchain.",
     description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
@@ -232,7 +227,7 @@ async def get_particular_addresses(
 @explorer_router.get(
     "/search",
     tags=[ExplorerAPI.GENERAL_FETCH.value],
-    response_model=SearchContext,
+    # response_model=SearchContext,
     summary="Search an entity (block, transaction, address) on the blockchain.",
     description="An API endpoint that attempts to search for an entity provided by input. This endpoint enforce length restrictions, as well as returns a singleton data as a redirection link.",
 )

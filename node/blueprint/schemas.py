@@ -180,9 +180,9 @@ class Block(BaseModel):
 class NodeInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
+    is_mining: bool
     consensus_timer: datetime
-    last_mined_block: Block
-    # ! Needs more information.
+    last_mined_block: int
 
 
 class Blockchain(BaseModel):
@@ -281,7 +281,7 @@ class Tokens(BaseModel):
     )
     token: JWTToken = Field(..., description="The token generated from this row.")
     state: TokenStatus = Field(..., description="The current status of this token.")
-    expiration: datetime = Field(
+    expiration: datetime | None = Field(
         ...,
         description="The date and time from where this token will expire.",
     )
@@ -332,13 +332,29 @@ class Users(BaseModel):
 # # HTTP Methods — START
 # * Note that this class is not used in the API system! Meaning they are used internally.
 class HTTPRequestPayload(BaseModel):
-    url: str
-    data: RequestPayloadContext | None
-    headers: RequestPayloadContext | None
-    method: HTTPQueueMethods
-    task_type: HTTPQueueTaskType
-    await_result_immediate: bool
-    name: str | None
+    url: str = Field(
+        ...,
+        description="The URL to send a request at, and from where it will receive a response.",
+    )
+    data: RequestPayloadContext | None = Field(
+        ..., description="The context or the payload to send at the url."
+    )
+    headers: RequestPayloadContext | None = Field(
+        ...,
+        description="It contains properties that may modify the output of the response or just an identifier for the request.",
+    )
+    method: HTTPQueueMethods = Field(
+        ...,
+        description="The method from which classifies the request from fetcting a data to sending a data and etc.",
+    )
+    await_result_immediate: bool = Field(
+        ...,
+        description="An identifier that tells if this request requires an immediate response from the origin.",
+    )
+    name: str | None = Field(
+        ...,
+        description="The name of this HTTP request, required whenever `await_result_immediate` is set to `True`.",
+    )
 
 
 # # HTTP Methods — END

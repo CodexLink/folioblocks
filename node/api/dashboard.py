@@ -9,21 +9,12 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from typing import Any
 from blueprint.schemas import (
-    Applicant,
-    Applicants,
     DashboardContext,
-    Issuance,
-    Issuances,
-    IssueToStudentIn,
-    IssueToStudentOut,
-    NewStudentIn,
     NewStudentOut,
-    Request,
-    Requests,
     Student,
     Students,
-    UserLogoutIn,
 )
 from core.constants import (
     QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
@@ -84,7 +75,7 @@ async def get_applicants(
 @dashboard_router.get(
     "/applicant/{applicant_id}",
     tags=[DashboardAPI.EMPLOYER_API.value],
-    response_model=Applicant,
+    # response_model=Applicant,
     summary="Obtain a certain individual.",
     description="An API-exclusive to employers that obtains a particular individual, which displays their information.",
 )
@@ -112,7 +103,7 @@ async def get_all_requests() -> None:  # TODO.
         DashboardAPI.EMPLOYER_API.value,
         DashboardAPI.INSTITUTION_API.value,
     ],
-    response_model=Request,
+    # response_model=Request,
     summary="Obtain a particular request. Context-protected based on the association of the user.",
     description="An API endpoint that returns a particular requests that is associated from this user.",
 )
@@ -136,7 +127,7 @@ async def request_document_view(
 @dashboard_router.get(
     "/issuances",
     tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=Issuances,
+    # response_model=Issuances,
     summary="Get a list of issuances from the students.",
     description="An API endpoint that returns of a list of issuances that was invoked from the students.",
 )
@@ -161,7 +152,7 @@ async def get_issuances(
 @dashboard_router.get(
     "/issuance/{issue_id}",
     tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=Issuance,
+    # response_model=Issuance,
     summary="Obtain a particular issued document.",
     description="An API endpoint that obtains a specified document based on its ID.",
 )
@@ -172,11 +163,11 @@ async def get_issued_docs(*, issue_id: int) -> None:
 @dashboard_router.post(
     "/issue",
     tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=IssueToStudentOut,
+    # response_model=IssueToStudentOut,
     summary="Submit a document to mint from the blockchain.",
     description="An API endpoint that allows institutions to submit new documents in the blockchain. Note that minting them requires user (address) reference.",
 )
-async def mint_document(*, doc_context: IssueToStudentIn) -> None:
+async def mint_document(*, doc_context: Any) -> None:
     return
 
 
@@ -224,5 +215,5 @@ async def get_student(*, student_addr: AddressUUID) -> None:
     summary="Create a student information for the blockchain to recognize.",
     description="An API endpoint that creates a student account on the blockchain.",
 )
-async def create_student(*, student_context: NewStudentIn) -> None:
+async def create_student(*, student_context: Any) -> None:
     return

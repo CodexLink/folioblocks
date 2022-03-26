@@ -1,0 +1,68 @@
+// - schemas.jsonc
+// @o This jsonc file contains the structure that I want to do for the API repsonse and inputs, which will be converted to a Pydantic model later on, see schemas.py for the exact implementation.
+{
+  "schemas": [
+    // - TRANSACTIONS SCHEMA.
+    {
+      "tx_hash": "0xCCCCCCCC", // Automatically computed with tx_hash as None.
+      "action": "", // Resolved to TransactionActions
+      "status": "", // Resolved to TransactionStatus
+      "content": {
+        // Resolves to TransactionContent
+        "category": "", // Resolves to TransactionCategory.
+        "type": "", // Resolves to TransactionContentType.
+        "operation": "", // Resolves to TransactionContentOperation.
+        "payload": {} // The following field should change.
+      },
+      "from": "", // This is resolved only when action is P2P.
+      "to": "", // This is resolved only when action is P2P.
+      "prev_hash": "", // The previous transaction hash that reflects from this hash.
+      "timestamp": "" // Resolved to datetime.
+    },
+    // ! These payloads will be overwritten whenever
+    // - EMPLOYMENT | PAYLOAD SCHEMA.
+    {
+      // We don't know how to search for them. We can basically bind their address in the MASTER's database.
+      "employee": {
+        "identity": "", // As address. Should be assert by to on tx_hash section.
+        "company": "", // We can basically refer to the ID of association from the table database. Should be resolved when inserted the company.
+        "role": "", // We cannot create a custom enum for this.
+        "status": "", // Resolves to EmploymentStatus.enum // ACTIVE | TERMINATED | RESIGNED | INACTIVE.
+        "activities": {
+          "type": "", // Resolves to PROJECTS | ACTIVITIES | PROMOTION.
+          "name": "",
+          "description": "",
+          "duration_start": "",
+          "duration_end": "",
+          "document_rep": "", // This should contain the hash of the original file, which should be AES'd.
+          "role": "",
+          "validated_by": "" // An address. Should be assert `from` on tx_hash_section.
+        }
+      }
+    },
+    // - SCHOOL | ORGANIZATION | PAYLOAD SCHEMA.
+    {
+      "school | organization": {
+        "identity": "", // As address. Should be assert by to on tx_hash section.
+        "name": "", // We can basically refer to the ID of association from the table database. Should be resolved when inserted the company.
+        "year": "", // IF APPLICABLE | We cannot create a custom enum for this.
+        "course": "", // IF APPLICABLE.
+        "status": "", // Resolves to EmploymentStatus.enum // ACTIVE | TERMINATED | RESIGNED | INACTIVE.
+        "activities": {
+          "type": "", // Resolves to AWARDS | RECOGNITION | PROJECTS
+          "name": "",
+          "description": "",
+          "duration_start": "",
+          "duration_end": "",
+          "document_rep": "", // This should contain the hash of the original file, which should be AES'd.
+          "validated_by": "" // An address. Should be assert `from` on tx_hash_section.
+        },
+        "other_info": {
+          "title": "",
+          "description": "",
+          "inserted_by": ""
+        }
+      }
+    }
+  ]
+}

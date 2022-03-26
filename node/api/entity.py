@@ -277,12 +277,3 @@ async def logout_entity(
         status_code=HTTPStatus.NOT_FOUND,
         detail="The inferred token does not exist or is already labeled as expired!",
     )
-
-
-@entity_router.get(
-    "/info",
-    summary="Obtains the information of the entity.",
-    description="An API endpoint that obtains information of the user. This is useful when browsed in the website.",
-)
-async def get_entity() -> None:  # * This requires custom pydantic model.
-    raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Not yet implemented.")

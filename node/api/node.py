@@ -11,12 +11,15 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from typing import Any
 
-from blueprint.schemas import NodeInfoContext, NodeNegotiation, NodeNegotiationProcess
-from core.constants import BaseAPI, NodeAPI
-from core.dependencies import EnsureAuthorized, ensure_past_negotiations
+from blueprint.schemas import NodeInformation
+from core.blockchain import get_blockchain_instance
+from core.constants import AddressUUID, BaseAPI, NodeAPI, UserEntity
+from core.dependencies import (
+    EnsureAuthorized,
+    ensure_past_negotiations,
+    get_identity_tokens,
+)
 from fastapi import APIRouter, Depends
-
-from core.constants import UserEntity
 
 node_router = APIRouter(
     prefix="/node",
@@ -24,7 +27,6 @@ node_router = APIRouter(
 )
 
 
-# TODO: ADD A HEADER WHERE WE VERIFY THE REQUESTOR, IT MUST BE A MASTER_NODE NODE. ALSO ADD DATABASE FROM THIS IF POSSIBLE.
 @node_router.get(
     "/info",
     tags=[
@@ -32,18 +34,27 @@ node_router = APIRouter(
         NodeAPI.NODE_TO_NODE_API.value,
         NodeAPI.MASTER_NODE_API.value,
     ],
-    response_model=NodeInfoContext,
+    response_model=NodeInformation,
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
 )
-async def get_entity_info(
+async def get_node_info(
     *,
     auth: Any = Depends(
         EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
     ),
-) -> None:  # Includes, time_estimates, mining_status, consensus, config. # TODO, accept multiple contents.
+) -> NodeInformation:
+    blockchain_state = get_blockchain_instance().get_blockchain_state
 
-    return
+    return NodeInformation(
+        owner=AddressUUID(
+            get_identity_tokens()[0] if get_identity_tokens is not None else "0"
+        ),
+        is_sleeping=blockchain_state["sleeping"],
+        is_mining=blockchain_state["mining"],
+        consensus_timer=blockchain_state["consensus_timer"],
+        last_mined_block=blockchain_state["last_mined_block"],
+    )
 
 
 @node_router.post(
@@ -51,7 +62,7 @@ async def get_entity_info(
     tags=[
         NodeAPI.NODE_TO_NODE_API.value,
     ],
-    response_model=NodeNegotiation,
+    # response_model=NodeNegotiation,
     summary="Initiates and finishes negotiation from mafster node to side node and vice versa.",
     description="An API endpoint that handles the negotiations from node-to-node.",  # TODO: Add some test cases. This was intended to ensure that we really know wtf are we doing.
 )
@@ -68,7 +79,7 @@ async def pre_post_negotiate(
 @node_router.put(
     "/negotiate/{negotiation_id}",  # Aside from client identification, we should have an identifier.
     tags=[NodeAPI.NODE_TO_NODE_API.value],
-    response_model=NodeNegotiationProcess,
+    # response_model=NodeNegotiationProcess,
     summary="Execute and acknowledge payloads given from this endpoint.",
     description="An exclusive-situational API endpoint that allows nodes to communicate during process stage of the negotiation.",
 )
@@ -77,6 +88,3 @@ async def process_negotiate(
     deps: Any = Depends(ensure_past_negotiations),
 ) -> None:  # Actions should be updating data for the master node to communicate.
     return
-
-
-# TODO: Add a consensus endpoint or a functionality from the negotiation!!!

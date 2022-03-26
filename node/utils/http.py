@@ -52,7 +52,6 @@ class HTTPClient:
         *,
         url: URLAddress,
         method: HTTPQueueMethods,
-        task_type: HTTPQueueTaskType = HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST,
         data: RequestPayloadContext | None = None,
         headers: RequestPayloadContext | None = None,
         await_result_immediate: bool = True,
@@ -64,7 +63,6 @@ class HTTPClient:
         Args:
                                         - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
                                         - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
-                                        - task_type (HTTPQueueTaskType, optional): An enum that contains a set of tasks to classify the request. Defaults to HTTPQueueTaskType.UNSPECIFIED_HTTP_REQUEST.
                                         - await_result_immediate (bool, optional): Should this request run under asyncio.create_task() or await them? By doing `await_result_immediate`, it blocks other requests at the LIFO list container as it was prioritized to run first. But you get to have a data to return. Defaults to False.
                                         - name (str, optional): The name of the request. This is required whenever the request is not `await_result_immediate`. Use get_finished_task` to fetch the request.
 
@@ -88,7 +86,6 @@ class HTTPClient:
                     data=data,
                     headers=headers,
                     method=method,
-                    task_type=task_type,
                     await_result_immediate=await_result_immediate,
                     name=name,
                 )
@@ -130,7 +127,6 @@ class HTTPClient:
             data=data,
             headers=headers,
             method=method,
-            task_type=task_type,
             await_result_immediate=await_result_immediate,
             name=name,
         )
