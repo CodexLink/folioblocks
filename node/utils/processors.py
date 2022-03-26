@@ -87,7 +87,7 @@ async def crypt_file(
 
     try:
         logger.debug(
-            f"{'Async:' if enable_async else ''}{'Decrypting' if process == CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
+            f"{'Async: ' if enable_async else ''}{'Decrypting' if process == CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
         )
         if process == CryptFileAction.TO_DECRYPT:
             if key is None:

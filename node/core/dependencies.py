@@ -148,8 +148,10 @@ async def authenticate_node_client(
 
             # ! Assumes email service is running, so unhandled it for now because complexity rises.
             except IntegrityError as e:
-                logger.critical(
-                    f"Your input matches one of the records for `{NodeType.MASTER_NODE.name} registration.` Are you attempting to restart instance? Please delete the generated files and try again."
+                from utils.processors import unconventional_terminate
+
+                unconventional_terminate(
+                    message=f"Your input matches one of the records for `{NodeType.MASTER_NODE.name} registration.` Are you attempting to restart instance? Please delete the generated files and try again.",
                 )
 
             logger.info(

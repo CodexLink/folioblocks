@@ -103,15 +103,22 @@ BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"
 
-# # Constants, Auth: SMTP Email
-DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
-DEFAULT_SMTP_PORT: Final[int] = 465
-DEFAULT_SMTP_CONNECT_MAX_RETRIES: Final[int] = 10
+# # Constants, FastAPI Configs
+
+CORS_ALLOW_CREDENTIALS: Final[bool] = True
+CORS_ALLOWED_HEADERS: Final[list[str]] = ["*"]
+CORS_ALLOWED_METHODS: Final[list[str]] = ["DELETE", "GET", "POST", "PUT"]
+CORS_ALLOWED_ORIGINS: Final[list[str]] = ["*"]
 
 # # Constants, General
 ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 ASGI_APP_TARGET: Union[ASGIApplication, str] = "__main__:api_handler"
+
+# # Constants, Auth: SMTP Email
+DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
+DEFAULT_SMTP_PORT: Final[int] = 465
+DEFAULT_SMTP_CONNECT_MAX_RETRIES: Final[int] = 10
 
 # # Constants, Resources
 DATABASE_NAME: Final[str] = "folioblocks-node.db"

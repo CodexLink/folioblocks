@@ -139,7 +139,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             block_context["contents"] = frozendict(block_context["contents"])
 
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            logger.info(f"{block_context['id']} | {self.cached_block_id }")
             if block_context["id"] != self.cached_block_id:
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
@@ -268,11 +267,11 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 # @o Check backward reference from the current block to recent block.
                 if dict_idx:  # ! Mind the zero-based list access.
                     if (
-                        dict_data["contents"]["prev_hash_block"]
+                        dict_data["prev_hash_block"]
                         != context["chain"][dict_idx - 1]["hash_block"]
                     ):
                         logger.critical(
-                            f"Block #{dict_data['id']}'s backward reference to Block #{dict_data['id'] - 1} is invalid! | Expects (from Current Block): {dict_data['hash_block']}, got {context['chain'][dict_idx - 1]['contents']['prev_hash_block']} instead."
+                            f"Block #{dict_data['id']}'s backward reference to Block #{dict_data['id'] - 1} is invalid! | Expects (from Current Block): {dict_data['hash_block']}, got {context['chain'][dict_idx - 1]['prev_hash_block']} instead."
                         )
 
                         logger.critical(
@@ -343,22 +342,23 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
 
-        if self.get_last_block.id >= self.cached_block_id:
-            logger.critical(
-                f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {self.get_last_block.id} | Currently Cached: {self.cached_block_id}"
-            )
-            return None
+        if self.get_last_block is not None:
+            if self.get_last_block.id >= self.cached_block_id:
+                logger.critical(
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {self.get_last_block.id} | Currently Cached: {self.cached_block_id}"
+                )
+                return None
+        else:
+            logger.warning(f"This new block wil be the first block from this blockchain.")
 
         _block: Block = Block(
             id=self.cached_block_id,
             block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
+            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if self.get_last_block is None else HashUUID(self.get_last_block.hash_block),  # type: ignore
             contents=HashableBlock(
                 nonce=None,  # ! Unsolvable, these are determined during the process of mining.
                 validator=get_identity_tokens()[0],
-                prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH)
-                if self.get_last_block is None
-                else HashUUID(self.get_last_block.hash_block),  # type: ignore
                 transactions=transactions,
                 timestamp=datetime.now(),
             ),
@@ -491,7 +491,7 @@ def get_blockchain_instance(
     # If there are no resulting objective, then we can log this as an error, otherwise return the object.
     if blockchain_service is None:
         logger.critical(
-            "Unresolved role from this instance. Please specify your role. This may be a developer issue, please report this as possible or try again."
+            "There are no blockchain instance."
         )
 
     if token_ref is None:

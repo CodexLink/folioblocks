@@ -10,15 +10,16 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 import logging
 from argparse import Namespace
-from asyncio import create_task, get_event_loop, sleep
+from asyncio import create_task, sleep
 from datetime import datetime
 from logging.config import dictConfig
 from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
+
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
-from sqlalchemy import func, select
 
 from api.admin import admin_router
 from api.dashboard import dashboard_router
@@ -32,6 +33,10 @@ from core.constants import (
     ASGI_APP_TARGET,
     ASYNC_TARGET_LOOP,
     AUTH_ENV_FILE_NAME,
+    CORS_ALLOW_CREDENTIALS,
+    CORS_ALLOWED_HEADERS,
+    CORS_ALLOWED_METHODS,
+    CORS_ALLOWED_ORIGINS,
     HTTPQueueMethods,
     JWTToken,
     LoggerLevelCoverage,
@@ -86,7 +91,7 @@ Several roles prohibits the use of other functionalities that is designed for th
 
 * About design:
 FastAPI doesn't seem to support class-based views by nature. Even when fastapi-utils provides that capability, I dont trust its functionality anymore due to the nature of FastAPI being too far than fastapi-utils can keep up.
-Meaning, that tool may be outdated. Hacking it like what I did in `CodexLink/discord-activity-badge` would take
+Meaning, that tool may be outdated.` Hacking it like what I did in `CodexLink/discord-activity-badge` would take
 my time more than making other features, which I still haven't done.
 
 """
@@ -101,6 +106,14 @@ if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER_NODE:
     api_handler.include_router(admin_router)
     api_handler.include_router(dashboard_router)  # * Email can be used here.
     api_handler.include_router(explorer_router)
+
+api_handler.add_middleware(
+    CORSMiddleware,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
+    allow_headers=CORS_ALLOWED_HEADERS,
+    allow_methods=CORS_ALLOWED_METHODS,
+    allow_origins=CORS_ALLOWED_ORIGINS,
+)
 
 
 @api_handler.on_event("startup")

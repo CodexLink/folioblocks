@@ -117,7 +117,7 @@ args_handler.add_argument(
 args_handler.add_argument(
     "-pr",
     "--prefer-role",
-    choices=locals()["_injected_nr_choices"],
+    choices=locals()["_injected_nt_choices"],
     help=FOLIOBLOCKS_HELP[ArgumentParameter("PREFER_ROLE")],
     required=True,
 )

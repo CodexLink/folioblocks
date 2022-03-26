@@ -9,7 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from datetime import datetime
-from typing import Any, List
+from typing import Any
 
 from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
@@ -197,23 +197,23 @@ class Transaction(BaseModel):
 class HashableBlock(BaseModel):
     nonce: int | None
     validator: AddressUUID
-    prev_hash_block: HashUUID
     transactions: list[Transaction] | None
     timestamp: datetime
 
 
+# @o Variables that is None is determined first before doing something.
 class Block(BaseModel):
-    # Note: Variables that is None is determined first before doing something.
     id: int
     block_size: int | None
-    hash_block: HashUUID | None
     contents: HashableBlock
+    hash_block: HashUUID | None
+    prev_hash_block: HashUUID
 
 
 # This was dissected.
 class Blockchain(BaseModel):
-    block: List[Block]
-    transactions: List[Transaction]
+    block: list[Block]
+    transactions: list[Transaction]
     status_reports: Any  # TODO: We have to return more than this, to provide insights about the current master node.
 
 
@@ -233,7 +233,7 @@ class Addresses(BaseModel):
 class Address(BaseModel):
     id: int
     address: AddressUUID
-    transactions: List[Transaction]
+    transactions: list[Transaction]
     role: str
 
 
