@@ -37,7 +37,11 @@ node_router = APIRouter(
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
     dependencies=[
-        Depends(EnsureAuthorized(_as=[UserEntity.NODE_USER])),
+        Depends(
+            EnsureAuthorized(
+                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
+            )
+        ),
     ],
 )
 async def get_node_info() -> NodeConsensusInformation:
@@ -78,7 +82,13 @@ async def get_node_info() -> NodeConsensusInformation:
     ],
     summary="Initiates and finishes negotiation for the consensus mechanism named as 'Proof-of-Elapsed-Time.'",
     description="A special API endpoint that is called multiple times for the consensus mechanism from initial to final negotiation.",
-    dependencies=[Depends(EnsureAuthorized(_as=UserEntity.NODE_USER))],
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
+            )
+        )
+    ],
 )
 async def consensus_negotiate() -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     return

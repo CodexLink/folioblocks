@@ -42,6 +42,7 @@ from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
     AUTH_ENV_FILE_NAME,
+    MASTER_NODE_IP_PORT,
     AddressUUID,
     CredentialContext,
     HTTPQueueMethods,
@@ -58,14 +59,17 @@ identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
+
 def store_args_value(args: Namespace) -> None:
     logger.debug(f"Argument values from `Argparse` has been stored. | Context: {args}")
     global args_value
     args_value = args
 
+
 def get_args_value() -> Namespace:
     global args_value
     return args_value
+
 
 def store_db_instance(instance: Database) -> None:
     logger.debug(f"Database instance has been stored. | Context: {instance}")
@@ -104,56 +108,92 @@ def generate_auth_token() -> str:
     return generated
 
 
-# ! Implement blacklisted users!
+# TODO Implement blacklisted users!
 async def authenticate_node_client(
     *,
     role: NodeType,
     instances: tuple[Namespace, Database],
-) -> None:  # Create a pydantic model from this.
+) -> None:
 
-    # Inserted from this context due to circular import.
-    from utils.processors import ensure_input_prompt
+    from utils.processors import (
+        ensure_input_prompt,
+    )  # ! Imported on function due to circular dependency.
 
     user_credentials: tuple[CredentialContext, CredentialContext] | None = None
 
     logger.debug("Attempting to authenticate ...")
 
     if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
-        logger.debug(
-            "Environment file doesn't contain the values for 'NODE_USERNAME' and/or 'NODE_PWD' or is entirely missing. Assuming first-time instance."
-        )
-
-        logger.info(
-            f"The system will create an `auth_token` for you to register yourself as a {NodeType.MASTER_NODE.name}. Please enter your email address."
+        logger.warning(
+            "Environment file doesn't contain the values for `NODE_USERNAME` and/or `NODE_PWD` or is entirely missing. Assuming first-time instance."
         )
 
         while True:
             try:
-                email_address: EmailStr = await ensure_input_prompt(
-                    input_context="Email Address",
-                    hide_fields=False,
-                    generalized_context="email address",
-                    additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
+                logger.info(
+                    f"Detected as {role.name} | {f'To start, the system will create an `auth_token` for you to register yourself.' if role == NodeType.MASTER_NODE else f'Since this a new instance, you need credentials for you to enter in blockchain.'} | Please enter your email address."
                 )
 
-                generated_token: str = generate_auth_token()
+                if role == NodeType.MASTER_NODE:
+                    email_address: EmailStr = await ensure_input_prompt(
+                        input_context="Email Address",
+                        hide_fields=False,
+                        generalized_context="email address",
+                        additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
+                    )
 
-                insert_generated_token_stmt = auth_codes.insert().values(
-                    code=generated_token,
-                    account_type=UserEntity.NODE_USER,
-                    to_email=email_address,
-                    expiration=datetime.now() + timedelta(days=2),
-                )
+                    # * This functionality is only available on `MASTER` in local / self instance.
+                    generated_token: str = generate_auth_token()
+                    insert_generated_token_stmt = auth_codes.insert().values(
+                        code=generated_token,
+                        account_type=UserEntity.MASTER_NODE_USER,
+                        to_email=email_address,
+                        expiration=datetime.now() + timedelta(days=2),
+                    )
 
-                await instances[1].execute(insert_generated_token_stmt)
+                    await instances[1].execute(insert_generated_token_stmt)
 
-                await get_email_instance().send(
-                    content=f"<html><body><h1>Register Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                    subject="Register Auth Code for Registration @ Folioblocks",
-                    to=email_address,
-                )
+                    await get_email_instance().send(
+                        content=f"<html><body><h1>Register Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                        subject="Register Auth Code for Registration @ Folioblocks",
+                        to=email_address,
+                    )
+                else:  # @o Resolves to NodeType.ARCHIVAL_MINER_NODE.
+                    inputted_credentials: list[Any] = await ensure_input_prompt(
+                        input_context=[
+                            "Personal e-mail representing this node",
+                            "Node username",
+                            "Node password",  # * I cannot implement password-checking because I have no time to do it.
+                        ],
+                        hide_fields=[False, False, True],
+                        generalized_context="credentials",
+                        additional_context="You will have to ensure it this time to avoid potential conflicts from the startup!",
+                        enable_async=True,
+                    )
 
-            # ! Assumes email service is running, so unhandled it for now because complexity rises.
+                    register_node: Any = await get_http_client_instance().enqueue_request(
+                        url=URLAddress(
+                            f"http://{instances[0].host}:{instances[0].port}/entity/register"
+                        ),
+                        method=HTTPQueueMethods.POST,
+                        data={
+                            "email": inputted_credentials[0],
+                            "username": inputted_credentials[1],
+                            "password": inputted_credentials[2],
+                        },
+                    )
+
+                    if not register_node.ok:
+                        logger.error(
+                            f"There seems to be an error during request. Please try again | Info: {register_node.json()}"
+                        )
+                        continue
+
+                    logger.info(
+                        "Registration seems to be successful! Please re-enter your username and password to continue."
+                    )
+
+            # ! Assumeing that the email service is running, I have to step away from this since complexity rises if I continue on improving it.
             except IntegrityError as e:
                 from utils.processors import unconventional_terminate
 
@@ -180,7 +220,7 @@ async def authenticate_node_client(
         try:
             login_req: Any = await get_http_client_instance().enqueue_request(
                 url=URLAddress(
-                    f"http://{instances[0].host}:{instances[0].port}/entity/login"
+                    f"http://{instances[0].host}:{get_args_value().port}/entity/login"
                 ),
                 method=HTTPQueueMethods.POST,
                 data={

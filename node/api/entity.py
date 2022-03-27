@@ -102,8 +102,10 @@ if evaluated_role in NodeType:
                     del dict_credentials["first_name"], dict_credentials["last_name"]
 
                 dict_credentials["type"] = (
-                    UserEntity.NODE_USER
-                    if auth_token.account_type == UserEntity.NODE_USER.name
+                    auth_token[
+                        3
+                    ]  # @o 3th index represents the account type from the `auth_token` metadata table.
+                    if auth_token.account_type in UserEntity
                     else UserEntity.DASHBOARD_USER
                 )  #  else SQLEntityUser.ADMIN_USER
 
@@ -241,6 +243,7 @@ if evaluated_role in NodeType:
 
                         return EntityLoginResult(
                             user_address=fetched_credential_data.unique_address,
+                            user_role=fetched_credential_data.type,
                             jwt_token=JWTToken(token),
                             expiration=jwt_expire_at,
                         )

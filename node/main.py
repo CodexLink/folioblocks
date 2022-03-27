@@ -13,7 +13,6 @@ from argparse import Namespace
 from asyncio import create_task, sleep, wait
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
-from http.client import responses
 from logging.config import dictConfig
 from socket import AF_INET, SOCK_STREAM, error, socket
 from typing import Any
@@ -155,7 +154,7 @@ async def pre_initialize() -> None:
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
     if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
         for each_port_in_host in range(0, MASTER_NODE_IP_PORT):
-            response, _ = await wait(
+            _, response = await wait(
                 {
                     create_task(
                         get_http_client_instance().enqueue_request(
@@ -295,23 +294,23 @@ if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         for each_tokens in tokens_available:
             token = Tokens.parse_obj(each_tokens)
 
-            # TODO
-            logger.debug(
-                f"@ Token {token.id} | JWT Invalidation Condition (of {current_datetime.isoformat()} vs. {token.expiration.isoformat()}) | '(Should be) >' {current_datetime > token.expiration} | '(Should be) ==' {current_datetime == token.expiration} | `<' {current_datetime < token.expiration}"
-            )
+            if token.expiration is not None:
+                logger.debug(
+                    f"@ Token {token.id} | JWT Invalidation Condition (of {current_datetime.isoformat()} vs. {token.expiration.isoformat()}) | '(Should be) >' {current_datetime > token.expiration} | '(Should be) ==' {current_datetime == token.expiration} | `<' {current_datetime < token.expiration}"
+                )
 
-            if current_datetime >= token.expiration:
-                token_to_del = (
-                    tokens.update()
-                    .where(tokens.c.expiration == token.expiration)
-                    .values(state=TokenStatus.EXPIRED)
-                )  ## Change the state of the token when past through expiration.
+                if current_datetime >= token.expiration:
+                    token_to_del = (
+                        tokens.update()
+                        .where(tokens.c.expiration == token.expiration)
+                        .values(state=TokenStatus.EXPIRED)
+                    )  ## Change the state of the token when past through expiration.
 
-                await get_db_instance().execute(token_to_del)
+                    await get_db_instance().execute(token_to_del)
 
-                logger.info(
-                    f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."
-                )  ## Character beyond 25th will be truncated. This is just a pure random though.
+                    logger.info(
+                        f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."
+                    )  ## Character beyond 25th will be truncated. This is just a pure random though.
 
 
 # * We cannot encapsulate the whole (main.py) module as there's a subprocess usage wherein there's a custom __main__ that will run this script. Doing so may cause recursion.

@@ -278,14 +278,14 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                         )
 
                         logger.critical(
-                            "Due to potential fraudalent local blockchain file, please wait for the MASTER_NODE node to acknowledge your replacement of blockchain file."
+                            "Due to potential fraudalent local blockchain file, please wait for the `MASTER_NODE` node to acknowledge your replacement of blockchain file."
                         )
                         self.blockchain_ready = False
 
                         # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
                     logger.info(
-                        f"Block #{dict_idx} backward reference to Block# {dict_idx - 1} is valid!"
+                        f"Block #{dict_data['id']} backward reference to Block# {dict_data['id'] - 1} is valid!"
                     )
                 else:
                     logger.debug(

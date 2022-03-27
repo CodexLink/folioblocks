@@ -253,7 +253,8 @@ class UserActivityState(Enum):
 
 
 class UserEntity(Enum):
-    NODE_USER = "Node User"
+    MASTER_NODE_USER = "Master Node User"
+    ARCHIVAL_MINER_NODE_USER = "Archival Miner Node User"
     DASHBOARD_USER = "Dashboard User"
     ADMIN_USER = "Administrator"
 

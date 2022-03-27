@@ -267,6 +267,10 @@ class EntityLoginResult(BaseModel):
         description="The unique identifier of the user in the blockchain space. This can be used to reference yourself for every transaction done in the network.",
         max_length=UUID_KEY_LENGTH,
     )
+    user_role: UserEntity = Field(
+        ...,
+        description="The role of the node, which is technically returned to the client for further validation.",
+    )
     jwt_token: JWTToken = Field(
         ...,
         description="The JWT token for authenticating your session in the blockchain network. Invoke this in the header to authorize yourself.",

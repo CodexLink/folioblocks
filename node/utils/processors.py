@@ -22,7 +22,7 @@ from pathlib import Path
 from secrets import token_hex
 from signal import CTRL_C_EVENT
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any, Callable
+from typing import Any, Final
 import sys
 from aioconsole import ainput
 from aiofiles import open as aopen
@@ -55,6 +55,7 @@ from fastapi import Depends
 from passlib.context import CryptContext
 from sqlalchemy import create_engine, select
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
+from email_validator import validate_email, EmailNotValidError
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -366,7 +367,7 @@ async def initialize_resources_and_return_db_context(
                 )
 
             credentials: list[CredentialContext] = await ensure_input_prompt(
-                input_context=["Email Address", "Email Password"],
+                input_context=["Email Address", "Password"],
                 hide_fields=[False, True],
                 generalized_context="Server email credentials",
                 additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
@@ -514,8 +515,6 @@ async def ensure_input_prompt(
     additional_context: str | None = None,
     enable_async: bool = False,
     delimiter: str = ":",
-    validator: Callable | None = None,
-    validate_field: list[str] | str | None = None,
 ) -> Any:
 
     # * Assert in list form for all readable type.
@@ -525,7 +524,6 @@ async def ensure_input_prompt(
     assert_rvalue: int = len(
         hide_fields if isinstance(input_context, list) else [hide_fields]  # type: ignore # ??? | Resolve the `Sized` incompatibility with bool.
     )
-
     assert (
         assert_lvalue == assert_rvalue
     ), f"The `input_context` (length of {assert_lvalue}) and the `hide_fields` (length of {assert_rvalue}) were unequal! This is a developer issue, please report as possible."
@@ -534,6 +532,10 @@ async def ensure_input_prompt(
         input_s: list[str] | str = (
             "" or []
         )  # TODO: Not a prio but have to fix its typing later.
+
+        # TODO
+        # # Implementation-wise, I understand that the code below is too redundant, but I can't fix it as of now.
+
         if isinstance(input_context, list) and isinstance(hide_fields, list):
             for field_idx, each_context_to_input in enumerate(input_context):
                 while True:
@@ -544,9 +546,16 @@ async def ensure_input_prompt(
                     )
 
                     if not _item_input:
-                        logger.critical(
-                            f"One of the inputs for the {generalized_context} is empty! Please try again."
+                        logger.error(
+                            f"One of the inputs for the `{generalized_context}` is empty! Please try again."
                         )
+                        continue
+
+                    keyword_n_input_validate = verify_email_keyword_and_validate(
+                        display=f"{each_context_to_input}{delimiter} ",
+                        inputted=_item_input,
+                    )
+                    if keyword_n_input_validate[0] and not keyword_n_input_validate[1]:
                         continue
 
                     if isinstance(input_s, list):
@@ -567,9 +576,17 @@ async def ensure_input_prompt(
                 )
 
             if not input_s:
-                logger.critical(
+                logger.error(
                     f"The input for the {generalized_context} is empty! Please try again."
                 )
+                continue
+
+            singleton_keyword_n_value_validate = verify_email_keyword_and_validate(
+                display=f"{input_context}{delimiter} ",
+                inputted=input_s if isinstance(input_s, str) else "",
+            )
+
+            if singleton_keyword_n_value_validate[0] and not singleton_keyword_n_value_validate[1]:
                 continue
 
         logger.warning(
@@ -584,6 +601,32 @@ async def ensure_input_prompt(
             continue
 
         return input_s
+
+
+def verify_email_keyword_and_validate(
+    *, display: str, inputted: str
+) -> tuple[bool, bool]:
+    email_input_indicators: Final[list[str]] = [
+        "Email",
+        "email",
+        "E-mail",
+        "e-mail",
+        "EMail",
+    ]
+    if any(each_keyword in display for each_keyword in email_input_indicators):
+        try:
+            validate_email(inputted)
+            logger.info("E-mail address is valid!")
+            return (
+                True,
+                True,
+            )  # @o Since `validate_email` doesn't return a bool but rather a context, then we assume its good, therefore return `True`.
+
+        except EmailNotValidError as e:
+            logger.error(f"Invalid e-mail address! Please try again | Info: {e}.")
+            return (True, False)
+
+    return (False, False)
 
 
 async def handle_input_function(
