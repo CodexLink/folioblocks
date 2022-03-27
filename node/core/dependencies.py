@@ -131,7 +131,7 @@ async def authenticate_node_client(
         while True:
             try:
                 logger.info(
-                    f"Detected as {role.name} | {f'To start, the system will create an `auth_token` for you to register yourself.' if role == NodeType.MASTER_NODE else f'Since this a new instance, you need credentials for you to enter in blockchain.'} | Please enter your email address."
+                    f"{f'To start, the system will create an `auth_token` for you to register yourself.' if role == NodeType.MASTER_NODE else f'Since this a new instance, you need credentials for you to enter in blockchain.'} | Please enter your email address."
                 )
 
                 if role == NodeType.MASTER_NODE:
@@ -236,6 +236,19 @@ async def authenticate_node_client(
             if login_req.ok:
                 # Resolve via pydantic.
                 resolved_model = EntityLoginResult.parse_obj(await login_req.json())
+
+                resolve_entity_to_role = (
+                    NodeType.MASTER_NODE
+                    if resolved_model.user_role == UserEntity.MASTER_NODE_USER
+                    else NodeType.ARCHIVAL_MINER_NODE
+                )
+
+                # TODO: Please test this one.
+                if resolve_entity_to_role.value != get_args_value().prefer_role:
+                    unconventional_terminate(
+                        message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().prefer_role} instead.",
+                        early=True,
+                    )
 
                 # With this, we should also save the context by using store_auth_token().
                 store_identity_tokens(

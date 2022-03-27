@@ -80,7 +80,11 @@ store_args_value(parsed_args)
 @o They need to access these so that certain endpoints will be excluded based on the `parsed_args.prefer_role`.
 ! Note that their contents will change, so better understand the condition and its output as it may contain a router or just a set of functions to call for request to the `MASTER` node.
 """
-from api.entity import entity_router
+if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
+    from api.entity import entity_router
+else:
+    from api.entity import login_as_miner_node, logout_as_miner_node
+
 from api.node import node_router
 
 logger_config: dict[str, Any] = LoggerHandler.init(
@@ -113,7 +117,7 @@ api_handler: FastAPI = FastAPI()
 
 api_handler.include_router(node_router)
 
-if parsed_args.prefer_role is not NodeType.ARCHIVAL_MINER_NODE:
+if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
     api_handler.include_router(admin_router)
     api_handler.include_router(entity_router)
     api_handler.include_router(dashboard_router)

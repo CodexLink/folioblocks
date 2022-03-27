@@ -303,10 +303,6 @@ async def initialize_resources_and_return_db_context(
             model_metadata.create_all(sql_engine)
             logger.info("Database structure applied ...")
 
-            logger.warning(
-                f"The system detects the invocation of a role as a {NodeType.MASTER_NODE.name}."
-            )
-
             logger.info("Encrypting a new database ...")
             auth_key = await crypt_file(
                 filename=DATABASE_RAW_PATH,
@@ -358,30 +354,31 @@ async def initialize_resources_and_return_db_context(
 
             logger.info("Encrypting resources done.")
 
-            if role is NodeType.MASTER_NODE:
-                logger.warning(
-                    f"The system detects the invocation of role as a {NodeType.MASTER_NODE.name}. Please insert email address and password for the email services."
-                )
+            logger.warning(
+                f"To re-iterate, the system detects the invocation of role as a {role}. {'Please insert email address and password for the email services.'  if role == NodeType.MASTER_NODE else 'The system will attempt to generate `AUTH_KEY` and `SECRET_KEY`.'}"
+            )
+            if role == NodeType.MASTER_NODE:
                 logger.warning(
                     "Please ENSURE that credentials are correct. Don't worry, it will be hashed along with the `auth_key` that is generated here."
                 )
 
-            credentials: list[CredentialContext] = await ensure_input_prompt(
-                input_context=["Email Address", "Password"],
-                hide_fields=[False, True],
-                generalized_context="Server email credentials",
-                additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
-            )
+                credentials: list[CredentialContext] = await ensure_input_prompt(
+                    input_context=["Email Address", "Password"],
+                    hide_fields=[False, True],
+                    generalized_context="Server email credentials",
+                    additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
+                )
 
-            # Override AUTH_FILE_NAME after encryption.
             logger.info("Generating a new key environment file ...")
             with open(AUTH_ENV_FILE_NAME, "w") as env_writer:
                 env_context: list[str] = [
                     f"AUTH_KEY={auth_key.decode('utf-8')}",
                     f"SECRET_KEY={token_hex(32)}",
-                    f"EMAIL_SERVER_ADDRESS={credentials[0]}",
-                    f"EMAIL_SERVER_PWD={credentials[1]}",
                 ]
+
+                if role == NodeType.MASTER_NODE:
+                    env_context.append(f"EMAIL_SERVER_ADDRESS={credentials[0]}")
+                    env_context.append(f"EMAIL_SERVER_PWD={credentials[1]}")
 
                 for each_context in env_context:
                     env_writer.write(each_context + "\n")
@@ -586,7 +583,10 @@ async def ensure_input_prompt(
                 inputted=input_s if isinstance(input_s, str) else "",
             )
 
-            if singleton_keyword_n_value_validate[0] and not singleton_keyword_n_value_validate[1]:
+            if (
+                singleton_keyword_n_value_validate[0]
+                and not singleton_keyword_n_value_validate[1]
+            ):
                 continue
 
         logger.warning(
