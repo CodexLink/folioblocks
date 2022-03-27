@@ -9,7 +9,6 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     HTTPQueueMethods,
     HTTPQueueResponseFormat,
-    HTTPQueueTaskType,
     RequestPayloadContext,
     URLAddress,
 )
@@ -203,7 +202,7 @@ class HTTPClient:
 
         if not self._is_ready:
             logger.warning(
-                "There is no finished task since no task has been executed. Please execute initialize() method for this instance to work as intended."
+                "There is no finished task since no task has been executed. Please execute `initialize()` method for this instance to work as intended."
             )
             return
 

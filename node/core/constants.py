@@ -134,17 +134,15 @@ BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
 
 # # Constraints — Node Operation Parameter
-NODE_LIMIT_NETWORK: Final[
+NODE_IP_ADDR: Final[IPAddress] = IPAddress(
+    "127.0.0.1"
+)  # - The host from where the master node will establish its connection, and the miners will attempt to connect to.
+MASTER_NODE_LIMIT_CONNECTED_NODES: Final[
     int
-] = 5  # The number of nodes that should exists in the network. Master node will reject any connections when the pool is full.
-NODE_IP_URL_TARGET: Final[
-    str
-] = "localhost"  # The IP address that any instance of the program will check for any existing nodes.
-NODE_IP_ADDR_FLOOR: IPAddress = IPAddress("127.0.0.1")
-NODE_IP_PORT_FLOOR: IPPort = IPPort(
-    5001
-)  # Contains the floor port to be used for generating usable and allowable ports.
-
+] = 4  # - The number of nodes that should exists in the network. Master node will reject any connections when the pool is full.
+MASTER_NODE_IP_PORT: Final[IPPort] = IPPort(
+    5000
+)  # - Contains the port from where the `MASTER_NODE` will attempt to live. Should be overridable
 # # Enums - API Models
 class BaseAPI(Enum):
     ADMIN = "Admin API"
@@ -303,6 +301,7 @@ class StudentActivities(IntEnum):
     AWARDS = auto()
     PROJECTS = auto()
     RECOGNITION = auto()
+
 
 class StudentStatus(IntEnum):
     ACTIVE = auto()

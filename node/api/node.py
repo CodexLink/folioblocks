@@ -16,7 +16,6 @@ from core.blockchain import get_blockchain_instance
 from core.constants import AddressUUID, BaseAPI, NodeAPI, UserEntity
 from core.dependencies import (
     EnsureAuthorized,
-    ensure_past_negotiations,
     get_identity_tokens,
 )
 from fastapi import APIRouter, Depends
@@ -38,9 +37,7 @@ node_router = APIRouter(
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
     dependencies=[
-        Depends(
-            EnsureAuthorized(_as=[UserEntity.NODE_USER, UserEntity.DASHBOARD_USER])
-        ),
+        Depends(EnsureAuthorized(_as=[UserEntity.NODE_USER])),
     ],
 )
 async def get_node_info() -> NodeConsensusInformation:
@@ -54,6 +51,7 @@ async def get_node_info() -> NodeConsensusInformation:
         ),
         is_sleeping=blockchain_state["sleeping"],
         is_mining=blockchain_state["mining"],
+        node_role=blockchain_state["role"],
         consensus_timer=blockchain_state["consensus_timer"],
         last_mined_block=blockchain_state["last_mined_block"],
     )

@@ -9,7 +9,6 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from datetime import datetime
-from typing import Any
 
 from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
@@ -32,6 +31,7 @@ from core.constants import (
     InternExperience,
     JWTToken,
     KeyContext,
+    NodeType,
     NotificationContext,
     RequestContext,
     RequestPayloadContext,
@@ -190,6 +190,7 @@ class NodeConsensusInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
     is_mining: bool
+    node_role: NodeType
     consensus_timer: datetime
     last_mined_block: int
 

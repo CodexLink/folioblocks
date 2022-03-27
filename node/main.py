@@ -51,6 +51,11 @@ from core.dependencies import (
 )
 from core.email import get_email_instance
 from core.logger import LoggerHandler
+from core.constants import (
+    MASTER_NODE_IP_PORT,
+    MASTER_NODE_LIMIT_CONNECTED_NODES,
+    NODE_IP_ADDR,
+)
 from utils.exceptions import InsufficientCredentials
 from utils.http import get_http_client_instance
 from utils.processors import (
@@ -58,6 +63,8 @@ from utils.processors import (
     initialize_resources_and_return_db_context,
     look_for_nodes,
 )
+from socket import AF_INET, SOCK_STREAM, error, socket
+from errno import EADDRINUSE, EADDRNOTAVAIL
 
 """
 # # Startup Dependencies
@@ -148,7 +155,8 @@ async def pre_initialize() -> None:
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
     if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
         pass
-        # create_task(get_http_client_instance().enqueue_request())
+        # for each_port_in_host in range(MASTER_NODE_IP_PORT)
+        # await wait({create_task(get_http_client_instance().enqueue_request())})
 
     create_task(post_initialize())
 
@@ -220,7 +228,9 @@ async def terminate() -> None:
         )
 
     if get_http_client_instance() is not None:
-        await get_http_client_instance().close()  # * Shutdown the HTTP client module.
+        await get_http_client_instance().close(
+            should_destroy=True
+        )  # * Shutdown the HTTP client module.
 
     if get_blockchain_instance() is not None:
         await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
@@ -241,7 +251,9 @@ TODO: Consensus Method (Remember, that we need the consensus dependency or somet
 """
 
 if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
-    logger.debug(f"Several functions for the {NodeType.MASTER_NODE} were imported.")
+    logger.warning(
+        f"Several functions for the `{NodeType.MASTER_NODE} `were imported due to invocation of the role."
+    )
 
     @api_handler.on_event("startup")
     @repeat_every(seconds=120, wait_first=True)
@@ -259,6 +271,7 @@ if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         for each_tokens in tokens_available:
             token = Tokens.parse_obj(each_tokens)
 
+            # TODO
             logger.debug(
                 f"@ Token {token.id} | JWT Invalidation Condition (of {current_datetime.isoformat()} vs. {token.expiration.isoformat()}) | '(Should be) >' {current_datetime > token.expiration} | '(Should be) ==' {current_datetime == token.expiration} | `<' {current_datetime < token.expiration}"
             )
@@ -279,6 +292,29 @@ if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
 
 # * We cannot encapsulate the whole (main.py) module as there's a subprocess usage wherein there's a custom __main__ that will run this script. Doing so may cause recursion.
 if __name__ == "__main__":
+    # @o Assumes that this instance is instantiated along side `MASTER` node.
+    # - It is recommended to choose other ports if this was instantiated outside of `MASTER` scope.
+
+    if parsed_args.port == MASTER_NODE_IP_PORT:
+        check_port_socket = socket(AF_INET, SOCK_STREAM)
+        for each_port in range(0, MASTER_NODE_LIMIT_CONNECTED_NODES):
+            iter_evaluated_port = MASTER_NODE_IP_PORT + each_port
+            try:
+                logger.info(f"Checking port {iter_evaluated_port} if available ...")
+                check_port_socket.bind((NODE_IP_ADDR, iter_evaluated_port))
+                check_port_socket.close()
+            except error as e:
+                check_port_socket.close()  # * Close the socket to perform the next port.
+                if e.errno == EADDRINUSE or e.errno == EADDRNOTAVAIL:
+                    logger.info(f"Port {iter_evaluated_port} is already in used.")
+                    continue
+                else:
+                    logger.info(f"Port {iter_evaluated_port} is available!")
+                    parsed_args.port = iter_evaluated_port
+                break
+            finally:
+                check_port_socket.close()
+
     uvicorn.run(
         app=ASGI_APP_TARGET,
         host=parsed_args.host,
