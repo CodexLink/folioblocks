@@ -98,7 +98,7 @@ class EmailService:
 
                 if retries_count + 1 <= self.max_retries:
                     logger.warning(
-                        f"Attempting to reconnect email services... | Attempt #{retries_count + 1} out of {self.max_retries}"
+                        f"Attempting to reconnect email services ... | Attempt #{retries_count + 1} out of {self.max_retries}"
                     )
 
                 retries_count += 1
@@ -123,7 +123,7 @@ class EmailService:
     ) -> None:  # This should require a pydantic class for the message??????
         if not self._email_service.is_connected:
             logger.debug(
-                "Email service is not available after multiple tries, ignoring this request..."
+                "Email service is not available after multiple tries, ignoring this request ..."
             )
             return
 

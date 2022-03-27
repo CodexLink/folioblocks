@@ -40,7 +40,7 @@ class HTTPClient:
         logger.debug("HTTP client ClientSession initialized.")
 
         self._is_ready = True
-        logger.info("HTTP client is ready to take some requests...")
+        logger.info("HTTP client is ready to take some requests ...")
         create_task(
             name=f"{HTTPClient.__name__}_queue_iterator",
             coro=self._queue_iterator_runtime(),
@@ -96,7 +96,7 @@ class HTTPClient:
             else:
                 response_name = f"response_{token_urlsafe(8)}"
                 logger.debug(
-                    f"This request doesn't have a name and is awaited (`await_result_immediate`). Named as {response_name} (generated) for log clarity."
+                    f"This request doesn't have a name and is awaited (`await_result_immediate`). Named as `{response_name}` (generated) for log clarity."
                 )
 
         # Resolve conflict references as one.
@@ -237,7 +237,7 @@ class HTTPClient:
         while True:
             if self._response:
                 logger.info(
-                    f"Attempting to %s all ({len(self._response)}) request/s left..."
+                    f"Attempting to %s all ({len(self._response)}) request/s left ..."
                     % ("finish" if not should_destroy else "destroy")
                 )
 
@@ -263,7 +263,7 @@ class HTTPClient:
     async def _sync_state_to_database(
         self,
     ) -> None:
-        logger.debug("Syncing unfinished tasks to the database (if there is any)...")
+        logger.debug("Syncing unfinished tasks to the database (if there is any) ...")
         raise HTTPClientFeatureUnavailable
 
     def get_current_queue(  # * This is just an extra.

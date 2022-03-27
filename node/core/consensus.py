@@ -16,7 +16,7 @@ class AdaptedPoETConsensus:
 
         # self._consensus_http_session: ClientSession = ClientSession()
 
-        logger.info("Attempting to what...")
+        logger.info("Attempting to what ...")
 
     # Calls on replace if not.
     async def is_valid(self) -> None:

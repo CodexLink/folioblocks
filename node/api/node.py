@@ -43,7 +43,7 @@ node_router = APIRouter(
 async def get_node_info() -> NodeConsensusInformation:
     blockchain_state: dict[
         str, Any
-    ] = get_blockchain_instance().get_blockchain_private_state
+    ] = get_blockchain_instance().get_blockchain_private_state()
 
     return NodeConsensusInformation(
         owner=AddressUUID(

@@ -78,7 +78,7 @@ async def get_blockchain() -> Blockchain:
     )
 
     blockchain_state: NodeMasterInformation | None = (
-        get_blockchain_instance().get_blockchain_public_state
+        get_blockchain_instance().get_blockchain_public_state()
     )
 
     if blockchain_state is not None:

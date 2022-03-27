@@ -7,7 +7,7 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
-from asyncio import create_task, gather
+from asyncio import create_task, gather, sleep, wait
 from datetime import datetime, timedelta
 from enum import EnumMeta
 from http import HTTPStatus
@@ -16,7 +16,7 @@ from os import environ as env
 from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
-
+from utils.http import get_http_client_instance
 import jwt
 from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import (
@@ -296,11 +296,46 @@ if evaluated_role in NodeType:
 
         - The following implementation is still included under routes for the sake of location-of-implementation-wise.
         - Technically what `ARCHIVAL_MINER_NODE` does was to call for request instead of taking those as endpoint or route.
-        ! Note that it will use HTTP client, so better track the `ARCHIVAL_MINER_NODE` instance in `pre_initialize()` and `post_initialize()` method @ main.py.
+        ! Note that it will use HTTP client, so better track the `ARCHIVAL_MINER_NODE` instance in `pre_initialize()` and `post_initialize()` method at `main.py`.
+        @o These methods require one-time call, therefore we need to do while loop until `get_http_client_instance.is_ready` is `True`.
+
         """
 
-        async def logout_as_miner_node() -> None:
+        async def login_as_miner_node() -> None:
+            await wait(
+                {
+                    create_task(
+                        _ensure_http_client_has_instance(
+                            fn_ref=login_as_miner_node.__name__
+                        )
+                    )
+                }
+            )
+
+            # login_as_node = await get_http_client_instance().enqueue_request(
+            #     url=http://
+            # )
+
             return None
 
-        async def login_as_miner_node() -> None:
+        async def logout_as_miner_node() -> None:
+            await wait(
+                {
+                    create_task(
+                        _ensure_http_client_has_instance(
+                            fn_ref=logout_as_miner_node().__name__
+                        )
+                    )
+                }
+            )
             return None
+
+        async def _ensure_http_client_has_instance(*, fn_ref: str) -> None:
+            while True:
+                if not get_http_client_instance().is_ready:
+                    logger.warning(
+                        f"The following function `{fn_ref}` attempted to do HTTP client request when its instance is not yet ready! Awaiting for 3 seconds..."
+                    )
+                    await sleep(3)
+                    continue
+                return None

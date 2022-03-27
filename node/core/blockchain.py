@@ -1,4 +1,4 @@
-from asyncio import get_event_loop, sleep
+from asyncio import create_task, get_event_loop, sleep, wait
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -54,13 +54,13 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         self.node_role: NodeType = client_role
         self.auth_token: tuple[AddressUUID, JWTToken] = auth_tokens
         self.block_timer: Final[int] = block_timer
-        self.consensus_timer: datetime = (
-            datetime.now()
-        )  # TODO: This will be computed based on the information by the MASTER_NODE node on how much is being participated, along with its computed value based on the average mining and iteration.
+        self.consensus_timer: timedelta  # TODO: This will be computed based on the information by the MASTER_NODE node on how much is being participated, along with its computed value based on the average mining and iteration.
 
         # * State and Variable References
-        self.node_ready = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
-        self.blockchain_ready = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
+        self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
+        self.node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
+        self.new_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
+        self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
         self.cached_block_id: int = (
             1  # * The current ID of the block to be rendered from the blockchain.
         )
@@ -68,7 +68,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         super().__init__()
 
     # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
-    def ensure_blockchain_ready(message: str) -> Callable:  # type: ignore
+    def ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
         def deco(fn: Callable) -> Callable:
             def instance(
                 self: Any, *args: list[Any], **kwargs: dict[Any, Any]
@@ -76,7 +76,9 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 if self.is_blockchain_ready:
                     return fn(self, *args, **kwargs)
 
-                unconventional_terminate(message=message)
+                if terminate_on_call:
+                    unconventional_terminate(message=message)
+
                 return None
 
             return instance
@@ -93,9 +95,13 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
         # Load the blockchain.
 
-        self._chain: frozendict | None = await self._process_file_state(
+        self._chain: frozendict = await self._process_file_state(
             operation=BlockchainIOAction.TO_READ
         )
+
+        # - New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. Also note that this will be turned-around when there's a context.
+
+        self.new_instance = True if not len(self._chain["chain"]) else False
 
         # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
         if (
@@ -108,6 +114,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
             # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
             self.blockchain_ready = True
+            self.new_instance = False
 
             logger.info(
                 "Genesis block generation has been finished! Blockchain system ready."
@@ -143,7 +150,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             self._chain["chain"].append(frozendict(block_context))
             self.cached_block_id += 1
             await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
-            await self.sleeping_phase()
+            await wait({create_task(self._consensus_sleeping_phase())})
 
         else:
             unconventional_terminate(
@@ -155,7 +162,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         self,
         *,
         operation: BlockchainIOAction,
-    ) -> frozendict | None:
+    ) -> frozendict:
         if operation in BlockchainIOAction:
             async with aopen(
                 BLOCKCHAIN_RAW_PATH,
@@ -184,7 +191,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                     await get_db_instance().execute(blockchain_hash_update_stmt)
 
                     await content_buffer.write(byte_json_content.decode("utf-8"))
-                    return None
+                    return self._chain
 
                 else:
                     raw_data = await content_buffer.read()
@@ -237,7 +244,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     def load_deserialized_blockchain(
         self,
         context: dict[str, Any],
-    ) -> frozendict | None:
+    ) -> frozendict:
         """
         A method that deserializes the blockchain into an immutable dictionary (frozendict) from the outsourced-data of the blockchain file.
 
@@ -274,9 +281,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                             "Due to potential fraudalent local blockchain file, please wait for the MASTER_NODE node to acknowledge your replacement of blockchain file."
                         )
                         self.blockchain_ready = False
-                        # TODO: Create a task that waits for it to do something to fetch a valid blockchain file.
 
-                        return None
+                        # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
                     logger.info(
                         f"Block #{dict_idx} backward reference to Block# {dict_idx - 1} is valid!"
@@ -320,7 +326,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
         mined_genesis_block = await get_event_loop().run_in_executor(
             None,
-            self.mine_block,
+            self._mine_block,
             self.create_block(transactions=None),
         )
 
@@ -338,22 +344,24 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
 
-        if self.get_last_block is not None:
-            if self.get_last_block.id >= self.cached_block_id:
+        last_block: Block | None = self._get_last_block()
+
+        if last_block is not None:
+            if last_block.id >= self.cached_block_id:
                 logger.critical(
-                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {self.get_last_block.id} | Currently Cached: {self.cached_block_id}"
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.cached_block_id}"
                 )
                 return None
         else:
             logger.warning(
-                f"This new block wil be the first block from this blockchain."
+                f"This new block will be the first block from this blockchain."
             )
 
         _block: Block = Block(
             id=self.cached_block_id,
             block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
-            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if self.get_last_block is None else HashUUID(self.get_last_block.hash_block),  # type: ignore
+            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if last_block is None else HashUUID(last_block.hash_block),  # type: ignore
             contents=HashableBlock(
                 nonce=None,  # ! Unsolvable, these are determined during the process of mining.
                 validator=get_identity_tokens()[0],
@@ -369,7 +377,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         return
 
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
-    def mine_block(self, block: Block) -> Block:
+    def _mine_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
         self.blockchain_ready = False
         prev: float = time()
@@ -393,21 +401,16 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 logger.info(
                     f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
-                self.calculate_sleep_time(
-                    mine_duration=time() - prev, mine_iteration=nth
-                )
+                self._calculate_sleep_time(mine_duration=time() - prev)
                 self.blockchain_ready = True
                 return block
 
             nth += 1
 
-    @ensure_blockchain_ready(
-        message="Houston, we have a problem. Calling this method is not possible unless blockchain is ready! You may be attempting to perform operations that is beyond acceptable. We cannot continue from this.",
-    )
     def get_sizeof(self, *, block: Block) -> int | None:
         return asizeof(block)
 
-    @property
+    @ensure_blockchain_ready
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
         if self.node_role == NodeType.MASTER_NODE:
             return NodeMasterInformation(
@@ -423,15 +426,18 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         )
         return None
 
-    @property
+    @ensure_blockchain_ready
     def get_blockchain_private_state(self) -> dict[str, Any]:
+        last_block: Block | None = self._get_last_block()
+
         return {
             "sleeping": self.is_node_ready,
             "mining": self.is_blockchain_ready,
             "consensus_timer": self.consensus_timer,
-            "last_mined_block": self.get_last_block.id if self.get_last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
+            "last_mined_block": last_block.id if last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
         }
 
+    @ensure_blockchain_ready
     def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
         if self._chain is not None:
             candidate_blocks: list[BlockOverview] = deepcopy(
@@ -458,21 +464,42 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             resolved_candidate_blocks.reverse()
             return resolved_candidate_blocks
 
-    @ensure_blockchain_ready(
-        message="Houston, we have a problem. This is illegal! There are no blocks to mine and you have parameters for this? This may be a developer-issue in regards to logic error. Though, we cannot recover from this due to some reason."
-    )
-    def calculate_sleep_time(
-        self, *, mine_duration: float | int, mine_iteration: int
-    ) -> None:
-        if not self.is_blockchain_ready:
-            self.consensus_timer = datetime.now() + timedelta(
-                seconds=mine_duration + (mine_iteration / 1000)
+    def _calculate_sleep_time(self, *, mine_duration: float | int) -> None:
+        if not self.is_blockchain_ready and not self.new_instance:
+            self.consensus_timer = timedelta(
+                seconds=mine_duration
+            )  # TODO: Get the average mining seconds to confluence with the timer.
+            logger.debug(
+                f"Consensus timer is calculated. Set to {self.consensus_timer.total_seconds()} seconds before waking. | Object: {self.consensus_timer}"
             )
 
-    def set_node_state(self) -> None:
+    async def _consensus_sleeping_phase(self) -> None:
+        if not self.new_instance:
+            self.sleeping_from_consensus = True
+
+            logger.info(
+                f"Block mining is finished. Sleeping for {self.consensus_timer.total_seconds()} seconds."
+            )
+
+            await sleep(self.consensus_timer.total_seconds())
+            self.sleeping_from_consensus = False
+
+            # * When done, ensure that the node's sate is changed.
+            self._set_node_state()
+
+            logger.info(
+                "Woke up from the consensus timer! Ready to take blocks to mine."
+            )
+            return
+
+        logger.info(
+            f"Consensus timer ignored due to condition. | Is new instance: {self.new_instance}, Blockchain ready: {self.blockchain_ready}"
+        )
+
+    def _set_node_state(self) -> None:
         self.node_ready = (
             True
-            if datetime.now() >= self.consensus_timer and self.is_blockchain_ready
+            if not self.sleeping_from_consensus and self.is_blockchain_ready
             else False
         )
 
@@ -485,7 +512,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         return self.blockchain_ready
 
     # I think this should work only on miner nodes.
-    async def update_chain(self) -> None:
+    async def _update_chain(self) -> None:
         # TODO: This should trigger when blockchain_ready is not True.
         if not self.is_blockchain_ready:
             return
@@ -494,11 +521,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     async def search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         pass
 
-    @property
-    @ensure_blockchain_ready(
-        message="Blockchain is not ready! It may have halted due to fraudalent actions which may have resulted to integrity loss. Please read back on the logs to see of what would have caused it."
-    )
-    def get_last_block(self) -> Block | None:
+    def _get_last_block(self) -> Block | None:
         # ! This return seems confusing but I have to sacrafice for my own sake of readability.
         # @o First we access the list by calling the key 'chain'.
         # @o Since we got to the list, we might wanna get the last block by slicing the list with the use of its own length - 1 to get the last block.
@@ -512,13 +535,6 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             return last_block_ref
 
         logger.warning("There's no block inside blockchain.")
-
-    async def sleeping_phase(self) -> None:
-        while not self.is_node_ready:
-            await sleep(
-                (datetime.now() - self.consensus_timer).seconds
-            )  # Avoids spamming.
-            self.set_node_state()
 
     async def close(self) -> None:
         return

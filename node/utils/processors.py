@@ -87,7 +87,7 @@ async def crypt_file(
 
     try:
         logger.debug(
-            f"{'Async: ' if enable_async else ''}{'Decrypting' if process == CryptFileAction.TO_DECRYPT else 'Encrypting'} a context..."
+            f"{'Async: ' if enable_async else ''}{'Decrypting' if process == CryptFileAction.TO_DECRYPT else 'Encrypting'} a context ..."
         )
         if process == CryptFileAction.TO_DECRYPT:
             if key is None:
@@ -199,7 +199,7 @@ async def initialize_resources_and_return_db_context(
         Database | None: Returns the context of the database for accessing the tables. Which can be ORM-accessible.
     """
 
-    logger.info("Initializing a database...")
+    logger.info("Initializing a database ...")
     db_instance: Database = Database(DATABASE_URL_PATH)
     sql_engine = create_engine(
         DATABASE_URL_PATH, connect_args={"check_same_thread": False}
@@ -217,7 +217,7 @@ async def initialize_resources_and_return_db_context(
         # - This is just an additional checking.
         if (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is not None:
             con: Connection | None = None
-            logger.info("Decrypting the database...")
+            logger.info("Decrypting the database ...")
             await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
@@ -300,7 +300,7 @@ async def initialize_resources_and_return_db_context(
             )
 
             model_metadata.create_all(sql_engine)
-            logger.info("Database structure applied...")
+            logger.info("Database structure applied ...")
 
             logger.warning(
                 f"The system detects the invocation of a role as a {NodeType.MASTER_NODE.name}."
@@ -413,10 +413,10 @@ async def close_resources(*, key: KeyContext) -> None:
     db: Database = get_db_instance()
 
     logger.warning(
-        f"Ensuring encode process of computed hash-signature for the {BLOCKCHAIN_NAME}."
+        f"Ensuring encode process of computed hash-signature for the `{BLOCKCHAIN_NAME}`."
     )
 
-    logger.warning("Closing blockchain by encryption...")
+    logger.warning("Closing blockchain by encryption ...")
     raw_blockchain_encrypt = await crypt_file(
         filename=BLOCKCHAIN_RAW_PATH,
         key=key,
@@ -441,7 +441,7 @@ async def close_resources(*, key: KeyContext) -> None:
 
         await db.execute(blockchain_hash_update_stmt)
 
-    logger.warning("Closing database by encryption...")
+    logger.warning("Closing database by encryption ...")
     await crypt_file(
         filename=DATABASE_RAW_PATH,
         key=key,
@@ -623,7 +623,7 @@ async def handle_input_function(
 # TODO: We need to import the HTTP here.
 async def look_for_nodes(*, role: NodeType, host: IPAddress, port: IPPort) -> None:
     logger.info(
-        f"Step 2.1 | Attempting to look {'for the master node' if role == NodeType.MASTER_NODE.name else 'at other nodes'} at host {host}, port {port}..."
+        f"Step 2.1 | Attempting to look {'for the master node' if role == NodeType.MASTER_NODE.name else 'at other nodes'} at host {host} in port {port} ..."
     )
 
 
