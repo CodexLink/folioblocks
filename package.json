@@ -2,13 +2,18 @@
   "name": "folioblocks-out-of-scope-script",
   "Description": "Technically, I created this to reduce my time on looking up the commands.",
   "scripts": {
-    "_backend": "python node/main.py -pr MASTER_NODE -ll DEBUG",
+    "_backend-master": "python node/main.py -pr MASTER_NODE -ll DEBUG",
+    "_backend-archival": "python node/main.py -pr MASTER_NODE -ll DEBUG",
     "clear-node-files": "pwsh -Command Remove-Item -Force -Path ./folioblocks-chain.json, ./folioblocks-node.db, .env",
     "frontend": "echo NotImplemented",
-    "backend": "pwsh -Command clear; npm run _backend;",
-    "reload-chain": "pwsh -Command clear; npm run clear-node-files; cp backup/with_chain/** .; npm run backend",
-    "reload-registered": "pwsh -Command clear; npm run clear-node-files; cp backup/new/** .; npm run backend",
-    "reload-new": "pwsh -Command npm run clear-node-files; npm run backend",
+    "backend-master": "pwsh -Command clear; npm run _backend-master;",
+    "backend-archival-node": "pwsh -Command clear; npm run _backend-archival;",
+    "reload-master-chain": "pwsh -Command clear; npm run clear-node-files; cp backup/with_chain/** .; npm run backend-master",
+    "reload-archival-chain": "pwsh -Command clear; npm run clear-node-files; cp backup/with_chain/** .; npm run backend-archival",
+    "reload-master-registered": "pwsh -Command clear; npm run clear-node-files; cp backup/new/** .; npm run backend-master",
+    "reload-archival-registered": "pwsh -Command clear; npm run clear-node-files; cp backup/new/** .; npm run backend-archival",
+    "reload-master-new": "pwsh -Command npm run clear-node-files; npm run backend-master",
+    "reload-archival-new": "pwsh -Command npm run clear-node-files; npm run backend-archival",
     "clean-logs": "rmdir /s /q logs"
   }
 }
