@@ -488,7 +488,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     async def update_chain(self) -> None:
         # TODO: This should trigger when blockchain_ready is not True.
         if not self.is_blockchain_ready:
-            pass
+            return
 
     # Ensure to follow the rule that we made last time.
     async def search_for(self, *, type: str, uid: AddressUUID | str) -> None:

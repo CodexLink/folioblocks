@@ -8,9 +8,10 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
+from http.client import responses
 import logging
 from argparse import Namespace
-from asyncio import create_task, sleep
+from asyncio import create_task, sleep, wait
 from datetime import datetime
 from logging.config import dictConfig
 from typing import Any
@@ -56,6 +57,7 @@ from core.constants import (
     MASTER_NODE_LIMIT_CONNECTED_NODES,
     NODE_IP_ADDR,
 )
+from node.utils.processors import supress_exceptions_and_warnings
 from utils.exceptions import InsufficientCredentials
 from utils.http import get_http_client_instance
 from utils.processors import (
@@ -135,7 +137,7 @@ async def pre_initialize() -> None:
         f"Step 0 (Argument Check) | Detected as {NodeType.MASTER_NODE.name if parsed_args.prefer_role == NodeType.MASTER_NODE.name else NodeType.ARCHIVAL_MINER_NODE.name} ..."
     )
 
-    await get_http_client_instance().initialize()  # Initialize the HTTP client for such requests.
+    await get_http_client_instance().initialize()  # * Initialize the HTTP client for such requests.
 
     try:
         await get_email_instance().connect()
@@ -154,9 +156,26 @@ async def pre_initialize() -> None:
 
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
     if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
-        pass
-        # for each_port_in_host in range(MASTER_NODE_IP_PORT)
-        # await wait({create_task(get_http_client_instance().enqueue_request())})
+        for each_port_in_host in range(0, MASTER_NODE_IP_PORT):
+            response, _ = await wait(
+                {
+                    create_task(
+                        get_http_client_instance().enqueue_request(
+                            url=URLAddress(
+                                f"http://{NODE_IP_ADDR}:{each_port_in_host}/explorer/chain"
+                            ),
+                            method=HTTPQueueMethods.GET,
+                            await_result_immediate=True,
+                            name=f"validate_master_node_conn_at_{each_port_in_host}",
+                        )
+                    )
+                }
+            )
+
+            if response:
+                print(response)
+
+            raise BaseException
 
     create_task(post_initialize())
 
@@ -200,6 +219,13 @@ async def terminate() -> None:
     """
     TODO: Ensure on services like blockchain, remove or finish any request or finish the consensus.
     """
+    # Supress exceptions and warnings.
+    # @o Why? Because there are some sessions and asyncio-related exceptions and warnings are technically polluting the console even though everything is resolved.
+    # @o With that, it is expected that this is unethical as ignoring messages and other stuff is indeed ignorant from the errors.
+    # @o But trust me, this is needed in the context of some errors that can't be handled because they are in internal and is not directly affecting components who uses it.
+
+    supress_exceptions_and_warnings()
+
     if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         if get_email_instance().is_connected:
             get_email_instance().close()  # * Shutdown email service instance.

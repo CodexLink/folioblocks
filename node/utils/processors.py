@@ -667,6 +667,13 @@ def process_blockchain_hash_state(
 
 
 # # Input Stoppers — START
+def supress_exceptions_and_warnings() -> None:
+    from contextlib import suppress
+
+    with suppress(BaseException):
+        sys.tracebacklimit = 0
+
+
 def unconventional_terminate(*, message: str, early: bool = False) -> None:
     """Recursive infinite by doing nothing after displaying a message that suggests hitting `CTRL+BREAK`.
 
@@ -674,13 +681,11 @@ def unconventional_terminate(*, message: str, early: bool = False) -> None:
         message (str): The message to display under `logging.exception(<context>).`
         early (bool): Inidicates that this method were runnning BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
     """
-    from contextlib import suppress
 
     logger.exception(message)
     if early:
-        with suppress(BaseException):
-            sys.tracebacklimit = 0
-            exit(-1)
+        supress_exceptions_and_warnings()
+        exit(-1)
 
     kill_process(getpid(), CTRL_C_EVENT)
 
