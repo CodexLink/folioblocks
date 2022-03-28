@@ -122,10 +122,11 @@ class EmailService:
         to: EmailStr,
     ) -> None:  # This should require a pydantic class for the message??????
         if not self._email_service.is_connected:
-            logger.debug(
-                "Email service is not available after multiple tries, ignoring this request ..."
+            logger.warning(
+                "Connection to the email service is not available, re-connecting ..."
             )
-            return
+
+            await self.connect()
 
         message_instance = MIMEMultipart("alternative")
 

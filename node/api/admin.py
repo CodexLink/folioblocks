@@ -17,13 +17,13 @@ This endpoint should be used for generating users as a organization or as a node
 
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from sqlite3 import IntegrityError
 
 from blueprint.models import auth_codes
 from blueprint.schemas import GenerateAuthInput
-from core.constants import BaseAPI, NodeAPI, UserEntity
+from core.constants import BaseAPI, NodeAPI, RequestPayloadContext, UserEntity
 from core.email import EmailService, get_email_instance
 from databases import Database
-from email_validator import EmailNotValidError, EmailSyntaxError, validate_email
 from fastapi import APIRouter, Header, HTTPException
 
 admin_router = APIRouter(
@@ -46,7 +46,7 @@ async def generate_auth_token_for_other_nodes(
         ...,
         description="The special passcode that allows the generation of `auth_code`.",
     ),
-) -> None:
+) -> RequestPayloadContext:
     from core.dependencies import (
         PasscodeTOTP,
         generate_auth_token,
@@ -58,19 +58,7 @@ async def generate_auth_token_for_other_nodes(
     email_instance: EmailService | None = get_email_instance()
     db_instance: Database | None = get_db_instance()
 
-    print(
-        auth_instance is None
-        or email_instance is None
-        or email_instance.is_connected
-        or db_instance is None
-    )
-
-    if (
-        auth_instance is None
-        or email_instance is None
-        or email_instance.is_connected
-        or db_instance is None
-    ):
+    if auth_instance is None or email_instance is None or db_instance is None:
         raise HTTPException(
             detail="Instance is not yet ready. This means, the system is not yet ready to take special requests. Try again later.",
             status_code=HTTPStatus.ACCEPTED,
@@ -85,37 +73,31 @@ async def generate_auth_token_for_other_nodes(
             status_code=HTTPStatus.FORBIDDEN,
         )
 
-    if payload.email is not None:
-        try:
-            validate_email(payload.email)
-        except (EmailNotValidError, EmailSyntaxError) as e:
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_ACCEPTABLE,
-                detail=f"Input for the E-mail address is invalid! | Info: {e}",
-            )
-    else:
-        raise HTTPException(
-            detail=f" E-mail address is not supplied.",
-            status_code=HTTPStatus.NO_CONTENT,
-        )
-
     if auth_instance.verify(x_passcode):
         generated_token: str = generate_auth_token()
 
-        insert_generated_token_stmt = auth_codes.insert().values(
-            code=generated_token,
-            account_type=payload.role_to_infer,
-            to_email=payload.email,
-            expiration=datetime.now() + timedelta(days=2),
-        )  # # LOOKOUT FOR THE ERROR HERE.
+        try:
+            insert_generated_token_stmt = auth_codes.insert().values(
+                code=generated_token,
+                account_type=payload.role_to_infer,
+                to_email=payload.email,
+                expiration=datetime.now() + timedelta(days=2),
+            )
 
-        await db_instance.execute(insert_generated_token_stmt)
+            await db_instance.execute(insert_generated_token_stmt)
+
+        except IntegrityError as e:
+            raise HTTPException(
+                detail=f"The email you entered already has an `auth_token`! If you think this is a mistake, please contact the developers. | Additional Info: {e}",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+
         await email_instance.send(
             content=f"<html><body><h1>Auth Code as Folioblock's Archival Miner Node!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
             subject="Register Auth Code for Archival Miner Node Registration @ Folioblocks",
             to=payload.email,
         )
-        return
+        return {"detail": "Registration successful."}
 
     raise HTTPException(
         detail="Invalid passcode.", status_code=HTTPStatus.NOT_ACCEPTABLE

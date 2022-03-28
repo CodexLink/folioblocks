@@ -144,7 +144,7 @@ async def pre_initialize() -> None:
         await get_email_instance().connect()
     except InsufficientCredentials as e:
         logger.warning(
-            f"There is no credentials due to non-existent environment file. ({AUTH_ENV_FILE_NAME}) | Info: {e}"
+            f"There is no credentials due to non-existent environment file. ({AUTH_ENV_FILE_NAME}) | Additional Info: {e}"
         )
 
     await initialize_resources_and_return_db_context(

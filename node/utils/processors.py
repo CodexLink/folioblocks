@@ -625,7 +625,9 @@ def verify_email_keyword_and_validate_input(
             )  # @o Since `validate_email` doesn't return a bool but rather a context, then we assume its good, therefore return `True`.
 
         except (EmailNotValidError, EmailSyntaxError) as e:
-            logger.error(f"Invalid e-mail address! Please try again | Info: {e}.")
+            logger.error(
+                f"Invalid e-mail address! Please try again | Additional Info: {e}."
+            )
             return (True, False)
 
     return (False, False)

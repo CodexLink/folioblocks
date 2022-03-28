@@ -251,7 +251,7 @@ if evaluated_role in NodeType:
                     except IntegrityError as e:
                         raise HTTPException(
                             status_code=HTTPStatus.BAD_REQUEST,
-                            detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Info: {e}",
+                            detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Additional Info: {e}",
                         )
 
             raise HTTPException(

@@ -105,6 +105,7 @@ JWT_ALGORITHM: Final[str] = "HS256"
 
 # # Constants, Auth: Time-based OTP.
 TOTP_PASSCODE_REFRESH_INTERVAL: Final[int] = 15
+TOTP_VALID_WINDOW_SECONDS: Final[int] = 3
 
 # # Constants, FastAPI Configs
 

@@ -45,6 +45,7 @@ from core.constants import (
     AUTH_CODE_MIN_CONTEXT,
     AUTH_ENV_FILE_NAME,
     TOTP_PASSCODE_REFRESH_INTERVAL,
+    TOTP_VALID_WINDOW_SECONDS,
     AddressUUID,
     CredentialContext,
     HTTPQueueMethods,
@@ -166,6 +167,7 @@ async def authenticate_node_client(
                             "Personal e-mail representing this node",
                             "Node username",
                             "Node password",  # * I cannot implement password-checking because I have no time to do it.
+                            "Auth code"
                         ],
                         hide_fields=[False, False, True],
                         generalized_context="credentials",
@@ -188,7 +190,7 @@ async def authenticate_node_client(
 
                     if not register_node.ok:
                         logger.error(
-                            f"There seems to be an error during request. Please try again | Info: {register_node.json()}"
+                            f"There seems to be an error during request. Please try again | Additional Info: {register_node.json()}"
                         )
                         continue
 
@@ -278,7 +280,7 @@ async def authenticate_node_client(
 
             else:
                 logger.error(
-                    f"Credentials are incorrect! Please try again. | Object: {login_req} | Info: {await login_req.json()}"
+                    f"Credentials are incorrect! Please try again. | Object: {login_req} | Additional Info: {await login_req.json()}"
                 )
                 await sleep(1.5)
                 continue
@@ -378,11 +380,11 @@ class PasscodeTOTP:
         return self.otp_auth.now()
 
     def verify(self, code: str) -> bool:
-        return self.otp_auth.verify(code)
-
+        return self.otp_auth.verify(code, valid_window=TOTP_VALID_WINDOW_SECONDS)
 
 
 totp_instance: PasscodeTOTP | None = None
+
 
 def get_totp_instance() -> PasscodeTOTP | None:
     global totp_instance
@@ -398,9 +400,10 @@ def get_totp_instance() -> PasscodeTOTP | None:
                 issuer=get_identity_tokens()[0],
             )
 
-            logger.error(
-                f"The environment key `AUTH_KEY` or `SECRET_KEY` is missing! Call this function when those fields exists from the `{AUTH_ENV_FILE_NAME}` file."
-            )
+    else:
+        logger.error(
+            f"The environment key `AUTH_KEY` or `SECRET_KEY` is missing! Call this function when those fields exists from the `{AUTH_ENV_FILE_NAME}` file."
+        )
 
     return totp_instance
 
