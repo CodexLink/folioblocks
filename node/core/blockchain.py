@@ -10,12 +10,17 @@ from typing import Any, Callable, Final
 
 from aiofiles import open as aopen
 from blueprint.models import file_signatures
-from blueprint.schemas import Block, HashableBlock, NodeMasterInformation, Transaction
+from blueprint.schemas import (
+    Block,
+    BlockOverview,
+    HashableBlock,
+    NodeMasterInformation,
+    Transaction,
+)
 from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
-from blueprint.schemas import BlockOverview
 from utils.processors import unconventional_terminate
 
 from core.consensus import AdaptedPoETConsensus
@@ -31,6 +36,7 @@ from core.constants import (
     HashUUID,
     JWTToken,
     NodeType,
+    random_generator,
 )
 from core.dependencies import get_db_instance, get_identity_tokens
 from core.tasks import AsyncTaskQueue
@@ -388,7 +394,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         while True:
             # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
 
-            block.contents.nonce = randint(0, MAX_INT_PYTHON)
+            block.contents.nonce = random_generator.randint(0, MAX_INT_PYTHON)
             computed_hash: HashUUID = HashUUID(
                 sha256(block.json().encode("utf-8")).hexdigest()
             )

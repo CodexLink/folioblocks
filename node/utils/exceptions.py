@@ -42,16 +42,6 @@ class HTTPClientFeatureUnavailable(NotImplementedError):
         super().__init__(*args)
 
 
-class InsufficientCredentials(ValueError):
-    def __init__(
-        self, what_service: Callable | object, fields_require: list[str] | str
-    ) -> None:
-        message: str = f"This entity {what_service} requires the following credentals: {fields_require}."
-
-        logger.exception(message)
-        super().__init__()
-
-
 class MaxJWTOnHold(AssertionError):
     def __init__(
         self,

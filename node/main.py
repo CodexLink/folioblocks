@@ -222,6 +222,8 @@ async def terminate() -> None:
     if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         email_instance: EmailService | None = get_email_instance()
 
+        print("Email", email_instance, type(email_instance), email_instance is None)
+
         if email_instance is not None and email_instance.is_connected:
             email_instance.close()  # * Shutdown email service instance.
         # Remove the token related to this master, as well as, change the state of this master account to Offline.
@@ -319,21 +321,27 @@ if __name__ == "__main__":
 
     if parsed_args.port == MASTER_NODE_IP_PORT:
         check_port_socket = socket(AF_INET, SOCK_STREAM)
+
         for each_port in range(0, MASTER_NODE_LIMIT_CONNECTED_NODES):
             iter_evaluated_port = MASTER_NODE_IP_PORT + each_port
+
             try:
                 logger.info(f"Checking port {iter_evaluated_port} if available ...")
                 check_port_socket.bind((NODE_IP_ADDR, iter_evaluated_port))
                 check_port_socket.close()
+
             except error as e:
                 check_port_socket.close()  # * Close the socket to perform the next port.
                 if e.errno == EADDRINUSE or e.errno == EADDRNOTAVAIL:
                     logger.info(f"Port {iter_evaluated_port} is already in used.")
                     continue
+
                 else:
                     logger.info(f"Port {iter_evaluated_port} is available!")
                     parsed_args.port = iter_evaluated_port
+
                 break
+
             finally:
                 check_port_socket.close()
 

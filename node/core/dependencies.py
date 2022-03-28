@@ -15,7 +15,6 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from logging import Logger, getLogger
 from os import environ as env
-from random import randint
 from secrets import token_hex
 from sqlite3 import IntegrityError
 from typing import Any
@@ -54,6 +53,7 @@ from core.constants import (
     TokenStatus,
     URLAddress,
     UserEntity,
+    random_generator,
 )
 from core.email import get_email_instance
 
@@ -87,7 +87,7 @@ def get_db_instance() -> Database:
 
 def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
     logger.debug(
-        f"Identity tokens were stored. | Context: (Address: {_tokens[0]}, JWT Token:{_tokens[1]})"
+        f"Identity tokens were stored. | Context: (Address: {_tokens[0]}, JWT Token: {_tokens[1]})"
     )
     global identity_tokens
     identity_tokens = _tokens
@@ -104,7 +104,9 @@ def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
 # TODO: Not sure why we have this function signature.
 # def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
 def generate_auth_token() -> str:
-    generated: str = token_hex(randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT))
+    generated: str = token_hex(
+        random_generator.randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT)
+    )
     logger.debug(
         f"Auth token generated with the following constraints: Min Length is {AUTH_CODE_MIN_CONTEXT}, Max Length is {AUTH_CODE_MAX_CONTEXT}. | Context: {generated}"
     )
@@ -167,7 +169,7 @@ async def authenticate_node_client(
                             "Personal e-mail representing this node",
                             "Node username",
                             "Node password",  # * I cannot implement password-checking because I have no time to do it.
-                            "Auth code"
+                            "Auth code",
                         ],
                         hide_fields=[False, False, True],
                         generalized_context="credentials",

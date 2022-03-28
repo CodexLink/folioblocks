@@ -15,7 +15,7 @@ from typing import NewType as _N
 from typing import TypeVar, Union
 
 from asgiref.typing import ASGIApplication
-
+from secrets import SystemRandom
 
 # ! Priority Classification Types
 class DocToRequestTypes(IntEnum):
@@ -60,6 +60,7 @@ URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 WorkExperience = _N("WorkExperience", DocumentSet)
+
 # # Custom Typed Types
 # * For the exceptions.
 # BlockAttribute = TypeVar("BlockAttribute", int, str, list["Transaction"], None)  # TODO.
@@ -133,8 +134,6 @@ BLOCKCHAIN_NAME: Final[str] = "folioblocks-chain.json"
 BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 
 # # Constants, Template Models with Pydantic
-# ! These are used when initializing new resources.
-
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
 
 # # Constraints — Node Operation Parameter
@@ -147,6 +146,9 @@ MASTER_NODE_LIMIT_CONNECTED_NODES: Final[
 MASTER_NODE_IP_PORT: Final[IPPort] = IPPort(
     5000
 )  # - Contains the port from where the `MASTER_NODE` will attempt to live. Should be overridable.
+
+# # Constraints — Randomizer
+random_generator = SystemRandom()
 
 # # Enums - API Models
 class BaseAPI(Enum):
