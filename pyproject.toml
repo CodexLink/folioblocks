@@ -26,6 +26,7 @@ frozendict = "^2.3.0"
 Pympler = "^1.0.1"
 aioconsole = "^0.4.1"
 orjson = "^3.6.7"
+pyotp = "^2.6.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.1.0"

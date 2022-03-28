@@ -55,7 +55,7 @@ from fastapi import Depends
 from passlib.context import CryptContext
 from sqlalchemy import create_engine, select
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
-from email_validator import validate_email, EmailNotValidError
+from email_validator import validate_email, EmailNotValidError, EmailSyntaxError
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -548,7 +548,7 @@ async def ensure_input_prompt(
                         )
                         continue
 
-                    keyword_n_input_validate = verify_email_keyword_and_validate(
+                    keyword_n_input_validate = verify_email_keyword_and_validate_input(
                         display=f"{each_context_to_input}{delimiter} ",
                         inputted=_item_input,
                     )
@@ -578,9 +578,11 @@ async def ensure_input_prompt(
                 )
                 continue
 
-            singleton_keyword_n_value_validate = verify_email_keyword_and_validate(
-                display=f"{input_context}{delimiter} ",
-                inputted=input_s if isinstance(input_s, str) else "",
+            singleton_keyword_n_value_validate = (
+                verify_email_keyword_and_validate_input(
+                    display=f"{input_context}{delimiter} ",
+                    inputted=input_s if isinstance(input_s, str) else "",
+                )
             )
 
             if (
@@ -603,7 +605,7 @@ async def ensure_input_prompt(
         return input_s
 
 
-def verify_email_keyword_and_validate(
+def verify_email_keyword_and_validate_input(
     *, display: str, inputted: str
 ) -> tuple[bool, bool]:
     email_input_indicators: Final[list[str]] = [
@@ -622,7 +624,7 @@ def verify_email_keyword_and_validate(
                 True,
             )  # @o Since `validate_email` doesn't return a bool but rather a context, then we assume its good, therefore return `True`.
 
-        except EmailNotValidError as e:
+        except (EmailNotValidError, EmailSyntaxError) as e:
             logger.error(f"Invalid e-mail address! Please try again | Info: {e}.")
             return (True, False)
 
@@ -718,11 +720,11 @@ def supress_exceptions_and_warnings() -> None:
 
 
 def unconventional_terminate(*, message: str, early: bool = False) -> None:
-    """Recursive infinite by doing nothing after displaying a message that suggests hitting `CTRL+BREAK`.
+    """A method that terminates the runtime process unconventionally via calling signal or `exit()`.
 
     Args:
         message (str): The message to display under `logging.exception(<context>).`
-        early (bool): Inidicates that this method were runnning BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
+        early (bool): Indicates that this method were running BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
     """
 
     logger.exception(message)
@@ -733,4 +735,4 @@ def unconventional_terminate(*, message: str, early: bool = False) -> None:
     kill_process(getpid(), CTRL_C_EVENT)
 
 
-# # Input Stoppers — END
+# # Input Stoppers — ENDfs

@@ -85,9 +85,17 @@ class NewStudentOut(BaseModel):
     student_address: AddressUUID
     date_created: datetime
 
+"""
+# Generate Auth Token Models
+- The following is just a model that represents the query inputs for the endpoint 'admin/generate_auth'.
+"""
+
+class GenerateAuthInput(BaseModel):
+    email: EmailStr
+    role_to_infer: UserEntity
 
 """
-# Block Structure
+# Block Structure Models
 - The following pydantic models are made out of the `Block`. Note that the fields for the `Block` and the `Blockchain` is here as well.
 @o Notice that the the declaration of the classes were done in descending form to the actual declaration of the `Block`.
 @o There are some fields were declared as `None` as they are defined during or after a certain processes.

@@ -103,6 +103,9 @@ BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"
 
+# # Constants, Auth: Time-based OTP.
+TOTP_PASSCODE_REFRESH_INTERVAL: Final[int] = 15
+
 # # Constants, FastAPI Configs
 
 CORS_ALLOW_CREDENTIALS: Final[bool] = True
@@ -142,7 +145,8 @@ MASTER_NODE_LIMIT_CONNECTED_NODES: Final[
 ] = 4  # - The number of nodes that should exists in the network. Master node will reject any connections when the pool is full.
 MASTER_NODE_IP_PORT: Final[IPPort] = IPPort(
     5000
-)  # - Contains the port from where the `MASTER_NODE` will attempt to live. Should be overridable
+)  # - Contains the port from where the `MASTER_NODE` will attempt to live. Should be overridable.
+
 # # Enums - API Models
 class BaseAPI(Enum):
     ADMIN = "Admin API"

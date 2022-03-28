@@ -17,7 +17,6 @@ if __name__ == "__main__":
     )
 
 from http import HTTPStatus
-from typing import Any
 
 from blueprint.schemas import (
     Block,

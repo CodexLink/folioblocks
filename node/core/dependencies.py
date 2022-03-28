@@ -10,6 +10,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from argparse import Namespace
 from asyncio import sleep
+from base64 import b32encode
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from logging import Logger, getLogger
@@ -34,6 +35,7 @@ from blueprint.schemas import EntityLoginResult, Tokens
 from databases import Database
 from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
+from pyotp import TOTP
 from sqlalchemy import select
 from utils.http import get_http_client_instance
 
@@ -42,7 +44,7 @@ from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
     AUTH_ENV_FILE_NAME,
-    MASTER_NODE_IP_PORT,
+    TOTP_PASSCODE_REFRESH_INTERVAL,
     AddressUUID,
     CredentialContext,
     HTTPQueueMethods,
@@ -154,8 +156,8 @@ async def authenticate_node_client(
                     await instances[1].execute(insert_generated_token_stmt)
 
                     await get_email_instance().send(
-                        content=f"<html><body><h1>Register Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                        subject="Register Auth Code for Registration @ Folioblocks",
+                        content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                        subject="Register Auth Code for Master Node Registration @ Folioblocks",
                         to=email_address,
                     )
                 else:  # @o Resolves to NodeType.ARCHIVAL_MINER_NODE.
@@ -180,6 +182,7 @@ async def authenticate_node_client(
                             "email": inputted_credentials[0],
                             "username": inputted_credentials[1],
                             "password": inputted_credentials[2],
+                            "auth_code": inputted_credentials[3],
                         },
                     )
 
@@ -245,6 +248,8 @@ async def authenticate_node_client(
 
                 # TODO: Please test this one.
                 if resolve_entity_to_role.value != get_args_value().prefer_role:
+                    from utils.processors import unconventional_terminate
+
                     unconventional_terminate(
                         message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().prefer_role} instead.",
                         early=True,
@@ -339,3 +344,65 @@ def ensure_past_negotiations(
     # Maybe query or use the current session or the Node ID.
     # We need to contact the other part to ensure that there is negotiations.
     return False
+
+
+# # Passcode Generators — START
+
+
+class PasscodeTOTP:
+    def __init__(
+        self, *, base_code: list[str] | str, interval: int = 10, issuer: str
+    ) -> None:
+        code: str = ""
+
+        # - Resolve the `base_code` by appending or just using only one.
+        if isinstance(base_code, list):
+            for each_code_given in base_code:
+                code += each_code_given
+
+        elif isinstance(base_code, str):
+            code = base_code
+
+        else:
+            from utils.processors import unconventional_terminate
+
+            unconventional_terminate(
+                message=f"Internal Error: The given parameters were not a type `{type(str)}` or `{type(list)}`. This is a developer-related issue. Please report as possible.",
+            )
+
+        # - Resolve by converting it into a consumable base32 output.
+        resolved_code: str = b32encode(code.encode("utf-8")).decode("utf-8")
+        self.otp_auth = TOTP(resolved_code, interval=interval, issuer=issuer)
+
+    def get_code(self) -> str:
+        return self.otp_auth.now()
+
+    def verify(self, code: str) -> bool:
+        return self.otp_auth.verify(code)
+
+
+
+totp_instance: PasscodeTOTP | None = None
+
+def get_totp_instance() -> PasscodeTOTP | None:
+    global totp_instance
+
+    if totp_instance is None:
+        env_secret: str | None = env.get("AUTH_KEY", None)
+        env_auth: str | None = env.get("SECRET_KEY", None)
+
+        if env_secret is not None and env_auth is not None:
+            totp_instance = PasscodeTOTP(
+                base_code=[env_secret, env_auth],
+                interval=TOTP_PASSCODE_REFRESH_INTERVAL,
+                issuer=get_identity_tokens()[0],
+            )
+
+            logger.error(
+                f"The environment key `AUTH_KEY` or `SECRET_KEY` is missing! Call this function when those fields exists from the `{AUTH_ENV_FILE_NAME}` file."
+            )
+
+    return totp_instance
+
+
+# # Passcode Generators — END
