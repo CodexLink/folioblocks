@@ -28,10 +28,10 @@ from api.explorer import explorer_router
 from blueprint.models import tokens, users
 from blueprint.schemas import Tokens
 from core.args import args_handler as ArgsHandler
+from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ASGI_APP_TARGET,
     ASYNC_TARGET_LOOP,
-    AUTH_ENV_FILE_NAME,
     CORS_ALLOW_CREDENTIALS,
     CORS_ALLOWED_HEADERS,
     CORS_ALLOWED_METHODS,
@@ -39,6 +39,7 @@ from core.constants import (
     MASTER_NODE_IP_PORT,
     MASTER_NODE_LIMIT_CONNECTED_NODES,
     NODE_IP_ADDR,
+    AddressUUID,
     HTTPQueueMethods,
     JWTToken,
     LoggerLevelCoverage,
@@ -54,10 +55,9 @@ from core.dependencies import (
     get_identity_tokens,
     store_args_value,
 )
-from core.email import get_email_instance
+from core.email import EmailService, get_email_instance
 from core.logger import LoggerHandler
-from utils.exceptions import InsufficientCredentials
-from utils.http import get_http_client_instance
+from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     close_resources,
     initialize_resources_and_return_db_context,
@@ -67,8 +67,7 @@ from utils.processors import (
 
 """
 # # Startup Dependencies
-
-A set of initialized objects that runs before the uvicorn async context. These are out-of-scope due to the nature of FastAPI uninstantiable by nature under class context.
+- A set of initialized objects that runs before the uvicorn async context. These are out-of-scope due to the nature of FastAPI uninstantiable by nature under class context.
 
 """
 parsed_args: Namespace = ArgsHandler.parse_args()
@@ -98,9 +97,6 @@ logger: logging.Logger = logging.getLogger(
     ASYNC_TARGET_LOOP
 )  # # Note that, uvicorn will override this in the main thread.
 
-
-# * We need to delay this email instance, otherwise it will look for potentially non-existing .env file if this system was initially instantiated for the first time.
-from core.blockchain import get_blockchain_instance
 
 """
 # # API Router Setup and Initialization
@@ -139,13 +135,6 @@ async def pre_initialize() -> None:
     )
 
     await get_http_client_instance().initialize()  # * Initialize the HTTP client for such requests.
-
-    try:
-        await get_email_instance().connect()
-    except InsufficientCredentials as e:
-        logger.warning(
-            f"There is no credentials due to non-existent environment file. ({AUTH_ENV_FILE_NAME}) | Additional Info: {e}"
-        )
 
     await initialize_resources_and_return_db_context(
         runtime=RuntimeLoopContext(__name__),
@@ -226,41 +215,47 @@ async def terminate() -> None:
     # @o But trust me, this is needed in the context of some errors that can't be handled because they are in internal and is not directly affecting components who uses it.
 
     supress_exceptions_and_warnings()
+    identity_tokens: tuple[AddressUUID, JWTToken] = get_identity_tokens()
+    http_instance: HTTPClient = get_http_client_instance()
+    blockchain_instance: BlockchainMechanism = get_blockchain_instance()
 
     if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
-        if get_email_instance().is_connected:
-            get_email_instance().close()  # * Shutdown email service instance.
+        email_instance: EmailService | None = get_email_instance()
+
+        if email_instance is not None and email_instance.is_connected:
+            email_instance.close()  # * Shutdown email service instance.
         # Remove the token related to this master, as well as, change the state of this master account to Offline.
-        if get_identity_tokens() is not None:
+
+        if identity_tokens is not None:
             token_to_invalidate_stmt = (
                 tokens.update()
-                .where(tokens.c.token == get_identity_tokens()[1])
+                .where(tokens.c.token == identity_tokens[1])
                 .values(state=TokenStatus.LOGGED_OUT)
             )
-            users.update().where(
-                users.c.unique_address == get_identity_tokens()[0]
-            ).values(activity=UserActivityState.OFFLINE)
+            users.update().where(users.c.unique_address == identity_tokens[0]).values(
+                activity=UserActivityState.OFFLINE
+            )
 
             await get_db_instance().execute(token_to_invalidate_stmt)
             logger.info(
                 f"Master Node's token has been invalidated due to Logout session."
             )
     else:
-        await get_http_client_instance().enqueue_request(
+        await http_instance.enqueue_request(
             url=URLAddress(
                 f"http://{parsed_args.host}:{parsed_args.port}/entity/logout"
             ),
             method=HTTPQueueMethods.POST,
-            headers={"X-Token": JWTToken(get_identity_tokens()[1])},
+            headers={"X-Token": JWTToken(identity_tokens[1])},
         )
 
-    if get_http_client_instance() is not None:
-        await get_http_client_instance().close(
+    if http_instance is not None:
+        await http_instance.close(
             should_destroy=True
         )  # * Shutdown the HTTP client module.
 
-    if get_blockchain_instance() is not None:
-        await get_blockchain_instance().close()  # * Shutdown the blockchain instance.
+    if blockchain_instance is not None:
+        await blockchain_instance.close()  # * Shutdown the blockchain instance.
 
     await close_resources(
         key=parsed_args.key_file[0]

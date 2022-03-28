@@ -29,12 +29,12 @@ from utils.exceptions import InsufficientCredentials
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
+    AUTH_ENV_FILE_NAME,
     DEFAULT_SMTP_CONNECT_MAX_RETRIES,
     DEFAULT_SMTP_PORT,
     DEFAULT_SMTP_URL,
     CredentialContext,
     IPPort,
-    NodeType,
     URLAddress,
 )
 
@@ -59,60 +59,64 @@ class EmailService:
         self.max_retries = max_retries
 
     async def connect(self) -> None:
+        try:
+            retries_count: int = 1  # - Protect the constant for iteration purposes.
 
-        retries_count: int = 1  # Protect the constant for iteration purposes.
-
-        while retries_count <= self.max_retries:
-            try:
-                logger.info(
-                    f"Attempt #{retries_count} | Attempting to connect to email service ({self.url}) at port {self.port}."
-                )
-
-                self._email_service: SMTP = SMTP(
-                    hostname=self.url,
-                    port=self.port,
-                    username=self.username,
-                    password=self.password,
-                    use_tls=True,
-                )
-
-                await self._email_service.connect()
-                logger.info("SMTP email service connected ...")
-
-                await self._email_service.ehlo()
-                logger.debug(
-                    f"SMTP send EHLO packets to {self.url} to initiate service ..."
-                )
-                logger.info(f"SMTP email service acknowledged and ready.")
-                return
-
-            except (
-                SMTPAuthenticationError,
-                SMTPConnectError,
-                SMTPServerDisconnected,
-            ) as e:
-                # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.
-                logger.critical(
-                    f"Failed to connect at email services. | Additional Info: {e}."
-                )
-
-                if retries_count + 1 <= self.max_retries:
-                    logger.warning(
-                        f"Attempting to reconnect email services ... | Attempt #{retries_count + 1} out of {self.max_retries}"
+            while retries_count <= self.max_retries:
+                try:
+                    logger.info(
+                        f"Attempt #{retries_count} | Attempting to connect AT email service ({self.url}) at port {self.port}."
                     )
 
-                retries_count += 1
-                continue
+                    self._email_service: SMTP = SMTP(
+                        hostname=self.url,
+                        port=self.port,
+                        username=self.username,
+                        password=self.password,
+                        use_tls=True,
+                    )
 
-        from utils.processors import (
-            unconventional_terminate,
-        )  # @o Circulate imports occur when implemented on the top.
+                    await self._email_service.connect()
+                    logger.info("SMTP email service connected ...")
 
-        unconventional_terminate(
-            message="Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
-            early=True,
-        )
-        await sleep(INFINITE)
+                    await self._email_service.ehlo()
+                    logger.debug(
+                        f"SMTP send EHLO packets to {self.url} to initiate service ..."
+                    )
+                    logger.info(f"SMTP email service acknowledged and ready.")
+                    return
+
+                except (
+                    SMTPAuthenticationError,
+                    SMTPConnectError,
+                    SMTPServerDisconnected,
+                ) as e:
+                    # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.
+                    logger.critical(
+                        f"Failed to connect at email services. | Additional Info: {e}."
+                    )
+
+                    if retries_count + 1 <= self.max_retries:
+                        logger.warning(
+                            f"Attempting to reconnect email services ... | Attempt #{retries_count + 1} out of {self.max_retries}"
+                        )
+
+                    retries_count += 1
+                    continue
+
+            from utils.processors import (
+                unconventional_terminate,
+            )  # @o Circulate imports occur when implemented on the top.
+
+            unconventional_terminate(
+                message="Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
+                early=True,
+            )
+            await sleep(INFINITE)
+        except InsufficientCredentials as e:
+            logger.warning(
+                f"There is no credentials due to non-existent environment file. ({AUTH_ENV_FILE_NAME}) | Additional Info: {e}"
+            )
 
     async def send(
         self,
@@ -120,10 +124,10 @@ class EmailService:
         content: str,
         subject: str,
         to: EmailStr,
-    ) -> None:  # This should require a pydantic class for the message??????
+    ) -> None:  # TODO: This should require a pydantic class for the message??????
         if not self._email_service.is_connected:
             logger.warning(
-                "Connection to the email service is not available, re-connecting ..."
+                "Connection to the email service is not available or the connetion is dead, re-connecting ..."
             )
 
             await self.connect()
@@ -160,17 +164,16 @@ class EmailService:
 email_service: EmailService | None = None
 
 
-def get_email_instance() -> EmailService:
+def get_email_instance() -> EmailService | None:
     global email_service
 
-    address: str | None = env.get("EMAIL_SERVER_ADDRESS", None)
-    pwd: str | None = env.get("EMAIL_SERVER_PWD", None)
+    if email_service is None:
+        address: str | None = env.get("EMAIL_SERVER_ADDRESS", None)
+        pwd: str | None = env.get("EMAIL_SERVER_PWD", None)
 
-    logger.debug("Initializing or returning emails service instance ...")
+        logger.debug("Initializing or returning emails service instance ...")
 
-    if address is not None and pwd is not None:
-
-        if email_service is None:
+        if address is not None and pwd is not None:
             email_service = EmailService(
                 url=URLAddress(DEFAULT_SMTP_URL),
                 port=IPPort(DEFAULT_SMTP_PORT),
@@ -178,10 +181,12 @@ def get_email_instance() -> EmailService:
                 password=CredentialContext(pwd),
             )
 
-        logger.debug("Email service instance retrieved, returning to the requestor ...")
-        return email_service
+            return None
+
+        else:
+            raise InsufficientCredentials(
+                EmailService, ["address (EMAIL_ADDRESS)", "pwd (EMAIL_PWD)"]
+            )
 
     else:
-        raise InsufficientCredentials(
-            EmailService, ["address (EMAIL_ADDRESS)", "pwd (EMAIL_PWD)"]
-        )
+        return email_service
