@@ -12,7 +12,6 @@ You should have received a copy of the GNU General Public License along with Fol
 
 
 from asyncio import sleep
-from asyncio.windows_events import INFINITE
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from logging import Logger, getLogger
@@ -31,6 +30,7 @@ from core.constants import (
     DEFAULT_SMTP_CONNECT_MAX_RETRIES,
     DEFAULT_SMTP_PORT,
     DEFAULT_SMTP_URL,
+    INFINITE_TIMER,
     CredentialContext,
     IPPort,
     URLAddress,
@@ -109,7 +109,7 @@ class EmailService:
             message="Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
             early=True,
         )
-        await sleep(INFINITE)
+        await sleep(INFINITE_TIMER)
 
     async def send(
         self,

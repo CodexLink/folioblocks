@@ -1,7 +1,40 @@
 # syntax=docker/dockerfile:1
+
+# - Before building the Docker, ensure that you setup the initial configs of the node.
+# - You have to setup email credentials as well as the account from the master node, or just the credentials.
+# - Ensure that the nodes were able to initialize as well as shutdown gracefully in the sense that the files were able to encrypt-decrpyt such files.
+
 FROM python:3.10.2-slim-buster
 
-ARG INSTANCE_PORT
+ARG NODE_ROLE
+
+# @o Be mindful of this one, since the system knows when the specified port is already in use, it does not however terminates the system. Which causes a mismatch port to port forward.
+ARG NODE_PORT=5001
+
+# ! Ensure that the `NODE_HOST` is the same as the docker's host instance IP address.
+ARG NODE_HOST=172.17.0.2
+
+ENV PORT=${NODE_PORT}
+ENV ROLE=${NODE_ROLE}
+ENV HOST=${NODE_HOST}
+EXPOSE $PORT
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+
+COPY /node .env folioblocks-chain.json folioblocks-node.db poetry.lock pyproject.toml /node/
+
+WORKDIR /node
+RUN mkdir /logs
+
+VOLUME ["/logs", "/folioblocks-chain.json", "/folioblocks-node.db"]
+
+RUN chmod +x /node/main.py \
+	&& pip install poetry==1.1.13 --no-cache-dir --disable-pip-version-check \
+	&& poetry config virtualenvs.create false
+
+RUN poetry install --no-dev --no-interaction --no-root
+
+ENTRYPOINT python3 main.py --host $HOST --log-level INFO --prefer-role $ROLE --port $PORT
+
+STOPSIGNAL SIGINT

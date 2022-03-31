@@ -20,10 +20,15 @@ from os import _exit, getpid
 from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
-from signal import CTRL_C_EVENT
+import sys
+
+if sys.platform == "win32":
+    from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
+else:
+    from signal import SIGTERM as CALL_TERMINATE_EVENT
+
 from sqlite3 import Connection, OperationalError, connect
 from typing import Any, Final
-import sys
 from aioconsole import ainput
 from aiofiles import open as aopen
 from blueprint.models import file_signatures, model_metadata
@@ -734,7 +739,7 @@ def unconventional_terminate(*, message: str, early: bool = False) -> None:
         supress_exceptions_and_warnings()
         exit(-1)
 
-    kill_process(getpid(), CTRL_C_EVENT)
+    kill_process(getpid(), CALL_TERMINATE_EVENT)
 
 
 # # Input Stoppers — ENDfs
