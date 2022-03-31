@@ -3,7 +3,6 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
 from logging import Logger, getLogger
-from random import randint
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
 from typing import Any, Callable, Final
@@ -416,7 +415,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
     def get_sizeof(self, *, block: Block) -> int | None:
         return asizeof(block)
 
-    @ensure_blockchain_ready
+    @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
         if self.node_role == NodeType.MASTER_NODE:
             return NodeMasterInformation(
@@ -443,7 +442,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             "last_mined_block": last_block.id if last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
         }
 
-    @ensure_blockchain_ready
+    @ensure_blockchain_ready()
     def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
         if self._chain is not None:
             candidate_blocks: list[BlockOverview] = deepcopy(

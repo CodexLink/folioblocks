@@ -222,8 +222,6 @@ async def terminate() -> None:
     if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         email_instance: EmailService | None = get_email_instance()
 
-        print("Email", email_instance, type(email_instance), email_instance is None)
-
         if email_instance is not None and email_instance.is_connected:
             email_instance.close()  # * Shutdown email service instance.
         # Remove the token related to this master, as well as, change the state of this master account to Offline.
