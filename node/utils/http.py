@@ -1,9 +1,9 @@
-from asyncio import Task, create_task, sleep
+from asyncio import Task, create_task, sleep, wait
 from logging import Logger, getLogger
 from secrets import token_urlsafe
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientConnectionError, ClientConnectorError, ClientSession
 from blueprint.schemas import HTTPRequestPayload
 from core.constants import (
     ASYNC_TARGET_LOOP,
@@ -37,7 +37,7 @@ class HTTPClient:
 
     async def initialize(self) -> None:
         self._session = ClientSession()  # * Initialize the ClientSession.
-        logger.debug("HTTP client ClientSession initialized.")
+        logger.debug("HTTP client 'ClientSession' were initialized.")
 
         self._is_ready = True
         logger.info("HTTP client is ready to take some requests ...")
@@ -55,7 +55,7 @@ class HTTPClient:
         headers: RequestPayloadContext | None = None,
         await_result_immediate: bool = True,
         name: str | None = None,
-    ) -> None:
+    ) -> Any:
         """
         A method that enqueues request payload to the LIFO list container to execute in burst or for the latter.
         ! Docs OUTDATED.
@@ -75,8 +75,8 @@ class HTTPClient:
         # # First, resolve the request name before handling the condition if its allowed to be retrieved or enqueued basesd on self.is_ready.
         if name:
             if await_result_immediate:
-                logger.error(
-                    f"This request is named as '{name}' will not save its result / resposne in the queue for result caching, please catch the result instead, ignore this message if the response is catched."
+                logger.warning(
+                    f"This request is named as '{name}' will not save its result (response) in the queue for result caching, please catch the result instead, ignore this message if the response is catched."
                 )
         else:
             if not await_result_immediate:
@@ -131,7 +131,7 @@ class HTTPClient:
         )
 
         logger.info(
-            f"The following request '{wrapped_request.name}' has been appended from the queue."
+            f"The following request '{wrapped_request.name}' (requesting to {url}) has been appended from the queue."
         )
         self._queue.append(wrapped_request)
 
@@ -207,19 +207,33 @@ class HTTPClient:
             return
 
         if fetched_task is not None:
-            if not fetched_task.done():
-                logger.warning(
-                    f"The following task '{task_name}' is not yet finished! Awaiting ..."
-                )
-                await fetched_task
+            try:
+                if not fetched_task.done():
+                    logger.warning(
+                        f"The following task '{task_name}' is not yet finished! Awaiting ..."
+                    )
+                    await wait({fetched_task})
 
-            if not fetched_task.result().ok:
-                logger.error(
-                    f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}"
+                if not fetched_task.result().ok:
+                    logger.error(
+                        f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}"
+                    )
+            except (
+                ConnectionRefusedError,
+                ConnectionAbortedError,
+                ConnectionResetError,
+                ClientConnectionError,
+                ClientConnectorError,
+            ) as e:
+                logger.critical(
+                    f"There was error during processing of request. | Info: {e}"
                 )
+                return None
 
-            self._response.pop(task_name)
-            logger.debug(f"Request '{task_name}' has been popped.")
+            finally:
+                self._response.pop(task_name)
+                logger.debug(f"Request '{task_name}' has been popped.")
+
             return fetched_task.result()
 
         else:

@@ -61,6 +61,7 @@ args_value: Namespace
 identity_tokens: tuple[AddressUUID, JWTToken]
 db_instance: Database
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
+master_node_properties: dict[str, str] = {}
 
 
 def store_args_value(args: Namespace) -> None:
@@ -101,6 +102,23 @@ def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
         pass
 
 
+def set_master_node_properties(*, key: str, context: str) -> None:
+    global master_node_properties
+    master_node_properties[key] = context
+
+
+def get_master_node_properties(
+    *, all: bool = False, key: str | None = None
+) -> dict[str, str] | str | int:
+    global master_node_properties
+
+    return (
+        master_node_properties[key]
+        if not all and key is not None
+        else master_node_properties
+    )
+
+
 # TODO: Not sure why we have this function signature.
 # def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
 def generate_auth_token() -> str:
@@ -126,7 +144,7 @@ async def authenticate_node_client(
 
     user_credentials: tuple[CredentialContext, CredentialContext] | None = None
 
-    logger.debug("Attempting to authenticate ...")
+    logger.debug(f"Attempting to authenticate as '{role.name}'...")
 
     if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
         logger.warning(
@@ -171,7 +189,7 @@ async def authenticate_node_client(
                             "Node password",  # * I cannot implement password-checking because I have no time to do it.
                             "Auth code",
                         ],
-                        hide_fields=[False, False, True],
+                        hide_fields=[False, False, True, False],
                         generalized_context="credentials",
                         additional_context="You will have to ensure it this time to avoid potential conflicts from the startup!",
                         enable_async=True,

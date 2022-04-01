@@ -139,7 +139,7 @@ BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
 
 # # Constraints — Node Operation Parameter
-NODE_IP_ADDR: Final[IPAddress] = IPAddress(
+MASTER_NODE_IP_ADDR: Final[IPAddress] = IPAddress(
     "127.0.0.1"
 )  # - The host from where the master node will establish its connection, and the miners will attempt to connect to.
 MASTER_NODE_LIMIT_CONNECTED_NODES: Final[
@@ -148,6 +148,9 @@ MASTER_NODE_LIMIT_CONNECTED_NODES: Final[
 MASTER_NODE_IP_PORT: Final[IPPort] = IPPort(
     5000
 )  # - Contains the port from where the `MASTER_NODE` will attempt to live. Should be overridable.
+
+MASTER_NODE_IP_PORT_FLOOR: Final[int] = 0
+MASTER_NODE_IP_PORT_CEILING: Final[int] = 10
 
 # # Constraints — Randomizer
 random_generator = SystemRandom()

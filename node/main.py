@@ -10,7 +10,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 import logging
 from argparse import Namespace
-from asyncio import create_task, sleep, wait
+from asyncio import Task, create_task, sleep, wait
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
 from logging.config import dictConfig
@@ -18,6 +18,7 @@ from socket import AF_INET, SOCK_STREAM, error, socket
 from typing import Any
 
 import uvicorn
+from aiohttp import ClientResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
@@ -36,9 +37,11 @@ from core.constants import (
     CORS_ALLOWED_HEADERS,
     CORS_ALLOWED_METHODS,
     CORS_ALLOWED_ORIGINS,
+    MASTER_NODE_IP_ADDR,
     MASTER_NODE_IP_PORT,
+    MASTER_NODE_IP_PORT_CEILING,
+    MASTER_NODE_IP_PORT_FLOOR,
     MASTER_NODE_LIMIT_CONNECTED_NODES,
-    NODE_IP_ADDR,
     AddressUUID,
     HTTPQueueMethods,
     JWTToken,
@@ -53,6 +56,8 @@ from core.dependencies import (
     authenticate_node_client,
     get_db_instance,
     get_identity_tokens,
+    get_master_node_properties,
+    set_master_node_properties,
     store_args_value,
 )
 from core.email import EmailService, get_email_instance
@@ -63,6 +68,7 @@ from utils.processors import (
     initialize_resources_and_return_db_context,
     look_for_nodes,
     supress_exceptions_and_warnings,
+    unconventional_terminate,
 )
 
 """
@@ -140,32 +146,71 @@ async def pre_initialize() -> None:
         runtime=RuntimeLoopContext(__name__),
         role=NodeType(parsed_args.prefer_role),
         auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
-    ),
-
-    await get_db_instance().connect()  # Initialize the database.
+    )
 
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
     if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
-        for each_port_in_host in range(0, MASTER_NODE_IP_PORT):
-            _, response = await wait(
+        for master_node_port_candidate in range(
+            MASTER_NODE_IP_PORT_FLOOR, MASTER_NODE_IP_PORT_CEILING + 1
+        ):
+            evaluated_master_port: int = (
+                MASTER_NODE_IP_PORT + master_node_port_candidate
+            )
+            master_node_response, _ = await wait(
                 {
                     create_task(
                         get_http_client_instance().enqueue_request(
                             url=URLAddress(
-                                f"http://{NODE_IP_ADDR}:{each_port_in_host}/explorer/chain"
+                                f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
                             ),
                             method=HTTPQueueMethods.GET,
                             await_result_immediate=True,
-                            name=f"validate_master_node_conn_at_{each_port_in_host}",
+                            name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
                         )
                     )
                 }
             )
 
-            if response:
-                print(response)
+            try:
+                stored_response: Task = master_node_response.pop().result()
+                if not isinstance(stored_response, ClientResponse):
+                    raise KeyError  # @o Since we are displaying the message, raise `KeyError` to hit the log to display.
 
-            raise BaseException
+                # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
+
+                set_master_node_properties(
+                    key="ip_address",
+                    context=f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}",
+                )
+                logger.info(
+                    f"Master node found at {MASTER_NODE_IP_ADDR}:{evaluated_master_port}! (Assumption after response)"
+                )
+                break
+
+            except KeyError:
+                logger.error(
+                    f"Response for the {MASTER_NODE_IP_ADDR}:{evaluated_master_port} has returned okay but contains nothing (client response), continuing to find the right address ..."
+                )
+                continue
+            # if master_node_response:
+            # store_identity_tokens(response, repo)
+            # print(
+            #     master_node_response,
+            #     type(master_node_response.pop()),
+            #     " | ",
+            #     type(master_node_response),
+            #     " | ",
+            #     dir(master_node_response),
+            # )
+            # await sleep(2000)
+
+        # @o When we didn't get anything, then terminate.
+        if not get_master_node_properties(all=True).__len__():
+            unconventional_terminate(
+                message=f"Multiple retries of establishing connection to the master node IP address '{MASTER_NODE_IP_ADDR}', within the range of port {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_FLOOR} to {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_CEILING} were failed! Please check the IP address of the master node and try again.",
+            )
+
+    await get_db_instance().connect()  # * Initialize the database.
 
     create_task(post_initialize())
 
@@ -325,7 +370,7 @@ if __name__ == "__main__":
 
             try:
                 logger.info(f"Checking port {iter_evaluated_port} if available ...")
-                check_port_socket.bind((NODE_IP_ADDR, iter_evaluated_port))
+                check_port_socket.bind((MASTER_NODE_IP_ADDR, iter_evaluated_port))
                 check_port_socket.close()
 
             except error as e:

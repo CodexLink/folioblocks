@@ -26,7 +26,7 @@ from core.constants import (
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
-    NODE_IP_ADDR,
+    MASTER_NODE_IP_ADDR,
     MASTER_NODE_IP_PORT,
     ArgumentParameter,
     LoggerLevelCoverage,
@@ -68,7 +68,7 @@ args_handler.add_argument(
 args_handler.add_argument(
     "-ho",
     "--host",
-    default=NODE_IP_ADDR,
+    default=MASTER_NODE_IP_ADDR,
     help=FOLIOBLOCKS_HELP[ArgumentParameter("HOST")],
 )
 
