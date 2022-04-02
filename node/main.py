@@ -85,10 +85,6 @@ store_args_value(parsed_args)
 @o They need to access these so that certain endpoints will be excluded based on the `parsed_args.prefer_role`.
 ! Note that their contents will change, so better understand the condition and its output as it may contain a router or just a set of functions to call for request to the `MASTER` node.
 """
-if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
-    from api.entity import entity_router
-else:
-    from api.entity import login_as_miner_node, logout_as_miner_node
 
 from api.node import node_router
 
@@ -120,6 +116,8 @@ api_handler: FastAPI = FastAPI()
 api_handler.include_router(node_router)
 
 if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
+    from api.entity import entity_router
+
     api_handler.include_router(admin_router)
     api_handler.include_router(entity_router)
     api_handler.include_router(dashboard_router)
@@ -284,7 +282,7 @@ async def terminate() -> None:
                 f"Master Node's token has been invalidated due to Logout session."
             )
     else:
-        await http_instance.enqueue_request(
+        await http_instance.enqueue_request(  # * No need to encapsulate this function to something else.
             url=URLAddress(
                 f"http://{parsed_args.host}:{parsed_args.port}/entity/logout"
             ),
@@ -298,7 +296,9 @@ async def terminate() -> None:
         )  # * Shutdown the HTTP client module.
 
     if blockchain_instance is not None:
-        await blockchain_instance.close()  # * Shutdown the blockchain instance.
+        await wait(
+            {create_task(blockchain_instance.close())}
+        )  # * Shutdown the blockchain instance. We really need to finish this off before doing anything else.
 
     await close_resources(
         key=parsed_args.key_file[0]

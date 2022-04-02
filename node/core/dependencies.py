@@ -112,8 +112,6 @@ def get_master_node_properties(
 ) -> dict[str, str] | str | int:
     global master_node_properties
 
-    print("wha", master_node_properties)
-
     return (
         master_node_properties[key]
         if not all and key is not None
@@ -216,6 +214,16 @@ async def authenticate_node_client(
                         )
                         continue
 
+                    # - Store the auth code.
+                    if role == NodeType.ARCHIVAL_MINER_NODE:
+                        logger.warning(
+                            "Auth code will be used as auth acceptance for blockchain operation."
+                        )
+                        with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
+                            env_writer.write(
+                                f"AUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
+                            )
+
                     logger.info(
                         "Registration seems to be successful! Please re-enter your username and password to continue."
                     )
@@ -261,7 +269,7 @@ async def authenticate_node_client(
             )
 
             if login_req.ok:
-                # Resolve via pydantic.
+                # * Resolve via pydantic.
                 resolved_model = EntityLoginResult.parse_obj(await login_req.json())
 
                 resolve_entity_to_role = (
@@ -317,7 +325,7 @@ async def authenticate_node_client(
 
 
 class EnsureAuthorized:
-    def __init__(self, _as: UserEntity | list[UserEntity]) -> None:
+    def __init__(self, *, _as: UserEntity | list[UserEntity]) -> None:
         self._as: UserEntity | list[UserEntity] = _as
 
     async def __call__(

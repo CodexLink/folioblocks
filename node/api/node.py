@@ -92,3 +92,107 @@ async def get_node_info() -> NodeConsensusInformation:
 )
 async def consensus_negotiate() -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
     return
+
+
+"""
+# Node-to-Node Consensus Blockchain Operation Endpoints
+
+@o Whenever the blockchain's `MASTER_NODE` is looking for `ARCHIVAL_MINER_NODE`s. It has to ping them in a way that it shows their availability.
+@o However, since we already did some established connection between them, we need to pass them off from the `ARCHIVAL_MINER_NODE`s themselves to the
+@o `MASTER_NODE`. This was to ensure that the node under communication is not a fake node by providing the `AssociationCertificate`.
+
+! These endpoints are being used both.
+"""
+
+
+@node_router.post(
+    "/consensus/acknowledge",
+    tags=[NodeAPI.NODE_TO_NODE_API.value],
+    summary="",
+    description="",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
+            )
+        )
+    ],
+)
+async def consensus_acknowledge() -> None:
+    return
+
+
+@node_router.post(
+    "/consensus/echo",
+    tags=[NodeAPI.NODE_TO_NODE_API.value],
+    summary="",
+    description="",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
+            )
+        )
+    ],
+)
+async def consensus_echo() -> None:
+    return
+
+
+"""
+# Node-to-Node Establish Connection Endpoints
+
+@o Before doing anything, an `ARCHIVAL_MINER_NODE` has to establish connection to the `MASTER_NODE`.
+@o With that, the `ARCHIVAL_MINER_NODE` has to give something a proof, that shows their proof of registration and login.
+@o The following are required: `JWT Token` and `Auth Code` (as Auth Acceptance Code)
+
+- When the `MASTER_NODE` identified those tokens to be valid, it will create a special token for the association.
+- To-reiterate, the following are the structure of the token that is composed of the attributes between the communicator `ARCHIVAL_MINER_NODE` and the `MASTER_NODE`.
+- Which will be the result of the entity named as `AssociationCertificate`.
+
+@o From the `ARCHIVAL_MINER_NODE`: (See above).
+@o From the `MASTER_NODE`: `ARCHIVAL_MINER_NODE`'s keys + AUTH_KEY (1st-Half, 32 characters) + SECRET_KEY(2nd-half, 32 character offset, 64 characters)
+
+# Result: AssociationCertificate for the `ARCHIVAL_MINER_NODE` in AES form, whereas, the key is based from the SECRET_KEY + AUTH_KEY + DATETIME (in ISO format).
+
+! Note that the result from the `MASTER_NODE` is saved, thurs, using `datetime` for the final key is possible.
+
+- When this was created, `ARCHIVAL_MINER_NODE` will save this under the database and will be used further with no expiration.
+"""
+
+
+@node_router.post(
+    "/establish/acknowledge",
+    tags=[NodeAPI.NODE_TO_NODE_API.value],
+    summary="",
+    description="",
+    dependencies=[Depends(EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER))],
+)
+async def establish_acknowledge() -> None:
+    return
+
+
+@node_router.post(
+    "/establish/echo",
+    tags=[NodeAPI.NODE_TO_NODE_API.value],
+    summary="",
+    description="",
+    dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
+)
+async def establish_echo() -> None:
+    return
+
+
+"""
+Blockchain operation
+"""
+
+# @node_router.post(
+#     "/establish/echo",
+#     tags=[NodeAPI.NODE_TO_NODE_API.value],
+#     summary="",
+#     description="",
+#     dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
+# )
+# async def establish_echo() -> None:
+#     return

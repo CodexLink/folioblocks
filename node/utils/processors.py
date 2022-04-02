@@ -11,7 +11,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from asyncio import get_event_loop
+from asyncio import get_event_loop, wait
 from getpass import getpass
 from hashlib import sha256
 from json import dump as json_export
@@ -420,16 +420,22 @@ async def close_resources(*, key: KeyContext) -> None:
     )
 
     logger.warning("Closing blockchain by encryption ...")
-    raw_blockchain_encrypt = await crypt_file(
-        filename=BLOCKCHAIN_RAW_PATH,
-        key=key,
-        process=CryptFileAction.TO_ENCRYPT,
-        enable_async=True,
-        return_file_hash=True,
+    raw_blockchain_encrypt, _ = await wait(
+        {
+            crypt_file(
+                filename=BLOCKCHAIN_RAW_PATH,
+                key=key,
+                process=CryptFileAction.TO_ENCRYPT,
+                enable_async=True,
+                return_file_hash=True,
+            )
+        }
     )
 
+    blockchain_hash_file = raw_blockchain_encrypt.pop().result()
+
     ensure_blockchain_hash_diff_stmt = file_signatures.select().where(
-        file_signatures.c.hash_signature == raw_blockchain_encrypt
+        file_signatures.c.hash_signature == blockchain_hash_file
     )
     ensure_blockchain_hash = await db.execute(ensure_blockchain_hash_diff_stmt)
     ensure_blockchain_hash = False if ensure_blockchain_hash == -1 else True  # Resolve.
@@ -439,21 +445,24 @@ async def close_resources(*, key: KeyContext) -> None:
         blockchain_hash_update_stmt = (
             file_signatures.update()
             .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
-            .values(hash_signature=raw_blockchain_encrypt)
+            .values(hash_signature=blockchain_hash_file)
         )
 
         await db.execute(blockchain_hash_update_stmt)
 
     logger.warning("Closing database by encryption ...")
+    await db.disconnect()  # * Shutdown the database instance.    db.execute()
     await crypt_file(
         filename=DATABASE_RAW_PATH,
         key=key,
         process=CryptFileAction.TO_ENCRYPT,
         enable_async=True,
     )
-
-    await db.disconnect()  # * Shutdown the database instance.    db.execute()
     logger.info("Database and blockchain successfully closed and encrypted.")
+
+    supress_exceptions_and_warnings()
+    await get_event_loop().shutdown_default_executor()
+
 
 
 def validate_file_keys(
@@ -722,7 +731,7 @@ def process_blockchain_hash_state(
 def supress_exceptions_and_warnings() -> None:
     from contextlib import suppress
 
-    with suppress(BaseException):
+    with suppress(BaseException, RuntimeError):
         sys.tracebacklimit = 0
 
 

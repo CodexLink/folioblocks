@@ -1,4 +1,4 @@
-from asyncio import create_task, get_event_loop, sleep, wait
+from asyncio import all_tasks, create_task, get_event_loop, sleep, wait
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -64,7 +64,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # * State and Variable References
         self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
         self.node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
-        self.new_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
+        self.new_master_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
         self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
         self.cached_block_id: int = (
             1  # * The current ID of the block to be rendered from the blockchain.
@@ -98,17 +98,19 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         * If client_role is ARCHIVAL_MINER_NODE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER_NODE node that is available. Also consider checking for unfinished tasks.
         """
 
-        # Load the blockchain.
-
-        # TODO: Role here.
-
+        # - Load the blockchain for both nodes.
         self._chain: frozendict = await self._process_file_state(
             operation=BlockchainIOAction.TO_READ
         )
 
+        # TODO: Consensus by fetching a token or something that allows these node and the master to communicate. They need to save that token in-memory, by losing an instance we loss that token.
+        # TODO: Queue if the hash of this blockchain is the same as from the master (via database).
+
+
+
         # - New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. Also note that this will be turned-around when there's a context.
 
-        self.new_instance = True if not len(self._chain["chain"]) else False
+        self.new_master_instance = True if not len(self._chain["chain"]) else False
 
         # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
         if (
@@ -121,7 +123,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
             # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
             self.blockchain_ready = True
-            self.new_instance = False
+            self.new_master_instance = False
 
             logger.info(
                 "Genesis block generation has been finished! Blockchain system ready."
@@ -156,7 +158,9 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
             self._chain["chain"].append(frozendict(block_context))
             self.cached_block_id += 1
-            await self._process_file_state(operation=BlockchainIOAction.TO_WRITE)
+            await wait(
+                {self._process_file_state(operation=BlockchainIOAction.TO_WRITE)}
+            )
             await wait({create_task(self._consensus_sleeping_phase())})
 
         else:
@@ -191,11 +195,11 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                         .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
                         .values(hash_signature=new_blockchain_hash)
                     )
+
+                    await get_db_instance().execute(blockchain_hash_update_stmt)
                     logger.debug(
                         f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
                     )
-
-                    await get_db_instance().execute(blockchain_hash_update_stmt)
 
                     await content_buffer.write(byte_json_content.decode("utf-8"))
                     return self._chain
@@ -331,10 +335,12 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         # Check for the genesis_block before inserting it.
         # TODO: We may need to use create_block since we have an unallocated_block.
 
-        mined_genesis_block = await get_event_loop().run_in_executor(
-            None,
-            self._mine_block,
-            self.create_block(transactions=None),
+        mined_genesis_block = await (
+            get_event_loop().run_in_executor(
+                None,
+                self._mine_block,
+                self.create_block(transactions=None),
+            )
         )
 
         await self._append(
@@ -472,7 +478,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             return resolved_candidate_blocks
 
     def _calculate_sleep_time(self, *, mine_duration: float | int) -> None:
-        if not self.is_blockchain_ready and not self.new_instance:
+        if not self.is_blockchain_ready and not self.new_master_instance:
             self.consensus_timer = timedelta(
                 seconds=mine_duration
             )  # TODO: Get the average mining seconds to confluence with the timer.
@@ -481,7 +487,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             )
 
     async def _consensus_sleeping_phase(self) -> None:
-        if not self.new_instance:
+        if not self.new_master_instance:
             self.sleeping_from_consensus = True
 
             logger.info(
@@ -500,7 +506,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             return
 
         logger.info(
-            f"Consensus timer ignored due to condition. | Is new instance: {self.new_instance}, Blockchain ready: {self.blockchain_ready}"
+            f"Consensus timer ignored due to condition. | Is new instance: {self.new_master_instance}, Blockchain ready: {self.blockchain_ready}"
         )
 
     def _set_node_state(self) -> None:
