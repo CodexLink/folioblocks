@@ -24,6 +24,8 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
 from sqlalchemy.orm import relationship
 
+from node.core.constants import AssociatedNodeStatus
+
 # TODO: We might wanna create a key where it combines all of the certain fields and when it was inserted for reset password, it should resulted to that!
 
 """
@@ -66,11 +68,10 @@ users = Table(
     ),
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
-    # TODO: I'm not sure if ths would work.
-    # association =
-    Column("username", String(24), unique=True, nullable=False),
+    # association = # TODO.
+    Column("username", String(24), nullable=False, unique=True),
     Column("password", String(64), nullable=False),
-    Column("email", String(128), unique=True, nullable=False),
+    Column("email", String(128), nullable=False, unique=True),
     Column("type", SQLEnum(UserEntity), server_default=UserEntity.DASHBOARD_USER.name),
     Column(
         "activity",
@@ -98,7 +99,7 @@ blacklisted_users = Table(
     Column("issued_on", DateTime, server_default=func.now()),
 )
 
-blacklisted_users.user_ref = relationship(users, foreign_keys=["user"])  # type: ignore
+blacklisted_users.user_ref = relationship(users, foreign_keys="user")  # type: ignore
 
 tokens = Table(
     "tokens",
@@ -126,22 +127,50 @@ auth_codes = Table(
     Column("id", Integer, primary_key=True),
     Column("generated_by", String(38), ForeignKey(user_id_ref), nullable=True),
     Column(
-        "code", String(64), unique=True, nullable=False
+        "code", String(64), nullable=False, unique=True
     ),  # 64 because token_hex-based restriction is not enforced, meaning len is unpredictable for some reason.
     Column("account_type", SQLEnum(UserEntity), nullable=False),
-    Column("to_email", String(128), unique=True, nullable=False),
+    Column("to_email", String(128), nullable=False, unique=True),
     Column("is_used", Boolean, server_default="False"),
     Column(
         "expiration", DateTime, server_default=func.now()
     ),  # TODO: Move this server_default  + 2 days from creation of auth_codes.
 )
 
-auth_codes.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
+auth_codes.user_ref = relationship(users, foreign_keys="generated_by")  # type: ignore
 
 file_signatures = Table(
     "file_signatures",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("filename", String(64), unique=True, nullable=False),
-    Column("hash_signature", Text, unique=True, nullable=False),
+    Column("filename", String(64), nullable=False, unique=True),
+    Column("hash_signature", Text, nullable=False, unique=True),
+)
+
+
+associated_nodes = Table(
+    "associated_nodes",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column(
+        "user_address",
+        String(38),
+        ForeignKey(user_id_ref),
+        nullable=False,
+        unique=False,
+    ),
+    Column("certificate", Text, unique=False, nullable=False),
+    Column(
+        "status",
+        SQLEnum(AssociatedNodeStatus),
+        nullable=True,
+        server_default=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE,
+    ),
+    Column("source_address", String(15), nullable=False, unique=True),
+    Column("source_port", Integer, nullable=False, unique=False),
+    Column("sleep_expiration", DateTime, nullable=True, unique=False),
+)
+
+associated_nodes.user_ref = relationship(  # type: ignore
+    associated_nodes, foreign_keys="user_address"
 )

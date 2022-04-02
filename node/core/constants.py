@@ -208,10 +208,6 @@ class BlockchainIOAction(IntEnum):
     TO_WRITE = auto()
     TO_READ = auto()
 
-    # These are unconfirmed and is subject for removal.
-    TO_APPEND = auto()
-    TO_OVERWRITE = auto()
-
 
 # # Enums, Constraints
 # ! Blockchain (Explorer) Query
@@ -270,6 +266,13 @@ class UserEntity(Enum):
     ARCHIVAL_MINER_NODE_USER = "Archival Miner Node User"
     DASHBOARD_USER = "Dashboard User"
     ADMIN_USER = "Administrator"
+
+
+class AssociatedNodeStatus(IntEnum):
+    CURRENTLY_AVAILABLE = auto()
+    CURRENTLY_MINING = auto()
+    CURRENTLY_NOT_AVAILABLE = auto()
+    CURRENTLY_SLEEPING = auto()
 
 
 # # Enums, Generic
