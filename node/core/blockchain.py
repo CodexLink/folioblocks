@@ -100,6 +100,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
         # Load the blockchain.
 
+        # TODO: Role here.
+
         self._chain: frozendict = await self._process_file_state(
             operation=BlockchainIOAction.TO_READ
         )

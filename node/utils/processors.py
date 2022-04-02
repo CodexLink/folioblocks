@@ -476,7 +476,7 @@ def validate_file_keys(
 
         except OSError:
             exit(
-                f"The file {file_ref} may not be a valid .env file or is missing. Please check your arguments or the file."
+                f"The file {file_ref} may not be a valid node-env.vars file or is missing. Please check your arguments or the file."
             )
 
         a_key: KeyContext = env.get("AUTH_KEY", None)
@@ -742,4 +742,18 @@ def unconventional_terminate(*, message: str, early: bool = False) -> None:
     kill_process(getpid(), CALL_TERMINATE_EVENT)
 
 
-# # Input Stoppers — ENDfs
+# # Input Stoppers — END
+
+# # Output Filters — START
+def mask(data: bytes | int | str) -> str:
+    if isinstance(data, int):
+        _data = data.__str__()
+    elif isinstance(data, bytes):
+        _data = data.decode("utf-8")
+    else:
+        _data = data
+
+    return "*" * len(_data)
+
+
+# # Output Filters — END

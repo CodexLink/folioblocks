@@ -17,20 +17,21 @@ ARG NODE_HOST=172.17.0.2
 ENV PORT=${NODE_PORT}
 ENV ROLE=${NODE_ROLE}
 ENV HOST=${NODE_HOST}
+
 EXPOSE $PORT
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-COPY /node .env folioblocks-chain.json folioblocks-node.db poetry.lock pyproject.toml /node/
+COPY /node poetry.lock pyproject.toml /node/
+COPY /backup /node/backup
 
 WORKDIR /node
-RUN mkdir /logs
 
-VOLUME ["/logs", "/folioblocks-chain.json", "/folioblocks-node.db"]
+RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/with_chain/** ./ ; else cp backup/archival/registered/** ./ ; fi
 
-RUN chmod +x /node/main.py \
-	&& pip install poetry==1.1.13 --no-cache-dir --disable-pip-version-check \
+RUN chmod +x /node/main.py\
+	&& pip install poetry==1.1.13 --no-cache-dir --disable-pip-version-check\
 	&& poetry config virtualenvs.create false
 
 RUN poetry install --no-dev --no-interaction --no-root

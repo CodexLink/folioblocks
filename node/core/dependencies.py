@@ -102,7 +102,7 @@ def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
         pass
 
 
-def set_master_node_properties(*, key: str, context: str) -> None:
+def set_master_node_properties(*, key: str, context: Any) -> None:
     global master_node_properties
     master_node_properties[key] = context
 
@@ -111,6 +111,8 @@ def get_master_node_properties(
     *, all: bool = False, key: str | None = None
 ) -> dict[str, str] | str | int:
     global master_node_properties
+
+    print("wha", master_node_properties)
 
     return (
         master_node_properties[key]
@@ -210,7 +212,7 @@ async def authenticate_node_client(
 
                     if not register_node.ok:
                         logger.error(
-                            f"There seems to be an error during request. Please try again | Additional Info: {register_node.json()}"
+                            f"There seems to be an error during request. Please try again | Additional Info: {await register_node.json()}"
                         )
                         continue
 

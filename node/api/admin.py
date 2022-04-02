@@ -97,7 +97,7 @@ async def generate_auth_token_for_other_nodes(
             subject="Register Auth Code for Archival Miner Node Registration @ Folioblocks",
             to=payload.email,
         )
-        return {"detail": "Registration successful."}
+        return {"detail": "Invocation of the email for registration were successful."}
 
     raise HTTPException(
         detail="Invalid passcode.", status_code=HTTPStatus.NOT_ACCEPTABLE

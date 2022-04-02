@@ -179,12 +179,16 @@ async def pre_initialize() -> None:
                 # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
 
                 set_master_node_properties(
-                    key="ip_address",
-                    context=f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}",
+                    key="MASTER_NODE_ADDRESS", context=MASTER_NODE_IP_ADDR
                 )
+                set_master_node_properties(
+                    key="MASTER_NODE_PORT", context=evaluated_master_port
+                )
+
                 logger.info(
                     f"Master node found at {MASTER_NODE_IP_ADDR}:{evaluated_master_port}! (Assumption after response)"
                 )
+
                 break
 
             except KeyError:
@@ -192,17 +196,6 @@ async def pre_initialize() -> None:
                     f"Response for the {MASTER_NODE_IP_ADDR}:{evaluated_master_port} has returned okay but contains nothing (client response), continuing to find the right address ..."
                 )
                 continue
-            # if master_node_response:
-            # store_identity_tokens(response, repo)
-            # print(
-            #     master_node_response,
-            #     type(master_node_response.pop()),
-            #     " | ",
-            #     type(master_node_response),
-            #     " | ",
-            #     dir(master_node_response),
-            # )
-            # await sleep(2000)
 
         # @o When we didn't get anything, then terminate.
         if not get_master_node_properties(all=True).__len__():
@@ -225,6 +218,11 @@ async def post_initialize() -> None:
 
     - Tasks moved from the initialize() function may adjust to concurrently run the instance while doing other several checks.
     """
+
+    if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
+        parsed_args.host, parsed_args.port = get_master_node_properties(
+            key="MASTER_NODE_ADDRESS"
+        ), get_master_node_properties(key="MASTER_NODE_PORT")
 
     await authenticate_node_client(
         role=NodeType(parsed_args.prefer_role),

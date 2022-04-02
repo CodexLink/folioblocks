@@ -91,7 +91,7 @@ MAX_JWT_HOLD_TOKEN: Final[int] = 5
 
 UUID_KEY_PREFIX: Final[str] = "fl"
 UUID_KEY_LENGTH: Final[int] = 35
-AUTH_ENV_FILE_NAME: Final[str] = ".env"
+AUTH_ENV_FILE_NAME: Final[str] = "node-env.vars"
 
 AUTH_CODE_MIN_CONTEXT: Final[int] = 4
 AUTH_CODE_MAX_CONTEXT: Final[int] = 32
@@ -126,6 +126,7 @@ INFINITE_TIMER: Final[
 DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
 DEFAULT_SMTP_PORT: Final[int] = 465
 DEFAULT_SMTP_CONNECT_MAX_RETRIES: Final[int] = 10
+DEFAULT_SMTP_TIMEOUT_CONNECTION: Final[int] = 10
 
 # # Constants, Resources
 DATABASE_NAME: Final[str] = "folioblocks-node.db"

@@ -27,8 +27,10 @@ from pydantic import EmailStr
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
+    AUTH_ENV_FILE_NAME,
     DEFAULT_SMTP_CONNECT_MAX_RETRIES,
     DEFAULT_SMTP_PORT,
+    DEFAULT_SMTP_TIMEOUT_CONNECTION,
     DEFAULT_SMTP_URL,
     INFINITE_TIMER,
     CredentialContext,
@@ -73,7 +75,9 @@ class EmailService:
                     f"Attempt #{retries_count} | Attempting to connect AT email service ({self.url}) at port {self.port}."
                 )
 
-                await self._email_service.connect()
+                await self._email_service.connect(
+                    timeout=DEFAULT_SMTP_TIMEOUT_CONNECTION
+                )
                 logger.info("SMTP email service connected ...")
 
                 await self._email_service.ehlo()
@@ -106,7 +110,7 @@ class EmailService:
         )  # @o Circulate imports occur when implemented on the top.
 
         unconventional_terminate(
-            message="Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `.env` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
+            message=f"Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `{AUTH_ENV_FILE_NAME}` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
             early=True,
         )
         await sleep(INFINITE_TIMER)
