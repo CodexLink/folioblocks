@@ -20,9 +20,9 @@ from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
+from node.core.constants import RequestPayloadContext
 from utils.processors import unconventional_terminate
 
-from core.consensus import AdaptedPoETConsensus
 from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
@@ -38,30 +38,29 @@ from core.constants import (
     random_generator,
 )
 from core.dependencies import get_db_instance, get_identity_tokens
-from core.tasks import AsyncTaskQueue
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 # TODO: Should we seperate consensus from this class?
-class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
+class BlockchainMechanism:
     def __init__(
         self,
         *,
-        block_timer: int = 5,
+        block_timer_seconds: int = 5,
         auth_tokens: tuple[AddressUUID, JWTToken],
-        client_role: NodeType,
+        node_role: NodeType,
     ) -> None:
 
-        # TODO: After finalization, seperate some methods and attributes for the ARCHIVAL_MINER_NODE and MASTER_NODE.
-        # Required since this class will be invoked no matter what the role of the client instance is.
-
-        # * Required Variables for the Blockchain Operaetion.
-        self.node_role: NodeType = client_role
+        # # Required Variables for the Blockchain Operaetion.
+        self.node_role: NodeType = node_role
         self.auth_token: tuple[AddressUUID, JWTToken] = auth_tokens
-        self.block_timer: Final[int] = block_timer
+
+        self.block_timer_seconds: Final[int] = block_timer_seconds
         self.consensus_timer: timedelta  # TODO: This will be computed based on the information by the MASTER_NODE node on how much is being participated, along with its computed value based on the average mining and iteration.
 
-        # * State and Variable References
+        self.transaction_container: list[Transaction] = []
+
+        # # State and Variable References
         self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
         self.node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
         self.new_master_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
@@ -70,10 +69,8 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             1  # * The current ID of the block to be rendered from the blockchain.
         )
 
-        super().__init__()
-
     # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
-    def ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
+    def __ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
         def deco(fn: Callable) -> Callable:
             def instance(
                 self: Any, *args: list[Any], **kwargs: dict[Any, Any]
@@ -85,10 +82,28 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                     unconventional_terminate(message=message)
 
                 return None
-
             return instance
-
         return deco
+
+    async def block_timer_executor(self) -> None:
+        while True:
+            await sleep(self.block_timer_seconds)
+
+            await self._get_available_archival_miner_nodes()
+
+            # - Process those transactions first.
+            # - Then, we create a block from it.
+            # - Queue for other nodes. (Since we record those nodes you just got AssociationCertificate, queue for them whose their state is ONLINE and is currently on available in the means of their state is not mining or something, whatever.) Use SQL relationship here.
+            # - Ping first then, check echo from them to see if their consensus timer is done.
+            # - If they are done, check if it is absolutely right. (Don't know the basis as of now)
+            # - When done, send it away, then we write that we have a transaction like this on SQL. It has to be fulfilled before labelled as done, as they are inserted from the blockchain.
+
+            # self._create_transaction()
+
+        return
+
+    # async def close(self) -> None:
+    #     raise NotImplemented
 
     async def initialize(self) -> None:
         """
@@ -99,37 +114,106 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         """
 
         # - Load the blockchain for both nodes.
-        self._chain: frozendict = await self._process_file_state(
+        self._chain: frozendict = await self._process_blockchain_file_to_current_state(
             operation=BlockchainIOAction.TO_READ
         )
 
-        # TODO: Consensus by fetching a token or something that allows these node and the master to communicate. They need to save that token in-memory, by losing an instance we loss that token.
-        # TODO: Queue if the hash of this blockchain is the same as from the master (via database).
+        if self.node_role == NodeType.MASTER_NODE:
+            # - New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. Also note that this will be turned-around when there's a context.
+            self.new_master_instance = True if not len(self._chain["chain"]) else False
 
+            # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
+            if (
+                self._chain is not None
+                and "chain" in self._chain
+                and not self._chain["chain"]
+            ):
+                for _ in range(0, BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
+                    await self._create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
 
+                # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
+                self.blockchain_ready = True
+                self.new_master_instance = False
 
-        # - New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. Also note that this will be turned-around when there's a context.
+                logger.info(
+                    "Genesis block generation has been finished! Blockchain system ready."
+                )
+        else:
+            # TODO: Consensus by fetching a token or something that allows these node and the master to communicate. They need to save that token in-memory, by losing an instance we loss that token.
+            # TODO: Queue if the hash of this blockchain is the same as from the master (via database).
+            pass
 
-        self.new_master_instance = True if not len(self._chain["chain"]) else False
+    async def insert_transaction(self, data: RequestPayloadContext) -> None:
+        self.transaction_container.append(await self._create_transaction(data))
 
-        # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
-        if (
-            self._chain is not None
-            and "chain" in self._chain
-            and not self._chain["chain"]
-        ):
-            for _ in range(0, BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
-                await self.create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
+    async def _get_available_archival_miner_nodes(
+        self,
+    ) -> None:  # TODO: This should return something.
+        pass
 
-            # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
-            self.blockchain_ready = True
-            self.new_master_instance = False
-
-            logger.info(
-                "Genesis block generation has been finished! Blockchain system ready."
+    @__ensure_blockchain_ready()
+    def get_blockchain_public_state(self) -> NodeMasterInformation | None:
+        if self.node_role == NodeType.MASTER_NODE:
+            return NodeMasterInformation(
+                block_timer=self.block_timer_seconds,
+                total_addresses=9999,
+                total_blocks=len(self._chain["chain"])
+                if self._chain is not None
+                else 0,
+                total_transactions=69420,
             )
+        logger.critical(
+            f"This client node requests for the `public_state` when their role is {self.node_role}! | Expects: {NodeType.MASTER_NODE}."
+        )
+        return None
 
-    async def _append(
+    @__ensure_blockchain_ready()
+    def get_blockchain_private_state(self) -> dict[str, Any]:
+        last_block: Block | None = self._get_last_block()
+
+        return {
+            "sleeping": self.is_node_ready,
+            "mining": self.is_blockchain_ready,
+            "consensus_timer": self.consensus_timer,
+            "last_mined_block": last_block.id if last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
+        }
+
+    @property
+    def is_blockchain_ready(self) -> bool:
+        return self.blockchain_ready
+
+    @property
+    def is_node_ready(self) -> bool:
+        return self.node_ready and self.is_blockchain_ready
+
+    @__ensure_blockchain_ready()
+    def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
+        if self._chain is not None:
+            candidate_blocks: list[BlockOverview] = deepcopy(
+                self._chain["chain"][len(self._chain["chain"]) - limit_to :]
+            )
+            resolved_candidate_blocks: list[BlockOverview] | list = []
+
+            for each_block in candidate_blocks:
+                each_block = dict(each_block)
+                # - [1] Push validator outside.
+                each_block["validator"] = each_block["contents"]["validator"]
+
+                # -  [2] Remove the contents scope.
+                del each_block["contents"]
+
+                # - [3] Remove hash context.
+                del each_block["hash_block"]
+                del each_block["prev_hash_block"]
+
+                # - [4] Assign this to the indexed block.
+                resolved_candidate_blocks.append(BlockOverview.parse_obj(each_block))
+
+            # * Once done, return the list.
+            resolved_candidate_blocks.reverse()
+            return resolved_candidate_blocks
+
+    async def _append_block(
         self,
         *,
         context: Block | Transaction,
@@ -159,7 +243,11 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             self._chain["chain"].append(frozendict(block_context))
             self.cached_block_id += 1
             await wait(
-                {self._process_file_state(operation=BlockchainIOAction.TO_WRITE)}
+                {
+                    self._process_blockchain_file_to_current_state(
+                        operation=BlockchainIOAction.TO_WRITE
+                    )
+                }
             )
             await wait({create_task(self._consensus_sleeping_phase())})
 
@@ -168,8 +256,152 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
             )
 
+    def _consensus_calculate_sleep_time(self, *, mine_duration: float | int) -> None:
+        if not self.is_blockchain_ready and not self.new_master_instance:
+            self.consensus_timer = timedelta(
+                seconds=mine_duration
+            )  # TODO: Get the average mining seconds to confluence with the timer.
+            logger.debug(
+                f"Consensus timer is calculated. Set to {self.consensus_timer.total_seconds()} seconds before waking. | Object: {self.consensus_timer}"
+            )
+
+    async def _consensus_sleeping_phase(self) -> None:
+        if not self.new_master_instance:
+            self.sleeping_from_consensus = True
+
+            logger.info(
+                f"Block mining is finished. Sleeping for {self.consensus_timer.total_seconds()} seconds."
+            )
+
+            await sleep(self.consensus_timer.total_seconds())
+            self.sleeping_from_consensus = False
+
+            # * When done, ensure that the node's sate is changed.
+            self._set_node_state()
+
+            logger.info(
+                "Woke up from the consensus timer! Ready to take blocks to mine."
+            )
+            return
+
+        logger.info(
+            f"Consensus timer ignored due to condition. | Is new instance: {self.new_master_instance}, Blockchain ready: {self.blockchain_ready}"
+        )
+
+    def _create_block(
+        self,
+        *,
+        transactions: list[Transaction] | None,
+    ) -> Block | None:
+
+        # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size, and hash_block.
+        # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
+        # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
+
+        last_block: Block | None = self._get_last_block()
+
+        if last_block is not None:
+            if last_block.id >= self.cached_block_id:
+                logger.critical(
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.cached_block_id}"
+                )
+                return None
+        else:
+            logger.warning(
+                f"This new block will be the first block from this blockchain."
+            )
+
+        _block: Block = Block(
+            id=self.cached_block_id,
+            block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
+            hash_block=None,  # ! Unsolvable, mine_block will handle it.
+            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if last_block is None else HashUUID(last_block.hash_block),  # type: ignore
+            contents=HashableBlock(
+                nonce=None,  # ! Unsolvable, these are determined during the process of mining.
+                validator=get_identity_tokens()[0],
+                transactions=transactions,
+                timestamp=datetime.now(),
+            ),
+        )
+
+        _block.block_size = asizeof(_block.contents.json())
+        return _block
+
+    async def _create_genesis_block(self) -> None:
+        """
+        Generates a block, hash it and append it within the context of the blockchain, for both the file and the in-memory.
+        """
+
+        # Check for the genesis_block before inserting it.
+        # TODO: We may need to use create_block since we have an unallocated_block.
+
+        mined_genesis_block = await (
+            get_event_loop().run_in_executor(
+                None,
+                self._mine_block,
+                self._create_block(transactions=None),
+            )
+        )
+
+        await self._append_block(
+            context=mined_genesis_block, auth_context=get_identity_tokens()
+        )
+
+    # TODO Do something here.
+    async def _create_transaction(self, data: RequestPayloadContext) -> Transaction:
+        return Transaction()
+
+    def _get_last_block(self) -> Block | None:
+        # ! This return seems confusing but I have to sacrafice for my own sake of readability.
+        # @o First we access the list by calling the key 'chain'.
+        # @o Since we got to the list, we might wanna get the last block by slicing the list with the use of its own length - 1 to get the last block.
+        # @o But before we do that, ensure that last item has a content. Accessing the last item with the use of index while it doesn't contain anything will result in `IndexError`.
+
+        if len(self._chain["chain"]):
+            last_block_ref = Block.parse_obj(
+                self._chain["chain"][len(self._chain["chain"]) - 1 :][0]
+            )
+            logger.debug(f"Last block has been fetched. Context | {last_block_ref}")
+            return last_block_ref
+
+        logger.warning("There's no block inside blockchain.")
+
+    def _get_sizeof(self, *, block: Block) -> int | None:
+        return asizeof(block)
+
+    # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
+    def _mine_block(self, block: Block) -> Block:
+        # If success, then return the hash of the block based from the difficulty.
+        self.blockchain_ready = False
+        prev: float = time()
+        nth: int = 1
+
+        logger.info(f"Attempting to mine a Block #{block.id} ...")
+
+        while True:
+            # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
+
+            block.contents.nonce = random_generator.randint(0, MAX_INT_PYTHON)
+            computed_hash: HashUUID = HashUUID(
+                sha256(block.json().encode("utf-8")).hexdigest()
+            )
+
+            if (
+                computed_hash[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY]
+                == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
+            ):
+                block.hash_block = computed_hash
+                logger.info(
+                    f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
+                )
+                self._consensus_calculate_sleep_time(mine_duration=time() - prev)
+                self.blockchain_ready = True
+                return block
+
+            nth += 1
+
     # Overwrites existing buffer from the frozendict if consensus has been established.
-    async def _process_file_state(
+    async def _process_blockchain_file_to_current_state(
         self,
         *,
         operation: BlockchainIOAction,
@@ -182,7 +414,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
 
                 if operation == BlockchainIOAction.TO_WRITE:
                     byte_json_content: bytes = export_to_json(
-                        self._chain, default=self.serialize_to_file_blockchain
+                        self._chain, default=self._process_serialize_to_file_blockchain
                     )
 
                     logger.debug(
@@ -207,7 +439,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
                 else:
                     raw_data = await content_buffer.read()
                     partial_deserialized_data = import_raw_json_to_dict(raw_data)
-                    deserialized_data = self.load_deserialized_blockchain(
+                    deserialized_data = self._process_deserialized_and_load_blockchain(
                         partial_deserialized_data
                     )
                     logger.info(
@@ -221,38 +453,7 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
         )
         return None
 
-    def serialize_to_file_blockchain(self, o: frozendict) -> dict[str, Any]:
-        """
-        A method that serializes the python objects to the blockchain file. This represents the JSON form of the blockchain.
-
-        Args:
-            o (frozendict): The whole chain, wrapped in frozendict.
-
-        Raises:
-            TypeError: Cast TypeError when the constraint from the `o` is not followed.
-
-        Returns:
-            dict[str, Any]: Returns the JSON form of the blockchain that is in-memory.
-
-        Note:
-        TODO By this point, I still haven't consider for scalability and its impact from processing such data.
-        * Until there's an impact, I will implement in-memory caching to reduce processing time and insert only data that is missing from the data pool.
-        """
-
-        if isinstance(o, frozendict):  # * Cast mutability on the whole chain.
-            _o = dict(deepcopy(o))
-            for block_idx, each_block in enumerate(_o["chain"]):
-                # * Then cast mutability from the whole block of the chain.
-                _o["chain"][block_idx] = dict(each_block)
-
-                # * Lastly, cast mutability to the content of the whole block of the chain.
-                _o["chain"][block_idx]["contents"] = dict(each_block["contents"])
-
-            return _o
-
-        raise TypeError
-
-    def load_deserialized_blockchain(
+    def _process_deserialized_and_load_blockchain(
         self,
         context: dict[str, Any],
     ) -> frozendict:
@@ -327,187 +528,40 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             message=f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)}). This is a logic error, please report to the developers as soon as possible.",
         )
 
-    async def create_genesis_block(self) -> None:
+    def _process_serialize_to_file_blockchain(self, o: frozendict) -> dict[str, Any]:
         """
-        Generates a block, hash it and append it within the context of the blockchain, for both the file and the in-memory.
+        A method that serializes the python objects to the blockchain file. This represents the JSON form of the blockchain.
+
+        Args:
+            o (frozendict): The whole chain, wrapped in frozendict.
+
+        Raises:
+            TypeError: Cast TypeError when the constraint from the `o` is not followed.
+
+        Returns:
+            dict[str, Any]: Returns the JSON form of the blockchain that is in-memory.
+
+        Note:
+        TODO By this point, I still haven't consider for scalability and its impact from processing such data.
+        * Until there's an impact, I will implement in-memory caching to reduce processing time and insert only data that is missing from the data pool.
         """
 
-        # Check for the genesis_block before inserting it.
-        # TODO: We may need to use create_block since we have an unallocated_block.
+        if isinstance(o, frozendict):  # * Cast mutability on the whole chain.
+            _o = dict(deepcopy(o))
+            for block_idx, each_block in enumerate(_o["chain"]):
+                # * Then cast mutability from the whole block of the chain.
+                _o["chain"][block_idx] = dict(each_block)
 
-        mined_genesis_block = await (
-            get_event_loop().run_in_executor(
-                None,
-                self._mine_block,
-                self.create_block(transactions=None),
-            )
-        )
+                # * Lastly, cast mutability to the content of the whole block of the chain.
+                _o["chain"][block_idx]["contents"] = dict(each_block["contents"])
 
-        await self._append(
-            context=mined_genesis_block, auth_context=get_identity_tokens()
-        )
+            return _o
 
-    def create_block(
-        self,
-        *,
-        transactions: list[Transaction] | None,
-    ) -> Block | None:
+        raise TypeError
 
-        # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size, and hash_block.
-        # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
-        # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
-
-        last_block: Block | None = self._get_last_block()
-
-        if last_block is not None:
-            if last_block.id >= self.cached_block_id:
-                logger.critical(
-                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.cached_block_id}"
-                )
-                return None
-        else:
-            logger.warning(
-                f"This new block will be the first block from this blockchain."
-            )
-
-        _block: Block = Block(
-            id=self.cached_block_id,
-            block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
-            hash_block=None,  # ! Unsolvable, mine_block will handle it.
-            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if last_block is None else HashUUID(last_block.hash_block),  # type: ignore
-            contents=HashableBlock(
-                nonce=None,  # ! Unsolvable, these are determined during the process of mining.
-                validator=get_identity_tokens()[0],
-                transactions=transactions,
-                timestamp=datetime.now(),
-            ),
-        )
-
-        _block.block_size = asizeof(_block.contents.json())
-        return _block
-
-    async def create_transaction(self) -> None:
-        return
-
-    # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
-    def _mine_block(self, block: Block) -> Block:
-        # If success, then return the hash of the block based from the difficulty.
-        self.blockchain_ready = False
-        prev: float = time()
-        nth: int = 1
-
-        logger.info(f"Attempting to mine a Block #{block.id} ...")
-
-        while True:
-            # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
-
-            block.contents.nonce = random_generator.randint(0, MAX_INT_PYTHON)
-            computed_hash: HashUUID = HashUUID(
-                sha256(block.json().encode("utf-8")).hexdigest()
-            )
-
-            if (
-                computed_hash[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY]
-                == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
-            ):
-                block.hash_block = computed_hash
-                logger.info(
-                    f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
-                )
-                self._calculate_sleep_time(mine_duration=time() - prev)
-                self.blockchain_ready = True
-                return block
-
-            nth += 1
-
-    def get_sizeof(self, *, block: Block) -> int | None:
-        return asizeof(block)
-
-    @ensure_blockchain_ready()
-    def get_blockchain_public_state(self) -> NodeMasterInformation | None:
-        if self.node_role == NodeType.MASTER_NODE:
-            return NodeMasterInformation(
-                block_timer=self.block_timer,
-                total_addresses=9999,
-                total_blocks=len(self._chain["chain"])
-                if self._chain is not None
-                else 0,
-                total_transactions=69420,
-            )
-        logger.critical(
-            f"This client node requests for the `public_state` when their role is {self.node_role}! | Expects: {NodeType.MASTER_NODE}."
-        )
-        return None
-
-    @ensure_blockchain_ready
-    def get_blockchain_private_state(self) -> dict[str, Any]:
-        last_block: Block | None = self._get_last_block()
-
-        return {
-            "sleeping": self.is_node_ready,
-            "mining": self.is_blockchain_ready,
-            "consensus_timer": self.consensus_timer,
-            "last_mined_block": last_block.id if last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
-        }
-
-    @ensure_blockchain_ready()
-    def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
-        if self._chain is not None:
-            candidate_blocks: list[BlockOverview] = deepcopy(
-                self._chain["chain"][len(self._chain["chain"]) - limit_to :]
-            )
-            resolved_candidate_blocks: list[BlockOverview] | list = []
-
-            for each_block in candidate_blocks:
-                each_block = dict(each_block)
-                # - [1] Push validator outside.
-                each_block["validator"] = each_block["contents"]["validator"]
-
-                # -  [2] Remove the contents scope.
-                del each_block["contents"]
-
-                # - [3] Remove hash context.
-                del each_block["hash_block"]
-                del each_block["prev_hash_block"]
-
-                # - [4] Assign this to the indexed block.
-                resolved_candidate_blocks.append(BlockOverview.parse_obj(each_block))
-
-            # * Once done, return the list.
-            resolved_candidate_blocks.reverse()
-            return resolved_candidate_blocks
-
-    def _calculate_sleep_time(self, *, mine_duration: float | int) -> None:
-        if not self.is_blockchain_ready and not self.new_master_instance:
-            self.consensus_timer = timedelta(
-                seconds=mine_duration
-            )  # TODO: Get the average mining seconds to confluence with the timer.
-            logger.debug(
-                f"Consensus timer is calculated. Set to {self.consensus_timer.total_seconds()} seconds before waking. | Object: {self.consensus_timer}"
-            )
-
-    async def _consensus_sleeping_phase(self) -> None:
-        if not self.new_master_instance:
-            self.sleeping_from_consensus = True
-
-            logger.info(
-                f"Block mining is finished. Sleeping for {self.consensus_timer.total_seconds()} seconds."
-            )
-
-            await sleep(self.consensus_timer.total_seconds())
-            self.sleeping_from_consensus = False
-
-            # * When done, ensure that the node's sate is changed.
-            self._set_node_state()
-
-            logger.info(
-                "Woke up from the consensus timer! Ready to take blocks to mine."
-            )
-            return
-
-        logger.info(
-            f"Consensus timer ignored due to condition. | Is new instance: {self.new_master_instance}, Blockchain ready: {self.blockchain_ready}"
-        )
+    # TODO: Ensure to follow the rule that we made last time.
+    async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
+        pass
 
     def _set_node_state(self) -> None:
         self.node_ready = (
@@ -516,41 +570,11 @@ class BlockchainMechanism(AsyncTaskQueue, AdaptedPoETConsensus):
             else False
         )
 
-    @property
-    def is_node_ready(self) -> bool:
-        return self.node_ready and self.is_blockchain_ready
-
-    @property
-    def is_blockchain_ready(self) -> bool:
-        return self.blockchain_ready
-
     # I think this should work only on miner nodes.
     async def _update_chain(self) -> None:
         # TODO: This should trigger when blockchain_ready is not True.
         if not self.is_blockchain_ready:
             return
-
-    # Ensure to follow the rule that we made last time.
-    async def search_for(self, *, type: str, uid: AddressUUID | str) -> None:
-        pass
-
-    def _get_last_block(self) -> Block | None:
-        # ! This return seems confusing but I have to sacrafice for my own sake of readability.
-        # @o First we access the list by calling the key 'chain'.
-        # @o Since we got to the list, we might wanna get the last block by slicing the list with the use of its own length - 1 to get the last block.
-        # @o But before we do that, ensure that last item has a content. Accessing the last item with the use of index while it doesn't contain anything will result in `IndexError`.
-
-        if len(self._chain["chain"]):
-            last_block_ref = Block.parse_obj(
-                self._chain["chain"][len(self._chain["chain"]) - 1 :][0]
-            )
-            logger.debug(f"Last block has been fetched. Context | {last_block_ref}")
-            return last_block_ref
-
-        logger.warning("There's no block inside blockchain.")
-
-    async def close(self) -> None:
-        return
 
 
 # # This approach was (not completely) taken from stackoverflow.
@@ -572,7 +596,7 @@ def get_blockchain_instance(
         # # Note that this will create an issue later when we tried ARCHIVAL_MINER_NODE node mode later on.
         blockchain_service = BlockchainMechanism(
             auth_tokens=token_ref,
-            client_role=role,
+            node_role=role,
         )
 
     # If there are no resulting objective, then we can log this as an error, otherwise return the object.

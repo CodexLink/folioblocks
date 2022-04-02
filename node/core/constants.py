@@ -99,7 +99,7 @@ AUTH_CODE_MAX_CONTEXT: Final[int] = 32
 # # Constants, Blockchain
 BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[int] = 4
 BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
-
+BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
 # # Constants, Auth: JWT
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"

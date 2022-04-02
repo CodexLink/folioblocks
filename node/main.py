@@ -295,10 +295,10 @@ async def terminate() -> None:
             should_destroy=True
         )  # * Shutdown the HTTP client module.
 
-    if blockchain_instance is not None:
-        await wait(
-            {create_task(blockchain_instance.close())}
-        )  # * Shutdown the blockchain instance. We really need to finish this off before doing anything else.
+    # if blockchain_instance is not None:
+    #     await wait(
+    #         {create_task(blockchain_instance.close())}
+    #     )  # * Shutdown the blockchain instance. We really need to finish this off before doing anything else.
 
     await close_resources(
         key=parsed_args.key_file[0]
