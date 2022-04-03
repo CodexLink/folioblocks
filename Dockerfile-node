@@ -28,14 +28,16 @@ COPY /backup /node/backup
 
 WORKDIR /node
 
-RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/with_chain/** ./ ; else cp backup/archival/registered/** ./ ; fi
+RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/with_chain/** ./ ;\
+	else cp backup/archival/registered/** ./ ; fi
 
-RUN chmod +x /node/main.py\
-	&& pip install poetry==1.1.13 --no-cache-dir --disable-pip-version-check\
+RUN pip install poetry==1.1.13 --disable-pip-version-check\
 	&& poetry config virtualenvs.create false
+RUN --mount=type=cache,target=/home/.cache/pypoetry/cache\
+	--mount=type=cache,target=/home/.cache/pypoetry/artifacts\
+	poetry install --no-dev --no-interaction --no-root
 
-RUN poetry install --no-dev --no-interaction --no-root
-
+RUN chmod +x /node/main.py
 ENTRYPOINT python3 main.py --host $HOST --log-level INFO --prefer-role $ROLE --port $PORT
 
 STOPSIGNAL SIGINT

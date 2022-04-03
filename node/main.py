@@ -163,7 +163,7 @@ async def pre_initialize() -> None:
                         url=URLAddress(
                             f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
                         ),
-                        method=HTTPQueueMethods.POST,
+                        method=HTTPQueueMethods.GET,
                         await_result_immediate=True,
                         name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
                     )

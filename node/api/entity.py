@@ -7,11 +7,10 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
-from asyncio import create_task, gather, sleep, wait
+from asyncio import create_task, gather
 from datetime import datetime, timedelta
 from enum import EnumMeta
 from http import HTTPStatus
-from http.client import BAD_REQUEST
 from logging import Logger, getLogger
 from os import environ as env
 from sqlite3 import IntegrityError
@@ -33,7 +32,6 @@ from core.constants import (
     UUID_KEY_PREFIX,
     AddressUUID,
     BaseAPI,
-    CredentialContext,
     EntityAPI,
     HashedData,
     JWTToken,

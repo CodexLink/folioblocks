@@ -13,6 +13,8 @@ from logging import Logger, getLogger
 from os import environ as env
 from typing import Any, Callable
 
+from blueprint.models import associated_nodes
+from databases import Database
 from utils.http import get_http_client_instance
 from utils.processors import load_env
 
@@ -25,11 +27,15 @@ from core.constants import (
     HTTPQueueMethods,
     IdentityTokens,
     JWTToken,
-    NodeCredentials,
     NodeType,
+    RequestPayloadContext,
     URLAddress,
 )
-from core.dependencies import get_identity_tokens, get_master_node_properties
+from core.dependencies import (
+    get_database_instance,
+    get_identity_tokens,
+    get_master_node_properties,
+)
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -70,10 +76,11 @@ class ConsensusMechanism:
         ), self.master_target(key=REF_MASTER_BLOCKCHAIN_PORT)
 
         stored_session_token: IdentityTokens | None = get_identity_tokens()
+        db: Database = get_database_instance()
 
         if stored_session_token is None:
             logger.error(
-                "There are no stored session token (AddressUUID and JWTToken) for this process to begin. This may be an error logic issue. Please report to the developers as possible."
+                "There are no stored session token (`AddressUUID` and `JWTToken`) for this process to begin. This may be an error logic issue. Please report to the developers as possible."
             )
             return None
 
@@ -92,8 +99,6 @@ class ConsensusMechanism:
                 await sleep(5)
                 continue
             break
-
-        print(auth_source, auth_session, auth_acceptance)
 
         master_response, _ = await wait(
             {
@@ -114,17 +119,23 @@ class ConsensusMechanism:
             }
         )
 
-        association_certificate = master_response.pop().result()
-        print(association_certificate)
+        # - Add the credentials to the associated nodes as self.
+        association_certificate: RequestPayloadContext = (
+            await master_response.pop().result().json()
+        )
 
-        while True:
-            pass
+        insert_fetched_certificate_stmt = associated_nodes.insert().values(
+            user_address=auth_source,
+            certificate=association_certificate["certificate_token"],
+            # * The following fields are not needed throughout the runtime, but is required due to constraint.
+            # ! Not that these variables does not represent the current node but rather the target node.
+            source_address=master_origin_address,
+            source_port=master_origin_port,
+        )
 
-        # Add the credentials to the associated nodes as self.
+        await db.execute(insert_fetched_certificate_stmt)
 
-        # Update the database to store the certificate so that in the future, we just load that and be ready.
-
-        return
+        logger.info("Generation of Association Certificate were successful!")
 
     @__restrict_call(on=NodeType.MASTER_NODE)
     async def negotiate(self) -> None:

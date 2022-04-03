@@ -9,22 +9,31 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
+from datetime import datetime
 from http import HTTPStatus
+from os import environ as env
 from typing import Any
 
-from sqlalchemy import select
-
+from blueprint.models import associated_nodes, auth_codes, tokens, users
 from blueprint.schemas import NodeConsensusInformation
 from core.blockchain import get_blockchain_instance
-from core.constants import AddressUUID, BaseAPI, NodeAPI, UserEntity
+from core.constants import (
+    AddressUUID,
+    AuthAcceptanceCode,
+    BaseAPI,
+    JWTToken,
+    NodeAPI,
+    UserEntity,
+)
 from core.dependencies import (
     EnsureAuthorized,
+    get_database_instance,
     get_identity_tokens,
 )
-from fastapi import APIRouter, Depends, HTTPException, Header
-from core.constants import AuthAcceptanceCode, JWTToken
-from core.dependencies import get_database_instance
-from blueprint.models import auth_codes, tokens, users
+from cryptography.fernet import Fernet
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
+from sqlalchemy import select
 
 node_router = APIRouter(
     prefix="/node",
@@ -145,6 +154,7 @@ async def get_node_info() -> NodeConsensusInformation:
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
 )
 async def acknowledge_as_response(
+    request: Request,
     x_source: AddressUUID = Header(..., description="The address of the requestor."),
     x_session: JWTToken = Header(
         ..., description="The current session token that the requestor uses."
@@ -153,40 +163,84 @@ async def acknowledge_as_response(
         ...,
         description="The auth code that is known as acceptance code, used for extra validation.",
     ),
-) -> None:
-
+) -> Response:
     db: Any = get_database_instance()  # * Initialized on scope.
+
     # - [1] Validate such entries from the header.
     # - [1.1] Get the source first.
     fetch_node_source_stmt = select([users.c.unique_address, users.c.email]).where(
         users.c.unique_address == x_source
     )
-    validated_source_address = (await db.fetch_all(fetch_node_source_stmt)).pop()
+    validated_source_address = await db.fetch_one(fetch_node_source_stmt)
 
     # - [1.2] Then validate the token by incorporating previous query and the header `x_acceptance`.
-    fetch_node_auth_stmt = auth_codes.select().where(
-        (auth_codes.c.code == x_acceptance)
-        & (
-            auth_codes.c.to_email == validated_source_address[1]
-        )  # Equivalent to validated_source_address.email.
+    # * Validate other credentials and beyond at this point.
+    if validated_source_address is not None:
+        fetch_node_auth_stmt = select([auth_codes.c.id]).where(
+            (auth_codes.c.code == x_acceptance)
+            & (
+                auth_codes.c.to_email == validated_source_address.email
+            )  # @o Equivalent to validated_source_address.email.
+        )
+
+        validated_auth_code = await db.fetch_one(fetch_node_auth_stmt)
+
+        if validated_auth_code is not None:
+            fetch_node_token_stmt = select([tokens.c.id]).where(
+                (tokens.c.token == x_session)
+                & (tokens.c.from_user == validated_source_address.unique_address)
+            )
+
+            validated_node_token = await db.fetch_one(fetch_node_token_stmt)
+
+            if validated_node_token is not None:
+                authority_code: str | None = env.get("AUTH_KEY", None)
+                authority_signed: str | None = env.get("SECRET_KEY", None)
+
+                # - Create the token here.
+                if authority_signed is not None and authority_code is not None:
+                    # - To complete, get one base token and randomize its location and splice it by 25% to encorporate with other tokens.
+                    # * This was intended and not a joke.
+                    encrypter = Fernet(authority_code.encode("utf-8"))
+
+                    authored_token: bytes = (
+                        authority_signed[:16]
+                        + x_session
+                        + authority_signed[32:48]
+                        + x_source
+                        + authority_signed[48:]
+                        + x_acceptance
+                        + authority_signed[16:32]
+                        + datetime.now().isoformat()  # Add variance.
+                    ).encode("utf-8")
+
+                    encrypted_authored_token: bytes = encrypter.encrypt(authored_token)
+
+                    # @o As a `MASTER` node, store it for validation later.
+                    store_authored_token_stmt = associated_nodes.insert().values(
+                        user_address=validated_source_address.unique_address,
+                        certificate=encrypted_authored_token.decode("utf-8"),
+                        source_address=request.client.host,
+                        source_port=request.client.port,
+                    )
+                    await db.execute(store_authored_token_stmt)
+
+                    # # Then return it.
+                    return JSONResponse(
+                        content={"certificate_token": authored_token.decode("utf-8")},
+                        status_code=HTTPStatus.OK,
+                    )
+
+                raise HTTPException(
+                    detail="Authority to sign the certificate is not possible due to missing parameters.",
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
+
+    raise HTTPException(
+        detail="One or more header values are invalid.",
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
     )
 
-    validated_auth_code = await db.execute(fetch_node_auth_stmt)
-
-    print("validated_auth_code", validated_auth_code)
-
-    fetch_node_token_stmt = tokens.select().where(
-        (tokens.c.token == x_session)
-        & (tokens.c.from_user == validated_source_address[0])
-    )
-
-    validated_node_token = await db.execute(fetch_node_token_stmt)
-
-    print(
-        "validated_node_token",
-        validated_node_token,
-        dir(validated_node_token),
-    )
     # if validate_auth_code and fetch_no
 
 

@@ -3,7 +3,7 @@ from logging import Logger, getLogger
 from secrets import token_urlsafe
 from typing import Any
 
-from aiohttp import ClientConnectionError, ClientConnectorError, ClientSession
+from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponse, ClientSession
 from blueprint.schemas import HTTPRequestPayload
 from core.constants import (
     ASYNC_TARGET_LOOP,
@@ -216,7 +216,7 @@ class HTTPClient:
 
                 if not fetched_task.result().ok:
                     logger.error(
-                        f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}"
+                        f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
                     )
             except (
                 ConnectionRefusedError,

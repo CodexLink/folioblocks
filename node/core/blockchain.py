@@ -3,7 +3,6 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
 from logging import Logger, getLogger
-from re import L
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
 from typing import Any, Callable, Final
@@ -156,21 +155,25 @@ class BlockchainMechanism(ConsensusMechanism):
             db: Database = get_database_instance()
             identity: IdentityTokens | None = get_identity_tokens()
 
-
             if identity is not None:
-                find_existing_certificate_stmt = select([associated_nodes.c.certificate]).where(
-                    associated_nodes.c.user_address == identity[0]
+                find_existing_certificate_stmt = select(
+                    [associated_nodes.c.certificate]
+                ).where(associated_nodes.c.user_address == identity[0])
+
+                existing_certificate = await db.fetch_val(
+                    find_existing_certificate_stmt
                 )
 
-                existing_certificate = await db.fetch_val(find_existing_certificate_stmt)
-
                 if not existing_certificate:
-                    logger.warning(F"Association Certificate does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain.")
+                    logger.warning(
+                        f"Association Certificate does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
+                    )
 
                     await wait({self.establish()})
-
-
-                # establish() should store it.
+                else:
+                    logger.info(
+                        "Association Certificate exists. Ignoring establishment from the `MASTER_NODE`."
+                    )
 
     async def insert_transaction(self, data: RequestPayloadContext) -> None:
         self.transaction_container.append(await self._create_transaction(data))

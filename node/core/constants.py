@@ -122,7 +122,6 @@ TOTP_PASSCODE_REFRESH_INTERVAL: Final[int] = 15
 TOTP_VALID_WINDOW_SECONDS: Final[int] = 3
 
 # # Constants, FastAPI Configs
-
 CORS_ALLOW_CREDENTIALS: Final[bool] = True
 CORS_ALLOWED_HEADERS: Final[list[str]] = ["*"]
 CORS_ALLOWED_METHODS: Final[list[str]] = ["DELETE", "GET", "POST", "PUT"]
