@@ -1,13 +1,16 @@
-from asyncio import all_tasks, create_task, get_event_loop, sleep, wait
+from asyncio import create_task, get_event_loop, sleep, wait
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
 from logging import Logger, getLogger
+from re import L
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
 from typing import Any, Callable, Final
 
 from aiofiles import open as aopen
+from databases import Database
+from sqlalchemy import select
 from blueprint.models import file_signatures
 from blueprint.schemas import (
     Block,
@@ -20,7 +23,7 @@ from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
-from node.core.constants import RequestPayloadContext
+from core.consensus import ConsensusMechanism
 from utils.processors import unconventional_terminate
 
 from core.constants import (
@@ -33,30 +36,32 @@ from core.constants import (
     AddressUUID,
     BlockchainIOAction,
     HashUUID,
-    JWTToken,
+    IdentityTokens,
     NodeType,
+    RequestPayloadContext,
     random_generator,
 )
-from core.dependencies import get_db_instance, get_identity_tokens
+from core.dependencies import get_database_instance, get_identity_tokens
+from blueprint.models import associated_nodes
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
-# TODO: Should we seperate consensus from this class?
-class BlockchainMechanism:
+
+class BlockchainMechanism(ConsensusMechanism):
     def __init__(
         self,
         *,
         block_timer_seconds: int = 5,
-        auth_tokens: tuple[AddressUUID, JWTToken],
+        auth_tokens: IdentityTokens,
         node_role: NodeType,
     ) -> None:
 
         # # Required Variables for the Blockchain Operaetion.
         self.node_role: NodeType = node_role
-        self.auth_token: tuple[AddressUUID, JWTToken] = auth_tokens
+        self.auth_token: IdentityTokens = auth_tokens
 
         self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.consensus_timer: timedelta  # TODO: This will be computed based on the information by the MASTER_NODE node on how much is being participated, along with its computed value based on the average mining and iteration.
+        self.consensus_timer: timedelta  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
 
         self.transaction_container: list[Transaction] = []
 
@@ -69,6 +74,8 @@ class BlockchainMechanism:
             1  # * The current ID of the block to be rendered from the blockchain.
         )
 
+        super().__init__(role=node_role)
+
     # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
     def __ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
         def deco(fn: Callable) -> Callable:
@@ -78,11 +85,14 @@ class BlockchainMechanism:
                 if self.is_blockchain_ready:
                     return fn(self, *args, **kwargs)
 
+                # TODO: Why do we have this?
                 if terminate_on_call:
                     unconventional_terminate(message=message)
 
                 return None
+
             return instance
+
         return deco
 
     async def block_timer_executor(self) -> None:
@@ -141,15 +151,29 @@ class BlockchainMechanism:
         else:
             # TODO: Consensus by fetching a token or something that allows these node and the master to communicate. They need to save that token in-memory, by losing an instance we loss that token.
             # TODO: Queue if the hash of this blockchain is the same as from the master (via database).
-            pass
+
+            # TODO: Do fetch in database before calling this stupid shit.
+            db: Database = get_database_instance()
+            identity: IdentityTokens | None = get_identity_tokens()
+
+
+            if identity is not None:
+                find_existing_certificate_stmt = select([associated_nodes.c.certificate]).where(
+                    associated_nodes.c.user_address == identity[0]
+                )
+
+                existing_certificate = await db.fetch_val(find_existing_certificate_stmt)
+
+                if not existing_certificate:
+                    logger.warning(F"Association Certificate does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain.")
+
+                    await wait({self.establish()})
+
+
+                # establish() should store it.
 
     async def insert_transaction(self, data: RequestPayloadContext) -> None:
         self.transaction_container.append(await self._create_transaction(data))
-
-    async def _get_available_archival_miner_nodes(
-        self,
-    ) -> None:  # TODO: This should return something.
-        pass
 
     @__ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
@@ -217,14 +241,14 @@ class BlockchainMechanism:
         self,
         *,
         context: Block | Transaction,
-        auth_context: tuple[AddressUUID, JWTToken],
+        auth_context: IdentityTokens,
     ) -> None:
         """
         A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
 
         Args:
             context (Block | Transaction): The context of the block as is.
-            auth_context (tuple[AddressUUID, JWTToken]): Authentication attribute, not sure what to do on this one yet.
+            auth_context (IdentityTokens): Authentication attribute, not sure what to do on this one yet.
 
         TODO
         * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
@@ -351,6 +375,11 @@ class BlockchainMechanism:
     async def _create_transaction(self, data: RequestPayloadContext) -> Transaction:
         return Transaction()
 
+    async def _get_available_archival_miner_nodes(
+        self,
+    ) -> None:  # TODO: This should return something.
+        pass
+
     def _get_last_block(self) -> Block | None:
         # ! This return seems confusing but I have to sacrafice for my own sake of readability.
         # @o First we access the list by calling the key 'chain'.
@@ -428,7 +457,7 @@ class BlockchainMechanism:
                         .values(hash_signature=new_blockchain_hash)
                     )
 
-                    await get_db_instance().execute(blockchain_hash_update_stmt)
+                    await get_database_instance().execute(blockchain_hash_update_stmt)
                     logger.debug(
                         f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
                     )
@@ -588,7 +617,7 @@ def get_blockchain_instance(
 ) -> BlockchainMechanism:
 
     global blockchain_service
-    token_ref: tuple[AddressUUID, JWTToken] | None = get_identity_tokens()
+    token_ref: IdentityTokens | None = get_identity_tokens()
 
     logger.debug("Initializing or returning blockchain instance ...")
 

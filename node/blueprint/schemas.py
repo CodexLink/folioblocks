@@ -16,19 +16,19 @@ from core.constants import (
     UUID_KEY_LENGTH,
     AcademicExperience,
     AddressUUID,
-    Certificates,
+    # Certificates,
     CredentialContext,
     DocRequestType,
     DocumentMeta,
-    DocumentProof,
-    Documents,
+    # DocumentProof,
+    # Documents,
     EmploymentActivityType,
     EmploymentStatus,
     GenericUUID,
     HashUUID,
     HTTPQueueMethods,
     HTTPQueueTaskType,
-    InternExperience,
+    # InternExperience,
     JWTToken,
     KeyContext,
     NodeType,
@@ -48,7 +48,7 @@ from core.constants import (
     UserActivityState,
     UserEntity,
     UserRole,
-    WorkExperience,
+    # WorkExperience,
 )
 from pydantic import BaseModel, EmailStr, Field
 
@@ -85,14 +85,17 @@ class NewStudentOut(BaseModel):
     student_address: AddressUUID
     date_created: datetime
 
+
 """
 # Generate Auth Token Models
 - The following is just a model that represents the query inputs for the endpoint 'admin/generate_auth'.
 """
 
+
 class GenerateAuthInput(BaseModel):
     email: EmailStr
     role_to_infer: UserEntity
+
 
 """
 # Block Structure Models

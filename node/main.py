@@ -42,8 +42,11 @@ from core.constants import (
     MASTER_NODE_IP_PORT_CEILING,
     MASTER_NODE_IP_PORT_FLOOR,
     MASTER_NODE_LIMIT_CONNECTED_NODES,
+    REF_MASTER_BLOCKCHAIN_ADDRESS,
+    REF_MASTER_BLOCKCHAIN_PORT,
     AddressUUID,
     HTTPQueueMethods,
+    IdentityTokens,
     JWTToken,
     LoggerLevelCoverage,
     NodeType,
@@ -54,7 +57,7 @@ from core.constants import (
 )
 from core.dependencies import (
     authenticate_node_client,
-    get_db_instance,
+    get_database_instance,
     get_identity_tokens,
     get_master_node_properties,
     set_master_node_properties,
@@ -156,15 +159,13 @@ async def pre_initialize() -> None:
             )
             master_node_response, _ = await wait(
                 {
-                    create_task(
-                        get_http_client_instance().enqueue_request(
-                            url=URLAddress(
-                                f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
-                            ),
-                            method=HTTPQueueMethods.GET,
-                            await_result_immediate=True,
-                            name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
-                        )
+                    get_http_client_instance().enqueue_request(
+                        url=URLAddress(
+                            f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
+                        ),
+                        method=HTTPQueueMethods.POST,
+                        await_result_immediate=True,
+                        name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
                     )
                 }
             )
@@ -177,10 +178,10 @@ async def pre_initialize() -> None:
                 # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
 
                 set_master_node_properties(
-                    key="MASTER_NODE_ADDRESS", context=MASTER_NODE_IP_ADDR
+                    key=REF_MASTER_BLOCKCHAIN_ADDRESS, context=MASTER_NODE_IP_ADDR
                 )
                 set_master_node_properties(
-                    key="MASTER_NODE_PORT", context=evaluated_master_port
+                    key=REF_MASTER_BLOCKCHAIN_PORT, context=evaluated_master_port
                 )
 
                 logger.info(
@@ -201,7 +202,7 @@ async def pre_initialize() -> None:
                 message=f"Multiple retries of establishing connection to the master node IP address '{MASTER_NODE_IP_ADDR}', within the range of port {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_FLOOR} to {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_CEILING} were failed! Please check the IP address of the master node and try again.",
             )
 
-    await get_db_instance().connect()  # * Initialize the database.
+    await get_database_instance().connect()  # * Initialize the database.
 
     create_task(post_initialize())
 
@@ -224,7 +225,7 @@ async def post_initialize() -> None:
 
     await authenticate_node_client(
         role=NodeType(parsed_args.prefer_role),
-        instances=(parsed_args, get_db_instance()),
+        instances=(parsed_args, get_database_instance()),
     )
 
     if (  ## Ensure that the email services were activated.
@@ -256,9 +257,9 @@ async def terminate() -> None:
     # @o But trust me, this is needed in the context of some errors that can't be handled because they are in internal and is not directly affecting components who uses it.
 
     supress_exceptions_and_warnings()
-    identity_tokens: tuple[AddressUUID, JWTToken] = get_identity_tokens()
+    identity_tokens: IdentityTokens | None = get_identity_tokens()
     http_instance: HTTPClient = get_http_client_instance()
-    blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+    # blockchain_instance: BlockchainMechanism = get_blockchain_instance()
 
     if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
         email_instance: EmailService | None = get_email_instance()
@@ -277,18 +278,21 @@ async def terminate() -> None:
                 activity=UserActivityState.OFFLINE
             )
 
-            await get_db_instance().execute(token_to_invalidate_stmt)
+            await get_database_instance().execute(token_to_invalidate_stmt)
             logger.info(
                 f"Master Node's token has been invalidated due to Logout session."
             )
     else:
-        await http_instance.enqueue_request(  # * No need to encapsulate this function to something else.
-            url=URLAddress(
-                f"http://{parsed_args.host}:{parsed_args.port}/entity/logout"
-            ),
-            method=HTTPQueueMethods.POST,
-            headers={"X-Token": JWTToken(identity_tokens[1])},
-        )
+        if identity_tokens is not None:
+            # - Ignore this if this node wasn't even logged on.
+
+            await http_instance.enqueue_request(
+                url=URLAddress(
+                    f"http://{parsed_args.host}:{parsed_args.port}/entity/logout"
+                ),
+                method=HTTPQueueMethods.POST,
+                headers={"X-Token": JWTToken(identity_tokens[1])},
+            )
 
     if http_instance is not None:
         await http_instance.close(
@@ -326,7 +330,7 @@ if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
 
         ## Query available tokens.
         token_query = tokens.select().where(tokens.c.state != TokenStatus.EXPIRED)
-        tokens_available = await get_db_instance().fetch_all(token_query)
+        tokens_available = await get_database_instance().fetch_all(token_query)
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")
@@ -348,7 +352,7 @@ if parsed_args.prefer_role == NodeType.MASTER_NODE.name:
                         .values(state=TokenStatus.EXPIRED)
                     )  ## Change the state of the token when past through expiration.
 
-                    await get_db_instance().execute(token_to_del)
+                    await get_database_instance().execute(token_to_del)
 
                     logger.info(
                         f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."

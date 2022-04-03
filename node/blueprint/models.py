@@ -24,7 +24,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
 from sqlalchemy.orm import relationship
 
-from node.core.constants import AssociatedNodeStatus
+from core.constants import AssociatedNodeStatus
 
 # TODO: We might wanna create a key where it combines all of the certain fields and when it was inserted for reset password, it should resulted to that!
 
@@ -164,7 +164,7 @@ associated_nodes = Table(
         "status",
         SQLEnum(AssociatedNodeStatus),
         nullable=True,
-        server_default=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE,
+        server_default=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE.name,
     ),
     Column("source_address", String(15), nullable=False, unique=True),
     Column("source_port", Integer, nullable=False, unique=False),

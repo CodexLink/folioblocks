@@ -9,7 +9,10 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
+from http import HTTPStatus
 from typing import Any
+
+from sqlalchemy import select
 
 from blueprint.schemas import NodeConsensusInformation
 from core.blockchain import get_blockchain_instance
@@ -18,7 +21,10 @@ from core.dependencies import (
     EnsureAuthorized,
     get_identity_tokens,
 )
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Header
+from core.constants import AuthAcceptanceCode, JWTToken
+from core.dependencies import get_database_instance
+from blueprint.models import auth_codes, tokens, users
 
 node_router = APIRouter(
     prefix="/node",
@@ -49,15 +55,23 @@ async def get_node_info() -> NodeConsensusInformation:
         str, Any
     ] = get_blockchain_instance().get_blockchain_private_state()
 
-    return NodeConsensusInformation(
-        owner=AddressUUID(
-            get_identity_tokens()[0] if get_identity_tokens is not None else "0"
-        ),
-        is_sleeping=blockchain_state["sleeping"],
-        is_mining=blockchain_state["mining"],
-        node_role=blockchain_state["role"],
-        consensus_timer=blockchain_state["consensus_timer"],
-        last_mined_block=blockchain_state["last_mined_block"],
+    identity_tokens = get_identity_tokens()
+
+    if identity_tokens is not None:
+        node_address = identity_tokens[0]
+
+        return NodeConsensusInformation(
+            owner=AddressUUID(node_address),
+            is_sleeping=blockchain_state["sleeping"],
+            is_mining=blockchain_state["mining"],
+            node_role=blockchain_state["role"],
+            consensus_timer=blockchain_state["consensus_timer"],
+            last_mined_block=blockchain_state["last_mined_block"],
+        )
+
+    raise HTTPException(
+        detail="Identity tokens from this node is missing. This is a developer-logic issue. Please report this problem as possible.",
+        status_code=HTTPStatus.FORBIDDEN,
     )
 
 
@@ -72,27 +86,8 @@ async def get_node_info() -> NodeConsensusInformation:
 /consensus/negotiate | When the miner is done, call this one again but with a payload, and then keep on retrying, SHOULD BLOCK THIS ONE.
 /consensus/negotiate | When it's done, call this again for you to sleep by sending the calculated consensus, if not right then the MASTER will send a correct timer.
 /consensus/negotiate | Repeat.
+# TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
 """
-
-
-@node_router.post(
-    "/consensus/negotiate",
-    tags=[
-        NodeAPI.NODE_TO_NODE_API.value,
-    ],
-    summary="Initiates and finishes negotiation for the consensus mechanism named as 'Proof-of-Elapsed-Time.'",
-    description="A special API endpoint that is called multiple times for the consensus mechanism from initial to final negotiation.",
-    dependencies=[
-        Depends(
-            EnsureAuthorized(
-                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
-            )
-        )
-    ],
-)
-async def consensus_negotiate() -> None:  # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
-    return
-
 
 """
 # Node-to-Node Consensus Blockchain Operation Endpoints
@@ -104,39 +99,21 @@ async def consensus_negotiate() -> None:  # TODO: Actions should be, receive_blo
 ! These endpoints are being used both.
 """
 
-
-@node_router.post(
-    "/consensus/acknowledge",
-    tags=[NodeAPI.NODE_TO_NODE_API.value],
-    summary="",
-    description="",
-    dependencies=[
-        Depends(
-            EnsureAuthorized(
-                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
-            )
-        )
-    ],
-)
-async def consensus_acknowledge() -> None:
-    return
-
-
-@node_router.post(
-    "/consensus/echo",
-    tags=[NodeAPI.NODE_TO_NODE_API.value],
-    summary="",
-    description="",
-    dependencies=[
-        Depends(
-            EnsureAuthorized(
-                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
-            )
-        )
-    ],
-)
-async def consensus_echo() -> None:
-    return
+# @node_router.post(
+#     "/consensus/receive_echo",
+#     tags=[NodeAPI.NODE_TO_NODE_API.value],
+#     summary="Receives echo from the `ARCHIVAL_MINER_NODE` for establishment of their connection to the blockchain.",
+#     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
+#     dependencies=[
+#         Depends(
+#             EnsureAuthorized(
+#                 _as=UserEntity.MASTER_NODE_USER
+#             )
+#         )
+#     ],
+# )
+# async def acknowledge_as_response(x,x_acceptance) -> None:
+#     return
 
 
 """
@@ -144,7 +121,7 @@ async def consensus_echo() -> None:
 
 @o Before doing anything, an `ARCHIVAL_MINER_NODE` has to establish connection to the `MASTER_NODE`.
 @o With that, the `ARCHIVAL_MINER_NODE` has to give something a proof, that shows their proof of registration and login.
-@o The following are required: `JWT Token` and `Auth Code` (as Auth Acceptance Code)
+@o The following are required: `JWT Token`, `Source Address`, and `Auth Code` (as Auth Acceptance Code)
 
 - When the `MASTER_NODE` identified those tokens to be valid, it will create a special token for the association.
 - To-reiterate, the following are the structure of the token that is composed of the attributes between the communicator `ARCHIVAL_MINER_NODE` and the `MASTER_NODE`.
@@ -153,7 +130,7 @@ async def consensus_echo() -> None:
 @o From the `ARCHIVAL_MINER_NODE`: (See above).
 @o From the `MASTER_NODE`: `ARCHIVAL_MINER_NODE`'s keys + AUTH_KEY (1st-Half, 32 characters) + SECRET_KEY(2nd-half, 32 character offset, 64 characters)
 
-# Result: AssociationCertificate for the `ARCHIVAL_MINER_NODE` in AES form, whereas, the key is based from the SECRET_KEY + AUTH_KEY + DATETIME (in ISO format).
+# Result: AssociationCertificate for the `ARCHIVAL_MINER_NODE` in AES form, whereas, the key is based from the ARCHIVAL-MINER_NODE's keys + SECRET_KEY + AUTH_KEY + DATETIME (in ISO format).
 
 ! Note that the result from the `MASTER_NODE` is saved, thurs, using `datetime` for the final key is possible.
 
@@ -162,30 +139,56 @@ async def consensus_echo() -> None:
 
 
 @node_router.post(
-    "/establish/acknowledge",
+    "/establish/receive_echo",
     tags=[NodeAPI.NODE_TO_NODE_API.value],
-    summary="",
-    description="",
-    dependencies=[Depends(EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER))],
+    summary="Receives echo from the `ARCHIVAL_MINER_NODE` for establishment of their connection to the blockchain.",
+    description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
 )
-async def establish_acknowledge() -> None:
-    return
+async def acknowledge_as_response(
+    x_source: AddressUUID = Header(..., description="The address of the requestor."),
+    x_session: JWTToken = Header(
+        ..., description="The current session token that the requestor uses."
+    ),
+    x_acceptance: AuthAcceptanceCode = Header(
+        ...,
+        description="The auth code that is known as acceptance code, used for extra validation.",
+    ),
+) -> None:
 
+    db: Any = get_database_instance()  # * Initialized on scope.
+    # - [1] Validate such entries from the header.
+    # - [1.1] Get the source first.
+    fetch_node_source_stmt = select([users.c.unique_address, users.c.email]).where(
+        users.c.unique_address == x_source
+    )
+    validated_source_address = (await db.fetch_all(fetch_node_source_stmt)).pop()
 
-@node_router.post(
-    "/establish/echo",
-    tags=[NodeAPI.NODE_TO_NODE_API.value],
-    summary="",
-    description="",
-    dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
-)
-async def establish_echo() -> None:
-    return
+    # - [1.2] Then validate the token by incorporating previous query and the header `x_acceptance`.
+    fetch_node_auth_stmt = auth_codes.select().where(
+        (auth_codes.c.code == x_acceptance)
+        & (
+            auth_codes.c.to_email == validated_source_address[1]
+        )  # Equivalent to validated_source_address.email.
+    )
 
+    validated_auth_code = await db.execute(fetch_node_auth_stmt)
 
-"""
-Blockchain operation
-"""
+    print("validated_auth_code", validated_auth_code)
+
+    fetch_node_token_stmt = tokens.select().where(
+        (tokens.c.token == x_session)
+        & (tokens.c.from_user == validated_source_address[0])
+    )
+
+    validated_node_token = await db.execute(fetch_node_token_stmt)
+
+    print(
+        "validated_node_token",
+        validated_node_token,
+        dir(validated_node_token),
+    )
+    # if validate_auth_code and fetch_no
+
 
 # @node_router.post(
 #     "/establish/echo",
@@ -195,4 +198,6 @@ Blockchain operation
 #     dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
 # )
 # async def establish_echo() -> None:
-#     return
+#     """
+#     An endpoint that the ARCHIVAL_MINER_NODE_USER will use to provide information to the master node.
+#     """

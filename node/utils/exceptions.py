@@ -42,20 +42,6 @@ class HTTPClientFeatureUnavailable(NotImplementedError):
         super().__init__(*args)
 
 
-class MaxJWTOnHold(AssertionError):
-    def __init__(
-        self,
-        uuids: tuple[AddressUUID, CredentialContext],
-        currently_has: int,
-        max_hold: int = MAX_JWT_HOLD_TOKEN,
-    ) -> None:
-
-        message: str = f"This user {uuids[0]} ({uuids[1]}) currently withold/s {currently_has} JWT tokens. The maximum value that the user can withold should be only {max_hold}."
-
-        logger.exception(message)
-        super().__init__()
-
-
 class NoKeySupplied(ValueError):
     def __init__(self, fn_ref: Callable, extra_info: str | None = None) -> None:
 

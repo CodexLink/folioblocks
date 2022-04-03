@@ -36,6 +36,8 @@ from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import select
+from core.constants import IdentityTokens
+from core.constants import ArgsPlusDatabaseInstances, UserCredentials
 from utils.http import get_http_client_instance
 
 from core.constants import (
@@ -46,7 +48,6 @@ from core.constants import (
     TOTP_PASSCODE_REFRESH_INTERVAL,
     TOTP_VALID_WINDOW_SECONDS,
     AddressUUID,
-    CredentialContext,
     HTTPQueueMethods,
     JWTToken,
     NodeType,
@@ -58,7 +59,7 @@ from core.constants import (
 from core.email import get_email_instance
 
 args_value: Namespace
-identity_tokens: tuple[AddressUUID, JWTToken]
+identity_tokens: IdentityTokens
 db_instance: Database
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 master_node_properties: dict[str, str] = {}
@@ -81,7 +82,7 @@ def store_db_instance(instance: Database) -> None:
     db_instance = instance
 
 
-def get_db_instance() -> Database:
+def get_database_instance() -> Database:
     global db_instance
     return db_instance
 
@@ -94,7 +95,7 @@ def store_identity_tokens(_tokens: tuple[AddressUUID, JWTToken]) -> None:
     identity_tokens = _tokens
 
 
-def get_identity_tokens() -> tuple[AddressUUID, JWTToken]:
+def get_identity_tokens() -> IdentityTokens | None:
     try:
         global identity_tokens
         return identity_tokens
@@ -135,14 +136,14 @@ def generate_auth_token() -> str:
 async def authenticate_node_client(
     *,
     role: NodeType,
-    instances: tuple[Namespace, Database],
+    instances: ArgsPlusDatabaseInstances,
 ) -> None:
 
     from utils.processors import (
         ensure_input_prompt,
     )  # ! Imported on function due to circular dependency.
 
-    user_credentials: tuple[CredentialContext, CredentialContext] | None = None
+    user_credentials: UserCredentials | None = None
 
     logger.debug(f"Attempting to authenticate as '{role.name}'...")
 
@@ -333,7 +334,7 @@ class EnsureAuthorized:
         x_token: JWTToken = Header(
             ..., description="The token that is inferred for validation."
         ),
-        db: Database = Depends(get_db_instance),
+        db: Database = Depends(get_database_instance),
     ) -> None:  # TODO.
 
         if x_token:
@@ -371,7 +372,7 @@ class EnsureAuthorized:
 def ensure_past_negotiations(
     *,
     identity: tuple[AddressUUID, JWTToken] = Depends(get_identity_tokens),
-    db: Database = Depends(get_db_instance),
+    db: Database = Depends(get_database_instance),
 ) -> bool:
     # Maybe query or use the current session or the Node ID.
     # We need to contact the other part to ensure that there is negotiations.

@@ -8,6 +8,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from argparse import Namespace
 from enum import Enum, IntEnum, auto
 from pathlib import Path
 from typing import Any, Callable, Final
@@ -17,6 +18,8 @@ from typing import TypeVar, Union
 from asgiref.typing import ASGIApplication
 from secrets import SystemRandom
 
+from databases import Database
+
 # ! Priority Classification Types
 class DocToRequestTypes(IntEnum):
     # TODO: We need more information. Preferrable under
@@ -24,29 +27,24 @@ class DocToRequestTypes(IntEnum):
     SPECIFIED = auto()
 
 
-# # Custom Variable Types
-NotificationContext = list[dict[str, Any]]
-RoleContext = dict[str, Any]
-DocumentSet = list[dict[str, Any]]
-RequestPayloadContext = dict[str, Any]
-
 # # Custom Assertable Types
 # TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.
 AcademicExperience = _N("AcademicExperience", str)
 AddressUUID = _N("AddressUUID", str)
 ArgumentParameter = _N("ArgumentParameter", str)
 ArgumentDescription = _N("ArgumentDescription", str)
+AuthAcceptanceCode = _N("AuthAcceptanceCode", str)
 BlockID = _N("BlockID", str)
-Certificates = _N("Certificates", DocumentSet)
+# Certificates = _N("Certificates", DocumentSet)
 CredentialContext = _N("CredentialContext", str)
 DocRequestType = _N("DocRequestType", DocToRequestTypes)
-Documents = _N("Documents", DocumentSet)
+# Documents = _N("Documents", DocumentSet)
 DocumentMeta = _N("DocumentMeta", str)
-DocumentProof = _N("DocumentProof", DocumentSet)
+# DocumentProof = _N("DocumentProof", DocumentSet)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
 HashedData = _N("HashedData", str)
-InternExperience = _N("InternExperience", DocumentSet)
+# InternExperience = _N("InternExperience", DocumentSet)
 IPAddress = _N("IPAddress", str)
 IPPort = _N("IPPort", int)
 NodeRole = _N("NodeRole", str)
@@ -59,7 +57,18 @@ RequestContext = _N("RequestContext", str)
 URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
-WorkExperience = _N("WorkExperience", DocumentSet)
+# WorkExperience = _N("WorkExperience", DocumentSet)
+
+# # Custom Variable Types
+DocumentSet = list[dict[str, Any]]
+IdentityTokens = tuple[AddressUUID, JWTToken]
+NotificationContext = list[dict[str, Any]]
+RequestPayloadContext = dict[str, Any]
+RoleContext = dict[str, Any]
+ArgsPlusDatabaseInstances = tuple[Namespace, Database]
+UserCredentials = tuple[CredentialContext, CredentialContext]
+NodeCredentials = tuple[CredentialContext, CredentialContext]
+
 
 # # Custom Typed Types
 # * For the exceptions.
@@ -100,6 +109,10 @@ AUTH_CODE_MAX_CONTEXT: Final[int] = 32
 BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[int] = 4
 BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
+
+REF_MASTER_BLOCKCHAIN_ADDRESS: Final[str] = "MASTER_NODE_ADDRESS"
+REF_MASTER_BLOCKCHAIN_PORT: Final[str] = "MASTER_NODE_PORT"
+
 # # Constants, Auth: JWT
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"

@@ -50,13 +50,13 @@ async def generate_auth_token_for_other_nodes(
     from core.dependencies import (
         PasscodeTOTP,
         generate_auth_token,
-        get_db_instance,
+        get_database_instance,
         get_totp_instance,
     )
 
     auth_instance: PasscodeTOTP | None = get_totp_instance()
     email_instance: EmailService | None = get_email_instance()
-    db_instance: Database | None = get_db_instance()
+    db_instance: Database | None = get_database_instance()
 
     if auth_instance is None or email_instance is None or db_instance is None:
         raise HTTPException(

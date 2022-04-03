@@ -11,16 +11,18 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+import sys
 from asyncio import get_event_loop, wait
 from getpass import getpass
 from hashlib import sha256
 from json import dump as json_export
 from logging import Logger, getLogger
-from os import _exit, getpid
+from os import _exit
+from os import environ as env
+from os import getpid
 from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
-import sys
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -29,6 +31,7 @@ else:
 
 from sqlite3 import Connection, OperationalError, connect
 from typing import Any, Final
+
 from aioconsole import ainput
 from aiofiles import open as aopen
 from blueprint.models import file_signatures, model_metadata
@@ -53,14 +56,16 @@ from core.constants import (
     RawData,
     RuntimeLoopContext,
 )
-from core.dependencies import get_db_instance, store_db_instance
+from core.dependencies import get_database_instance, store_db_instance
 from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
+from dotenv import find_dotenv, load_dotenv
+from email_validator import EmailNotValidError, EmailSyntaxError, validate_email
 from fastapi import Depends
 from passlib.context import CryptContext
 from sqlalchemy import create_engine, select
+
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
-from email_validator import validate_email, EmailNotValidError, EmailSyntaxError
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -413,7 +418,7 @@ async def close_resources(*, key: KeyContext) -> None:
         key (KeyContext): The key that is recently used for decrypting the SQLite database.
 
     """
-    db: Database = get_db_instance()
+    db: Database = get_database_instance()
 
     logger.warning(
         f"Ensuring encode process of computed hash-signature for the `{BLOCKCHAIN_NAME}`."
@@ -464,29 +469,36 @@ async def close_resources(*, key: KeyContext) -> None:
     await get_event_loop().shutdown_default_executor()
 
 
+file_ref: str  # - This is needed to avoid complicated implementation, but ugly.
+
+
+def load_env(*, reload: bool = False) -> None:
+    try:
+        load_dotenv(
+            find_dotenv(filename=str(Path(file_ref)), raise_error_if_not_found=True)
+        )
+
+    except OSError:
+        if not reload:
+            exit(
+                f"The file {file_ref} may not be a environment file or is missing. Please check your arguments or the file."
+            )
+        logger.error(
+            f"The environment variables cannot be loaded as the environment file '{file_ref}' is missing."
+        )
+
 
 def validate_file_keys(
     context: KeyContext | None,
 ) -> tuple[KeyContext, KeyContext]:
 
+    global file_ref
     file_ref = f"{Path(__file__).cwd()}/{context}"
-    # Validate if the given context is a path first.
+
+    # - Validate if the given context is a path first.
     if Path(file_ref).is_file():
 
-        from os import environ as env
-
-        from dotenv import find_dotenv, load_dotenv
-
-        try:
-            # Redundant, but ensure.
-            load_dotenv(
-                find_dotenv(filename=str(Path(file_ref)), raise_error_if_not_found=True)
-            )
-
-        except OSError:
-            exit(
-                f"The file {file_ref} may not be a valid node-env.vars file or is missing. Please check your arguments or the file."
-            )
+        load_env()
 
         a_key: KeyContext = env.get("AUTH_KEY", None)
         s_key: KeyContext = env.get("SECRET_KEY", None)
@@ -690,7 +702,7 @@ async def look_for_nodes(*, role: NodeType, host: IPAddress, port: IPPort) -> No
 
 # TODO: Function to below is just a prototype. TO BE TESTED.
 async def verify_hash_blockchain(
-    *, blockchain_contents: str | bytes, db: Database = Depends(get_db_instance)
+    *, blockchain_contents: str | bytes, db: Database = Depends(get_database_instance)
 ) -> bool:
     verify_hash_stmt = file_signatures.select(file_signatures.c.file == BLOCKCHAIN_NAME)
     blockchain_file_hash = await db.execute(verify_hash_stmt)
