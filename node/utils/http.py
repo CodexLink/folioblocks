@@ -3,7 +3,12 @@ from logging import Logger, getLogger
 from secrets import token_urlsafe
 from typing import Any
 
-from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponse, ClientSession
+from aiohttp import (
+    ClientConnectionError,
+    ClientConnectorError,
+    ClientResponse,
+    ClientSession,
+)
 from blueprint.schemas import HTTPRequestPayload
 from core.constants import (
     ASYNC_TARGET_LOOP,

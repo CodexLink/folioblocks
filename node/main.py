@@ -220,8 +220,8 @@ async def post_initialize() -> None:
 
     if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
         parsed_args.host, parsed_args.port = get_master_node_properties(
-            key="MASTER_NODE_ADDRESS"
-        ), get_master_node_properties(key="MASTER_NODE_PORT")
+            key=REF_MASTER_BLOCKCHAIN_ADDRESS
+        ), get_master_node_properties(key=REF_MASTER_BLOCKCHAIN_PORT)
 
     await authenticate_node_client(
         role=NodeType(parsed_args.prefer_role),

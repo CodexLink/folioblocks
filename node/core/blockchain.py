@@ -23,8 +23,16 @@ from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
 from core.consensus import ConsensusMechanism
+from core.constants import (
+    REF_MASTER_BLOCKCHAIN_ADDRESS,
+    REF_MASTER_BLOCKCHAIN_PORT,
+    HTTPQueueMethods,
+)
+from core.dependencies import get_master_node_properties
+from core.constants import URLAddress
+from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
-
+from aiofiles import open as aopen
 from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
@@ -64,6 +72,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
         self.transaction_container: list[Transaction] = []
 
+        # # Instances
+        self.db_instance: Final[Database] = get_database_instance()
+        self.http_instance: HTTPClient = get_http_client_instance()
+        self.identity = auth_tokens  # @o Equivalent to get_identity_tokens()
+
         # # State and Variable References
         self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
         self.node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
@@ -94,6 +107,39 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return deco
 
+    def __restrict_call(*, on: NodeType) -> Callable:  # type: ignore
+        """
+        Restricts the method to be called depending on their `self.role`.
+        Since most of the methods is designed respectively based on their role.
+        Ever process requires this certain role to only call this method and nothing else.
+
+        Args:
+                on (NodeType): The `role` of the node.
+
+        Returns:
+                Callable: Calls the decorator method.
+
+        Notes:
+        # This was duplicated, it was originated from the consensus.py.
+        # I cannot get it because its inside of the class and it doesn't get shared because it has not `self` attribute.
+        """
+
+        def deco(fn: Callable) -> Callable:
+            def instance(
+                self: Any, *args: list[Any], **kwargs: dict[Any, Any]
+            ) -> Callable | None:
+                if self.role == on:
+                    return fn(self, *args, **kwargs)
+
+                self.warning(
+                    f"Your role {self.role} cannot call the method `{fn.__name__}` due to the role is restricted to {on}."
+                )
+                return None
+
+            return instance
+
+        return deco
+
     async def block_timer_executor(self) -> None:
         while True:
             await sleep(self.block_timer_seconds)
@@ -109,17 +155,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
             # self._create_transaction()
 
-        return
-
     # async def close(self) -> None:
     #     raise NotImplemented
 
     async def initialize(self) -> None:
         """
-        A method that initialize resources needed for the blockchain system to work.
-
-        TODO
-        * If client_role is ARCHIVAL_MINER_NODE, then fetch or call update from the AdaptedPoERTConsensus to the MASTER_NODE node that is available. Also consider checking for unfinished tasks.
+        # A method that initialize resources needed for the blockchain system to work.
         """
 
         # - Load the blockchain for both nodes.
@@ -152,28 +193,23 @@ class BlockchainMechanism(ConsensusMechanism):
             # TODO: Queue if the hash of this blockchain is the same as from the master (via database).
 
             # TODO: Do fetch in database before calling this stupid shit.
-            db: Database = get_database_instance()
-            identity: IdentityTokens | None = get_identity_tokens()
 
-            if identity is not None:
-                find_existing_certificate_stmt = select(
-                    [associated_nodes.c.certificate]
-                ).where(associated_nodes.c.user_address == identity[0])
-
-                existing_certificate = await db.fetch_val(
-                    find_existing_certificate_stmt
-                )
+            if self.identity is not None:
+                existing_certificate = await self._get_own_certificate()
 
                 if not existing_certificate:
                     logger.warning(
-                        f"Association Certificate does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
+                        f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
                     )
-
                     await wait({self.establish()})
                 else:
                     logger.info(
-                        "Association Certificate exists. Ignoring establishment from the `MASTER_NODE`."
+                        "Association certificate token exists. Ignoring establishment from the `MASTER_NODE`."
                     )
+
+            logger.info(
+                f"Checking hash of the local blockchain against the blockchain."
+            )
 
     async def insert_transaction(self, data: RequestPayloadContext) -> None:
         self.transaction_container.append(await self._create_transaction(data))
@@ -195,15 +231,31 @@ class BlockchainMechanism(ConsensusMechanism):
         return None
 
     @__ensure_blockchain_ready()
-    def get_blockchain_private_state(self) -> dict[str, Any]:
+    def get_blockchain_private_state(self) -> dict[str, Any]:  # TODO: BlockchainPayload
         last_block: Block | None = self._get_last_block()
 
         return {
             "sleeping": self.is_node_ready,
             "mining": self.is_blockchain_ready,
             "consensus_timer": self.consensus_timer,
-            "last_mined_block": last_block.id if last_block is not None else 0,  # type: ignore | Ignoring the 'None' case,
+            "last_mined_block": last_block.id if last_block is not None else 0,
         }
+
+    async def get_chain_hash_file(self) -> HashUUID:
+        fetch_chain_hash_stmt = select([file_signatures.c.hash_signature]).where(
+            file_signatures.c.filename == BLOCKCHAIN_NAME
+        )
+
+        return HashUUID(await self.db_instance.fetch_val(fetch_chain_hash_stmt))
+
+    async def get_chain(self) -> str:
+        # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
+
+        # Adjust function for forcing to save new data when fetched.
+        async with aopen(BLOCKCHAIN_NAME, "r") as chain_reader:
+            data: str = await chain_reader.read()
+
+        return data
 
     @property
     def is_blockchain_ready(self) -> bool:
@@ -221,20 +273,20 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             resolved_candidate_blocks: list[BlockOverview] | list = []
 
-            for each_block in candidate_blocks:
-                each_block = dict(each_block)
+            for block in candidate_blocks:
+                parsed_block: dict = dict(block)
                 # - [1] Push validator outside.
-                each_block["validator"] = each_block["contents"]["validator"]
+                parsed_block["validator"] = parsed_block["contents"]["validator"]
 
                 # -  [2] Remove the contents scope.
-                del each_block["contents"]
+                del parsed_block["contents"]
 
                 # - [3] Remove hash context.
-                del each_block["hash_block"]
-                del each_block["prev_hash_block"]
+                del parsed_block["hash_block"]
+                del parsed_block["prev_hash_block"]
 
                 # - [4] Assign this to the indexed block.
-                resolved_candidate_blocks.append(BlockOverview.parse_obj(each_block))
+                resolved_candidate_blocks.append(BlockOverview.parse_obj(parsed_block))
 
             # * Once done, return the list.
             resolved_candidate_blocks.reverse()
@@ -244,7 +296,6 @@ class BlockchainMechanism(ConsensusMechanism):
         self,
         *,
         context: Block | Transaction,
-        auth_context: IdentityTokens,
     ) -> None:
         """
         A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
@@ -345,7 +396,7 @@ class BlockchainMechanism(ConsensusMechanism):
             prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if last_block is None else HashUUID(last_block.hash_block),  # type: ignore
             contents=HashableBlock(
                 nonce=None,  # ! Unsolvable, these are determined during the process of mining.
-                validator=get_identity_tokens()[0],
+                validator=self.identity[0],
                 transactions=transactions,
                 timestamp=datetime.now(),
             ),
@@ -370,13 +421,24 @@ class BlockchainMechanism(ConsensusMechanism):
             )
         )
 
-        await self._append_block(
-            context=mined_genesis_block, auth_context=get_identity_tokens()
-        )
+        await self._append_block(context=mined_genesis_block)
 
     # TODO Do something here.
     async def _create_transaction(self, data: RequestPayloadContext) -> Transaction:
         return Transaction()
+
+    async def _get_own_certificate(self) -> str | None:
+        if self.node_role == NodeType.ARCHIVAL_MINER_NODE:
+            find_existing_certificate_stmt = select(
+                [associated_nodes.c.certificate]
+            ).where(associated_nodes.c.user_address == self.identity[0])
+
+            return await self.db_instance.fetch_val(find_existing_certificate_stmt)
+
+        logger.error(
+            f"You cannot fetch your own certificate as a {NodeType.MASTER_NODE.name}!"
+        )
+        return None
 
     async def _get_available_archival_miner_nodes(
         self,
@@ -460,7 +522,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         .values(hash_signature=new_blockchain_hash)
                     )
 
-                    await get_database_instance().execute(blockchain_hash_update_stmt)
+                    await self.db_instance.execute(blockchain_hash_update_stmt)
                     logger.debug(
                         f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
                     )
@@ -602,11 +664,67 @@ class BlockchainMechanism(ConsensusMechanism):
             else False
         )
 
-    # I think this should work only on miner nodes.
+    @__restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
     async def _update_chain(self) -> None:
-        # TODO: This should trigger when blockchain_ready is not True.
-        if not self.is_blockchain_ready:
-            return
+        """
+        A private method to call to validate the node's blockchain file from the master's blockchain file.
+
+        # Notes:
+        - This should only be called from the following conditions:
+            @o Negotiating with the master to update its current chain.
+            @o On initilization of the instance.
+
+        """
+        # Before attempting to do that, check for the hash first.
+
+        master_node_props = get_master_node_properties()
+
+        # - Fetch from the master first by checking the hash, let the endpoint compare it.
+        is_hash_valid, _ = await wait(
+            {
+                self.http_instance.enqueue_request(
+                    url=URLAddress(
+                        f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/blockchain/verify_hash"  # type: ignore
+                    ),
+                    method=HTTPQueueMethods.POST,
+                    await_result_immediate=True,
+                    headers={
+                        "x-token": self.identity[1],
+                        "x-certificate-token": self._get_own_certificate(),
+                    },
+                )
+            }
+        )
+
+        hash_valid: RequestPayloadContext = (
+            await is_hash_valid.pop().result().json()
+        )  # * Parse in one-liner.
+
+        if not hash_valid["hash_valid"]:
+            # - Then let's compare it from the current.
+            blockchain_content, _ = await wait(
+                {
+                    self.http_instance.enqueue_request(
+                        url=URLAddress(
+                            f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/blockchain/request_update"  # type: ignore
+                        ),
+                        method=HTTPQueueMethods.POST,
+                        await_result_immediate=True,
+                        headers={
+                            "x-token": self.identity[1],
+                            "x-certificate-token": self._get_own_certificate(),
+                        },
+                    )
+                }
+            )
+
+            print("Final output", blockchain_content)
+
+            # TODO: Run other function for loading the file explicitly.
+
+        # When its different, then ensure that we have to fetch a new one.
+        #
+        return
 
 
 # # This approach was (not completely) taken from stackoverflow.

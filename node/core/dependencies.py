@@ -17,7 +17,7 @@ from logging import Logger, getLogger
 from os import environ as env
 from secrets import token_hex
 from sqlite3 import IntegrityError
-from typing import Any
+from typing import Any, Final
 
 from aioconsole import ainput
 from aiohttp import (
@@ -316,7 +316,7 @@ async def authenticate_node_client(
                 await sleep(1.5)
                 continue
 
-        # * Should cover the following exceptions: (ClientConnectorError, ClientConnectorSSLError, ClientConnectorCertificateError, and ClientConnectionError)
+        # * This should cover the following exceptions: (ClientConnectorError, ClientConnectorSSLError, ClientConnectorCertificateError, and ClientConnectionError)
         except ClientError as e:
             logger.critical(
                 f"There was an error during request. Please try again. | Context: {e}"
@@ -326,14 +326,22 @@ async def authenticate_node_client(
 
 
 class EnsureAuthorized:
-    def __init__(self, *, _as: UserEntity | list[UserEntity]) -> None:
+    def __init__(
+        self, *, _as: UserEntity | list[UserEntity], blockchain_related: bool = False
+    ) -> None:
         self._as: UserEntity | list[UserEntity] = _as
+        self._blockchain_related: Final[bool] = blockchain_related
 
     async def __call__(
         self,
         x_token: JWTToken = Header(
             ..., description="The token that is inferred for validation."
         ),
+        x_certificate_token: str
+        | None = Header(
+            None,
+            description=f"The certificate token that proves the negotiation between {NodeType.ARCHIVAL_MINER_NODE.name} and {NodeType.MASTER_NODE.name}",
+        ),  # TODO: Type-hint.
         db: Database = Depends(get_database_instance),
     ) -> None:  # TODO.
 
@@ -363,12 +371,16 @@ class EnsureAuthorized:
                     if user_role is self._as:
                         return
 
+        if self._blockchain_related and x_certificate_token is not None:
+            pass
+
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
-            detail="You are unauthorized to access this endpoint. Please login first.",
+            detail="You are unauthorized to access this endpoint.",
         )
 
 
+# TODO: MAY BE DEPRECATED LATER.
 def ensure_past_negotiations(
     *,
     identity: tuple[AddressUUID, JWTToken] = Depends(get_identity_tokens),

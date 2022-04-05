@@ -61,8 +61,14 @@ class ConsensusMechanism:
         def deco(fn: Callable) -> Callable:
             def instance(
                 self: Any, *args: list[Any], **kwargs: dict[Any, Any]
-            ) -> Callable:
-                return fn(self, *args, **kwargs) if self.role == on else None
+            ) -> Callable | None:
+                if self.role == on:
+                    return fn(self, *args, **kwargs)
+
+                self.warning(
+                    f"Your role {self.role} cannot call the method `{fn.__name__}` due to the role is restricted to {on}."
+                )
+                return None
 
             return instance
 
@@ -135,7 +141,7 @@ class ConsensusMechanism:
 
         await db.execute(insert_fetched_certificate_stmt)
 
-        logger.info("Generation of Association Certificate were successful!")
+        logger.info("Generation of Association certificate token were successful!")
 
     @__restrict_call(on=NodeType.MASTER_NODE)
     async def negotiate(self) -> None:

@@ -35,6 +35,9 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from core.constants import NodeType
+from core.blockchain import BlockchainMechanism
+
 node_router = APIRouter(
     prefix="/node",
     tags=[BaseAPI.NODE.value],
@@ -149,7 +152,7 @@ async def get_node_info() -> NodeConsensusInformation:
 
 @node_router.post(
     "/establish/receive_echo",
-    tags=[NodeAPI.NODE_TO_NODE_API.value],
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API],
     summary="Receives echo from the `ARCHIVAL_MINER_NODE` for establishment of their connection to the blockchain.",
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
 )
@@ -237,21 +240,57 @@ async def acknowledge_as_response(
                 )
 
     raise HTTPException(
-        detail="One or more header values are invalid.",
+        detail="One or more headers are invalid.",
         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
     )
 
-    # if validate_auth_code and fetch_no
+
+@node_router.post(
+    "/blockchain/request_update",
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
+    summary=f"Requests the blockchain file as-is from the '{NodeType.MASTER_NODE.name}'.",
+    description=f"A special API endpoint that allows '{NodeType.ARCHIVAL_MINER_NODE.name}' to fetch the latest version of the blockchain file from the '{NodeType.MASTER_NODE.name}'. This is mandatory before allowing the node to mine or participate from the blockchain.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
+            )
+        )
+    ],
+)
+async def request_blockchain_upstream() -> JSONResponse:
+    blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+    return JSONResponse(
+        content={
+            "current_hash": await blockchain_instance.get_chain_hash_file(),
+            "content": blockchain_instance.get_chain_hash_file(),
+        },
+        status_code=HTTPStatus.OK,
+    )
 
 
-# @node_router.post(
-#     "/establish/echo",
-#     tags=[NodeAPI.NODE_TO_NODE_API.value],
-#     summary="",
-#     description="",
-#     dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
-# )
-# async def establish_echo() -> None:
-#     """
-#     An endpoint that the ARCHIVAL_MINER_NODE_USER will use to provide information to the master node.
-#     """
+@node_router.post(
+    "/blockchain/verify_hash",
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
+    summary="Verifies the input as a hash towards to the latest blockchain.",
+    description=f"A special API endpoint that accepts hash in return to validate them against the `{NodeType.MASTER_NODE}`'s blockchain file.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+        )
+    ],
+)
+async def verify_given_hash(
+    x_hash: str = Header(
+        ...,
+        description=f"The input hash that is going to be compared against the {NodeType.MASTER_NODE.name}.",
+    )
+) -> JSONResponse:
+    blockchain_hash = await get_blockchain_instance().get_chain_hash_file()
+
+    return JSONResponse(
+        content={"hash_valid": blockchain_hash == x_hash},
+        status_code=HTTPStatus.OK
+        if blockchain_hash == x_hash
+        else HTTPStatus.NOT_ACCEPTABLE,
+    )
