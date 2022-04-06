@@ -66,7 +66,7 @@ class ConsensusMechanism:
                     return fn(self, *args, **kwargs)
 
                 self.warning(
-                    f"Your role {self.role} cannot call the method `{fn.__name__}` due to the role is restricted to {on}."
+                    f"Your role {self.role} cannot call this method `{fn.__name__}` due to the role is restricted to {on}."
                 )
                 return None
 

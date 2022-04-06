@@ -372,7 +372,7 @@ class EnsureAuthorized:
                         return
 
         if self._blockchain_related and x_certificate_token is not None:
-            pass
+            return
 
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,

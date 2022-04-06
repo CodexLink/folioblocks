@@ -2,12 +2,14 @@ from asyncio import create_task, get_event_loop, sleep, wait
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
+from http import HTTPStatus
 from logging import Logger, getLogger
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
 from typing import Any, Callable, Final
 
 from aiofiles import open as aopen
+from aiohttp import ClientResponse
 from databases import Database
 from sqlalchemy import select
 from blueprint.models import file_signatures
@@ -132,7 +134,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     return fn(self, *args, **kwargs)
 
                 self.warning(
-                    f"Your role {self.role} cannot call the method `{fn.__name__}` due to the role is restricted to {on}."
+                    f"Your role {self.role} cannot call this method `{fn.__name__}` due to the role is restricted to {on}."
                 )
                 return None
 
@@ -208,8 +210,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
             logger.info(
-                f"Checking hash of the local blockchain against the blockchain."
+                f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE.name} blockchain."
             )
+
+            await wait({self._update_chain()})
 
     async def insert_transaction(self, data: RequestPayloadContext) -> None:
         self.transaction_container.append(await self._create_transaction(data))
@@ -241,7 +245,7 @@ class BlockchainMechanism(ConsensusMechanism):
             "last_mined_block": last_block.id if last_block is not None else 0,
         }
 
-    async def get_chain_hash_file(self) -> HashUUID:
+    async def get_chain_hash(self) -> HashUUID:
         fetch_chain_hash_stmt = select([file_signatures.c.hash_signature]).where(
             file_signatures.c.filename == BLOCKCHAIN_NAME
         )
@@ -266,7 +270,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return self.node_ready and self.is_blockchain_ready
 
     @__ensure_blockchain_ready()
-    def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
+    async def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
         if self._chain is not None:
             candidate_blocks: list[BlockOverview] = deepcopy(
                 self._chain["chain"][len(self._chain["chain"]) - limit_to :]
@@ -291,6 +295,8 @@ class BlockchainMechanism(ConsensusMechanism):
             # * Once done, return the list.
             resolved_candidate_blocks.reverse()
             return resolved_candidate_blocks
+
+        return None
 
     async def _append_block(
         self,
@@ -684,47 +690,55 @@ class BlockchainMechanism(ConsensusMechanism):
             {
                 self.http_instance.enqueue_request(
                     url=URLAddress(
-                        f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/blockchain/verify_hash"  # type: ignore
+                        f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/verify_hash"  # type: ignore
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     headers={
                         "x-token": self.identity[1],
-                        "x-certificate-token": self._get_own_certificate(),
+                        "x-certificate-token": await self._get_own_certificate(),
+                        "x-hash": await self.get_chain_hash(),
                     },
                 )
             }
         )
 
-        hash_valid: RequestPayloadContext = (
-            await is_hash_valid.pop().result().json()
-        )  # * Parse in one-liner.
+        master_response: ClientResponse = is_hash_valid.pop().result()
 
-        if not hash_valid["hash_valid"]:
-            # - Then let's compare it from the current.
-            blockchain_content, _ = await wait(
-                {
-                    self.http_instance.enqueue_request(
-                        url=URLAddress(
-                            f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/blockchain/request_update"  # type: ignore
-                        ),
-                        method=HTTPQueueMethods.POST,
-                        await_result_immediate=True,
-                        headers={
-                            "x-token": self.identity[1],
-                            "x-certificate-token": self._get_own_certificate(),
-                        },
-                    )
-                }
-            )
+        if master_response.status == HTTPStatus.NOT_ACCEPTABLE:
 
-            print("Final output", blockchain_content)
+            hash_valid: RequestPayloadContext = (
+                await master_response.json()
+            )  # * Parse in one-liner.
 
-            # TODO: Run other function for loading the file explicitly.
+            if not hash_valid["hash_valid"]:
+                # - If that's the case then fetch the blockchain file.
+                blockchain_content, _ = await wait(
+                    {
+                        self.http_instance.enqueue_request(
+                            url=URLAddress(
+                                f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
+                            ),
+                            method=HTTPQueueMethods.POST,
+                            await_result_immediate=True,
+                            headers={
+                                "x-token": self.identity[1],
+                                "x-certificate-token": await self._get_own_certificate(),
+                            },
+                        )
+                    }
+                )
 
-        # When its different, then ensure that we have to fetch a new one.
-        #
+                print("Final output", await blockchain_content.pop().result().json())
+
+                # TODO: Run other function for loading the file explicitly.
+
+            # When its different, then ensure that we have to fetch a new one.
+            #
         return
+
+        # When this node receives something then do nothing for now.
+        self.logger.error()
 
 
 # # This approach was (not completely) taken from stackoverflow.

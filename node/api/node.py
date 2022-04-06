@@ -262,8 +262,8 @@ async def request_blockchain_upstream() -> JSONResponse:
     blockchain_instance: BlockchainMechanism = get_blockchain_instance()
     return JSONResponse(
         content={
-            "current_hash": await blockchain_instance.get_chain_hash_file(),
-            "content": blockchain_instance.get_chain_hash_file(),
+            "current_hash": await blockchain_instance.get_chain_hash(),
+            "content": await blockchain_instance.get_chain(),
         },
         status_code=HTTPStatus.OK,
     )
@@ -286,7 +286,7 @@ async def verify_given_hash(
         description=f"The input hash that is going to be compared against the {NodeType.MASTER_NODE.name}.",
     )
 ) -> JSONResponse:
-    blockchain_hash = await get_blockchain_instance().get_chain_hash_file()
+    blockchain_hash = await get_blockchain_instance().get_chain_hash()
 
     return JSONResponse(
         content={"hash_valid": blockchain_hash == x_hash},

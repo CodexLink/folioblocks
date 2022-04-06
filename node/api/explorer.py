@@ -72,9 +72,9 @@ explorer_router = APIRouter(
 )
 async def get_blockchain() -> Blockchain:
     blockchain_instance: BlockchainMechanism = get_blockchain_instance()
-    blockchain_blocks: list[BlockOverview] | None = blockchain_instance.overview_blocks(
-        limit_to=5
-    )
+    blockchain_blocks: list[
+        BlockOverview
+    ] | None = await blockchain_instance.overview_blocks(limit_to=5)
 
     blockchain_state: NodeMasterInformation | None = (
         get_blockchain_instance().get_blockchain_public_state()
