@@ -23,21 +23,33 @@ EXPOSE $PORT
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-COPY /node poetry.lock pyproject.toml /node/
-COPY /backup /node/backup
+# # Fetch poetry and put on a different folder.
+RUN apt-get update; apt-get install -y curl && curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python - \
+	&& ln -s "$HOME/.poetry/bin/poetry" /usr/local/bin/poetry \
+	&& mkdir -p /usr/local/build
 
-WORKDIR /node
+# # Copy the dependencies for the poetry to install.
+WORKDIR /usr/local/build
+COPY poetry.lock pyproject.toml ./
+RUN poetry export -f requirements.txt -o requirements.txt --without-hashes
 
+# # Copy our backend server from their respective folder.
+WORKDIR /usr/local/folioblocks-node/
+COPY node/ ./
+COPY /backup ./backup
+
+# # Decide what node configuration to copy over Docker.
 RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/with_chain/** ./ ;\
 	else cp backup/archival/registered/** ./ ; fi
 
-RUN pip install poetry==1.1.13 --disable-pip-version-check\
-	&& poetry config virtualenvs.create false
-RUN --mount=type=cache,target=/home/.cache/pypoetry/cache\
-	--mount=type=cache,target=/home/.cache/pypoetry/artifacts\
-	poetry install --no-dev --no-interaction --no-root
+RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
+	&& rm -rf /usr/local/build ~/.cache/pip
 
-RUN chmod +x /node/main.py
+# # Set the python file to an executable.
+RUN chmod +x main.py
+
+# # Run the file.
 ENTRYPOINT python3 main.py --host $HOST --log-level INFO --prefer-role $ROLE --port $PORT
 
+# TODO: Not sure if this is working when the stop button is stopped.
 STOPSIGNAL SIGINT
