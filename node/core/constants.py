@@ -35,6 +35,7 @@ ArgumentParameter = _N("ArgumentParameter", str)
 ArgumentDescription = _N("ArgumentDescription", str)
 AuthAcceptanceCode = _N("AuthAcceptanceCode", str)
 BlockID = _N("BlockID", str)
+BlockchainFileContext = _N("BlockchainFileContext", str)
 # Certificates = _N("Certificates", DocumentSet)
 CredentialContext = _N("CredentialContext", str)
 DocRequestType = _N("DocRequestType", DocToRequestTypes)
@@ -60,6 +61,7 @@ TxID = _N("TxID", str)
 # WorkExperience = _N("WorkExperience", DocumentSet)
 
 # # Custom Variable Types
+BlockchainPayload = tuple[HashUUID, BlockchainFileContext]
 DocumentSet = list[dict[str, Any]]
 IdentityTokens = tuple[AddressUUID, JWTToken]
 NotificationContext = list[dict[str, Any]]
@@ -219,6 +221,11 @@ class NodeAPI(Enum):
 class BlockchainIOAction(IntEnum):
     TO_WRITE = auto()
     TO_READ = auto()
+
+
+class BlockchainContentType(IntEnum):
+    ADDRESS = auto()
+    TRANSACTION = auto()
 
 
 # # Enums, Constraints

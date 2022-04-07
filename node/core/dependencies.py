@@ -160,9 +160,9 @@ async def authenticate_node_client(
 
                 if role == NodeType.MASTER_NODE:
                     email_address: EmailStr = await ensure_input_prompt(
-                        input_context="Email Address",
-                        hide_fields=False,
-                        generalized_context="email address",
+                        input_context="Master Email Address",
+                        hide_input_from_field=False,
+                        generalized_context="master email address",
                         additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
                     )
 
@@ -190,7 +190,7 @@ async def authenticate_node_client(
                             "Node password",  # * I cannot implement password-checking because I have no time to do it.
                             "Auth code",
                         ],
-                        hide_fields=[False, False, True, False],
+                        hide_input_from_field=[False, False, True, False],
                         generalized_context="credentials",
                         additional_context="You will have to ensure it this time to avoid potential conflicts from the startup!",
                         enable_async=True,
@@ -246,7 +246,7 @@ async def authenticate_node_client(
         if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
             user_credentials = await ensure_input_prompt(
                 input_context=["Node Username", "Node Password"],
-                hide_fields=[False, True],
+                hide_input_from_field=[False, True],
                 generalized_context="username and password",
                 additional_context="You will have to ensure it this time to avoid potential conflicts!",
                 enable_async=True,
@@ -254,11 +254,13 @@ async def authenticate_node_client(
 
         # Ensure that ENV will be covered here.
         try:
-            login_req: Any = await get_http_client_instance().enqueue_request(
+            login_request = await get_http_client_instance().enqueue_request(
                 url=URLAddress(
-                    f"http://{instances[0].host}:{get_args_value().port}/entity/login"
+                    f"http://{instances[0].host}:{instances[0].port}/entity/login"
                 ),
                 method=HTTPQueueMethods.POST,
+                await_result_immediate=True,
+                do_not_retry=True,
                 data={
                     "username": env.get("NODE_USERNAME", None)
                     if user_credentials is None
@@ -269,9 +271,9 @@ async def authenticate_node_client(
                 },
             )
 
-            if login_req.ok:
+            if login_request.ok:
                 # * Resolve via pydantic.
-                resolved_model = EntityLoginResult.parse_obj(await login_req.json())
+                resolved_model = EntityLoginResult.parse_obj(await login_request.json())
 
                 resolve_entity_to_role = (
                     NodeType.MASTER_NODE

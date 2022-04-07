@@ -59,6 +59,7 @@ class HTTPClient:
         data: RequestPayloadContext | None = None,
         headers: RequestPayloadContext | None = None,
         await_result_immediate: bool = True,
+        do_not_retry: bool = False,
         name: str | None = None,
     ) -> Any:
         """
@@ -146,8 +147,11 @@ class HTTPClient:
             )
             while True:
                 res_req_equiv = self.get_remaining_responses.get(name, None)
+
                 if res_req_equiv is not None:
-                    return await self.get_finished_task(task_name=name)
+                    return await self.get_finished_task(
+                        task_name=name, do_not_retry=do_not_retry
+                    )
 
                 await sleep(0)
 
@@ -199,9 +203,7 @@ class HTTPClient:
             )
 
     async def get_finished_task(
-        self,
-        *,
-        task_name: str,
+        self, *, task_name: str, do_not_retry: bool = False
     ) -> Any:
         fetched_task = self._response.get(task_name, None)
 
@@ -212,32 +214,46 @@ class HTTPClient:
             return
 
         if fetched_task is not None:
-            try:
-                if not fetched_task.done():
-                    logger.warning(
-                        f"The following task '{task_name}' is not yet finished! Awaiting ..."
-                    )
-                    await wait({fetched_task})
+            while True:
+                try:
+                    if not fetched_task.done():
+                        logger.warning(
+                            f"The following task '{task_name}' is not yet finished! Awaiting ..."
+                        )
+                        await fetched_task
 
-                if not fetched_task.result().ok:
-                    logger.error(
-                        f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
-                    )
-            except (
-                ConnectionRefusedError,
-                ConnectionAbortedError,
-                ConnectionResetError,
-                ClientConnectionError,
-                ClientConnectorError,
-            ) as e:
-                logger.critical(
-                    f"There was error during processing of request. | Info: {e}"
-                )
-                return None
+                    if not fetched_task.result().ok:
+                        logger.error(
+                            f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                        )
 
-            finally:
-                self._response.pop(task_name)
-                logger.debug(f"Request '{task_name}' has been popped.")
+                        if do_not_retry:
+                            break
+
+                        await sleep(2)
+                        continue
+
+                    break
+
+                except (
+                    ConnectionRefusedError,
+                    ConnectionAbortedError,
+                    ConnectionResetError,
+                    ClientConnectionError,
+                    ClientConnectorError,
+                ) as e:
+                    logger.critical(
+                        f"There was error during processing of request. | Info: {e}"
+                    )
+                    await sleep(2)
+
+                    if do_not_retry:
+                        break
+
+                    continue
+
+            self._response.pop(task_name)
+            logger.debug(f"Request '{task_name}' has been popped.")
 
             return fetched_task.result()
 

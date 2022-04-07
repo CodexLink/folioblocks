@@ -21,6 +21,7 @@ from aiosmtplib import (
     SMTP,
     SMTPAuthenticationError,
     SMTPConnectError,
+    SMTPReadTimeoutError,
     SMTPServerDisconnected,
 )
 from pydantic import EmailStr
@@ -90,6 +91,7 @@ class EmailService:
             except (
                 SMTPAuthenticationError,
                 SMTPConnectError,
+                SMTPReadTimeoutError,
                 SMTPServerDisconnected,
             ) as e:
                 # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.

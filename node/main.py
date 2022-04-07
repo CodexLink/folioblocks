@@ -18,7 +18,6 @@ from socket import AF_INET, SOCK_STREAM, error, socket
 from typing import Any
 
 import uvicorn
-from aiohttp import ClientResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
@@ -65,11 +64,12 @@ from core.dependencies import (
 )
 from core.email import EmailService, get_email_instance
 from core.logger import LoggerHandler
+from utils.processors import look_for_archival_nodes
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     close_resources,
     initialize_resources_and_return_db_context,
-    look_for_nodes,
+    look_for_master_node,
     supress_exceptions_and_warnings,
     unconventional_terminate,
 )
@@ -151,56 +151,7 @@ async def pre_initialize() -> None:
 
     # TODO: Insert HTTP request through here of looking for the master node. With that, save that from the env file later on.
     if parsed_args.prefer_role == NodeType.ARCHIVAL_MINER_NODE.name:
-        for master_node_port_candidate in range(
-            MASTER_NODE_IP_PORT_FLOOR, MASTER_NODE_IP_PORT_CEILING + 1
-        ):
-            evaluated_master_port: int = (
-                MASTER_NODE_IP_PORT + master_node_port_candidate
-            )
-            master_node_response, _ = await wait(
-                {
-                    get_http_client_instance().enqueue_request(
-                        url=URLAddress(
-                            f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
-                        ),
-                        method=HTTPQueueMethods.GET,
-                        await_result_immediate=True,
-                        name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
-                    )
-                }
-            )
-
-            try:
-                stored_response: Task = master_node_response.pop().result()
-                if not isinstance(stored_response, ClientResponse):
-                    raise KeyError  # @o Since we are displaying the message, raise `KeyError` to hit the log to display.
-
-                # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
-
-                set_master_node_properties(
-                    key=REF_MASTER_BLOCKCHAIN_ADDRESS, context=MASTER_NODE_IP_ADDR
-                )
-                set_master_node_properties(
-                    key=REF_MASTER_BLOCKCHAIN_PORT, context=evaluated_master_port
-                )
-
-                logger.info(
-                    f"Master node found at {MASTER_NODE_IP_ADDR}:{evaluated_master_port}! (Assumption after response)"
-                )
-
-                break
-
-            except KeyError:
-                logger.error(
-                    f"Response for the {MASTER_NODE_IP_ADDR}:{evaluated_master_port} has returned okay but contains nothing (client response), continuing to find the right address ..."
-                )
-                continue
-
-        # @o When we didn't get anything, then terminate.
-        if not get_master_node_properties(all=True).__len__():
-            unconventional_terminate(
-                message=f"Multiple retries of establishing connection to the master node IP address '{MASTER_NODE_IP_ADDR}', within the range of port {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_FLOOR} to {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_CEILING} were failed! Please check the IP address of the master node and try again.",
-            )
+        await look_for_master_node()  # ! THIS SHOULD BE A BLOCKCHAIN INSTANCE.
 
     await get_database_instance().connect()  # * Initialize the database.
 
@@ -231,9 +182,7 @@ async def post_initialize() -> None:
     if (  ## Ensure that the email services were activated.
         parsed_args.prefer_role == NodeType.MASTER_NODE.name
     ):
-        await look_for_nodes(
-            role=parsed_args.prefer_role, host=parsed_args.host, port=parsed_args.port
-        )
+        await look_for_archival_nodes()
 
     # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER_NODE will initialize their local or universal (depending on the role) blockchain file.
     create_task(

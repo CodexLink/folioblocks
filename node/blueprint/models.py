@@ -166,7 +166,7 @@ associated_nodes = Table(
         nullable=True,
         server_default=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE.name,
     ),
-    Column("source_address", String(15), nullable=False, unique=True),
+    Column("source_address", String(15), nullable=False, unique=False),
     Column("source_port", Integer, nullable=False, unique=False),
     Column("sleep_expiration", DateTime, nullable=True, unique=False),
 )

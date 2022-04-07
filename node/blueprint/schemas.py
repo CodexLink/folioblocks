@@ -212,7 +212,6 @@ class NodeMasterInformation(
     block_timer: int
     total_blocks: int
     total_transactions: int
-    total_addresses: int
 
 
 class Blockchain(BaseModel):

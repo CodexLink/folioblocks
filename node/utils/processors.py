@@ -12,7 +12,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 import sys
-from asyncio import get_event_loop, wait
+from asyncio import create_task, gather, get_event_loop, wait
 from getpass import getpass
 from hashlib import sha256
 from json import dump as json_export
@@ -24,13 +24,27 @@ from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
 
+from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponse
+from core.constants import (
+    MASTER_NODE_IP_ADDR,
+    MASTER_NODE_IP_PORT,
+    MASTER_NODE_IP_PORT_CEILING,
+    MASTER_NODE_IP_PORT_FLOOR,
+    REF_MASTER_BLOCKCHAIN_ADDRESS,
+    REF_MASTER_BLOCKCHAIN_PORT,
+    HTTPQueueMethods,
+    URLAddress,
+)
+from core.dependencies import set_master_node_properties
+from core.dependencies import get_master_node_properties
+
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
 else:
     from signal import SIGTERM as CALL_TERMINATE_EVENT
 
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any, Final
+from typing import Any, Coroutine, Final
 
 from aioconsole import ainput
 from aiofiles import open as aopen
@@ -49,8 +63,6 @@ from core.constants import (
     CredentialContext,
     CryptFileAction,
     HashedData,
-    IPAddress,
-    IPPort,
     KeyContext,
     NodeType,
     RawData,
@@ -61,11 +73,11 @@ from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from dotenv import find_dotenv, load_dotenv
 from email_validator import EmailNotValidError, EmailSyntaxError, validate_email
-from fastapi import Depends
 from passlib.context import CryptContext
 from sqlalchemy import create_engine, select
 
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
+from utils.http import get_http_client_instance
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -92,7 +104,7 @@ async def crypt_file(
     file_content: str | bytes = ""
 
     # Open the file first.
-    file_content = await process_crpyt_file(
+    file_content = await _process_crpyt_file(
         is_async=enable_async, filename=filename, mode="rb"
     )
 
@@ -121,7 +133,7 @@ async def crypt_file(
         )(file_content)
 
         # Then write to the file for the final effect.
-        await process_crpyt_file(
+        await _process_crpyt_file(
             content_to_write=processed_content,
             filename=filename,
             is_async=enable_async,
@@ -155,7 +167,7 @@ async def crypt_file(
         _exit(1)
 
 
-async def process_crpyt_file(
+async def _process_crpyt_file(
     *,
     is_async: bool,
     filename: str,
@@ -237,6 +249,8 @@ async def initialize_resources_and_return_db_context(
 
             try:
                 con = connect(DATABASE_RAW_PATH)
+                store_db_instance(db_instance)
+                logger.info("Database instance has been saved in-memory.")
 
             except OperationalError as e:
                 logger.error(
@@ -251,36 +265,22 @@ async def initialize_resources_and_return_db_context(
 
             await db_instance.connect()
             logger.warning(
-                "Temporarily opened database connection from instance to check integrity of blockchain."
+                "Temporarily opened the database connection from instance to check integrity of the blockchain file contents."
             )
 
+            """
+            - Understood that this was duplicated from the <class `BlockchainMechanism`>
+            - I cannot access that instance beyond this point due to the fact that we had multiple checks before instantiating important objects.
+            """
             blockchain_validate_hash_stmt = select(
                 [file_signatures.c.hash_signature]
             ).where(file_signatures.c.filename == BLOCKCHAIN_NAME)
             blockchain_retrieved_hash = await db_instance.fetch_val(
                 blockchain_validate_hash_stmt
             )
+            logger.info("Fetched blockchain file content's signature.")
 
-            # @o This is just a work around, I cannot expand `crypt_file` further to make this one compatible in a mean of making things looking better.
-            with open(BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
-                blockchain_context = blockchain_content.read()
-
-            blockchain_hash_from_raw = sha256(blockchain_context).hexdigest()
-
-            if blockchain_hash_from_raw != blockchain_retrieved_hash:
-                unconventional_terminate(
-                    message=f"Blockchain's file signature were mismatch! Database: {blockchain_retrieved_hash} | Computed: {blockchain_hash_from_raw}",
-                    early=True,
-                )
-            else:
-                logger.info("Blockchain file signature validated!")
-
-            store_db_instance(db_instance)
-            logger.debug("Database instance has been saved.")
-
-            await db_instance.disconnect()
-
-            logger.info("Decrypting a blockchain file ...")
+            # * We need to decrypt the blockchin file first before we do something to it. If we didn't, we are technically reading the encrypted version instead of the exposed version.
             await crypt_file(
                 filename=BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
@@ -288,9 +288,28 @@ async def initialize_resources_and_return_db_context(
             )
             logger.info("Blockchain file decrypted.")
 
+            with open(BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
+                blockchain_context_hash = sha256(blockchain_content.read()).hexdigest()
+
+            print(
+                "DIAGNOSE",
+                blockchain_context_hash,
+                blockchain_retrieved_hash,
+            )
+
+            if blockchain_context_hash != blockchain_retrieved_hash:
+                # @o Despite mismatched, we can just fetch a new one from the NodeType.MASTER_NODE.
+
+                logger.critical(
+                    f"Blockchain's file content signature were mismatch! Database: {blockchain_retrieved_hash} | Computed: {blockchain_context_hash} | This will be refreshed upon negotiation with the {NodeType.MASTER_NODE.name}."
+                )
+            else:
+                logger.info("Blockchain file content signature is valid!")
+
+            await db_instance.disconnect()
+
             return db_instance
 
-        # This may not be tested.
         elif (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is None:
             logger.critical(
                 f"A database exists but there's no key inside of {AUTH_ENV_FILE_NAME} or the file ({AUTH_ENV_FILE_NAME}) is missing. Have you modified it? Please check and try again."
@@ -307,62 +326,74 @@ async def initialize_resources_and_return_db_context(
 
         else:
             logger.warning(
-                f"Database and blockchain file does not exists. Creating a new database with a file name `{DATABASE_NAME}` and blockchain file named as `{BLOCKCHAIN_NAME}`."
+                f"Database and blockchain file does not exists. Creating such resources, a new database -> `{DATABASE_NAME}` and blockchain -> `{BLOCKCHAIN_NAME}`."
             )
 
+            # - Create the model in-memory to structurize the database file.
             model_metadata.create_all(sql_engine)
-            logger.info("Database structure applied ...")
+            logger.info("Database structurized from SQLAlchemy.")
 
-            logger.info("Encrypting a new database ...")
             auth_key = await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
                 return_key=True,
             )
+            logger.info("Database has been encrypted to gain the `auth_key`.")
 
             if auth_key is None:
                 raise NoKeySupplied(
                     initialize_resources_and_return_db_context,
-                    "This part of the function should have a returned new auth key. This was not intended! Please report this issue as soon as possible!",
+                    "This part of the function should have a returned new `auth_key`. This was not intended! Please report this issue as soon as possible!",
                 )
 
-            logger.warning("Temporarily decrypted database to insert signature data.")
             await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
             )
+            logger.warning("Temporarily decrypted database to insert signature data.")
 
-            # Since encrypting the database also returns a new generated key, used that as a reference for the second argument.
-            logger.info("Encrypting a new blockchain file ...")
-
+            # - Write the initial blockchain file.
             with open(BLOCKCHAIN_RAW_PATH, "w") as temp_writer:
                 initial_json_context: dict[
                     str, list[Any]
                 ] = BLOCKCHAIN_NODE_JSON_TEMPLATE
-                json_export(initial_json_context, temp_writer)
 
-            blockchain_hash = await crypt_file(
+                json_export(initial_json_context, temp_writer)
+            logger.info("Initial blockchain file has been written.")
+
+            # - Even though we already write from the file, we have to look at its decrypted form
+            # - As we value its actual content, not the hashed form.
+            with open(BLOCKCHAIN_RAW_PATH, "rb") as chain_temp_reader:
+                raw_blockchain_hash = sha256(chain_temp_reader.read()).hexdigest()
+
+            # - Insert the resulting hash from the database.
+            blockchain_hash_stmt = file_signatures.insert().values(
+                filename=BLOCKCHAIN_NAME, hash_signature=raw_blockchain_hash
+            )
+            logger.info("Initial blockchain signature has been calculated.")
+
+            # - Connect to the database, and then execute the SQL command.
+            await gather(
+                db_instance.connect(), db_instance.execute(blockchain_hash_stmt)
+            )
+
+            logger.info("Database insertion of blockchain signature is done.")
+
+            await crypt_file(
                 filename=BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
-                return_file_hash=True,
             )
-
-            blockchain_hash_stmt = file_signatures.insert().values(
-                filename=BLOCKCHAIN_NAME, hash_signature=blockchain_hash
-            )
-            await db_instance.connect()
-            await db_instance.execute(blockchain_hash_stmt)
+            logger.info("Blockchain file has been encrypted.")
 
             await crypt_file(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
             )
-
-            logger.info("Encrypting resources done.")
+            logger.info("Database file has been encrypted.")
 
             logger.warning(
                 f"To re-iterate, the system detects the invocation of role as a {role}. {'Please insert email address and password for the email services.'  if role == NodeType.MASTER_NODE else 'The system will attempt to generate `AUTH_KEY` and `SECRET_KEY`.'}"
@@ -373,13 +404,12 @@ async def initialize_resources_and_return_db_context(
                 )
 
                 credentials: list[CredentialContext] = await ensure_input_prompt(
-                    input_context=["Email Address", "Password"],
-                    hide_fields=[False, True],
+                    input_context=["Server Email Address", "Password"],
+                    hide_input_from_field=[False, True],
                     generalized_context="Server email credentials",
                     additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
                 )
 
-            logger.info("Generating a new key environment file ...")
             with open(AUTH_ENV_FILE_NAME, "w") as env_writer:
                 env_context: list[str] = [
                     f"AUTH_KEY={auth_key.decode('utf-8')}",
@@ -394,13 +424,13 @@ async def initialize_resources_and_return_db_context(
                     env_writer.write(each_context + "\n")
 
             logger.info(
-                f"Generation of new key file is done! | Named as `{AUTH_ENV_FILE_NAME}`."
+                f"Generated keys were saved to the environment file (`{AUTH_ENV_FILE_NAME}`)."
             )
 
             logger.info(
-                f"Generation of resources is done! Please check the file {AUTH_ENV_FILE_NAME}. DO NOT SHARE THOSE CREDENTIALS. | You need to relaunch this program so that the program will load the generated keys from the file."
+                f"Initial setup is done. Double-check for readable-credentials if they were finalized. PLEASE DO NOT SHARE THOSE CREDENTIALS. | You need to relaunch this program so that the program will load the generated keys from the file."
             )
-            _exit(1)
+            _exit(0)
 
     store_db_instance(db_instance)
     return db_instance
@@ -425,35 +455,31 @@ async def close_resources(*, key: KeyContext) -> None:
     )
 
     logger.warning("Closing blockchain by encryption ...")
-    raw_blockchain_encrypt, _ = await wait(
-        {
-            crypt_file(
-                filename=BLOCKCHAIN_RAW_PATH,
-                key=key,
-                process=CryptFileAction.TO_ENCRYPT,
-                enable_async=True,
-                return_file_hash=True,
-            )
-        }
+    raw_blockchain_encrypt = await crypt_file(
+        filename=BLOCKCHAIN_RAW_PATH,
+        key=key,
+        process=CryptFileAction.TO_ENCRYPT,
+        enable_async=True,
+        return_file_hash=True,
     )
 
-    blockchain_hash_file = raw_blockchain_encrypt.pop().result()
+    # blockchain_hash_file = raw_blockchain_encrypt
 
-    ensure_blockchain_hash_diff_stmt = file_signatures.select().where(
-        file_signatures.c.hash_signature == blockchain_hash_file
-    )
-    ensure_blockchain_hash = await db.execute(ensure_blockchain_hash_diff_stmt)
-    ensure_blockchain_hash = False if ensure_blockchain_hash == -1 else True  # Resolve.
+    # ensure_blockchain_hash_diff_stmt = file_signatures.select().where(
+    #     file_signatures.c.hash_signature == blockchain_hash_file
+    # )
+    # ensure_blockchain_hash = await db.execute(ensure_blockchain_hash_diff_stmt)
+    # ensure_blockchain_hash = False if ensure_blockchain_hash == -1 else True  # Resolve.
 
-    if not ensure_blockchain_hash:
-        logger.info("Blockchain file's hash upon close has been updated!")
-        blockchain_hash_update_stmt = (
-            file_signatures.update()
-            .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
-            .values(hash_signature=blockchain_hash_file)
-        )
+    # if not ensure_blockchain_hash:
+    #     logger.info("Blockchain file's hash upon close has been updated!")
+    #     blockchain_hash_update_stmt = (
+    #         file_signatures.update()
+    #         .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
+    #         .values(hash_signature=blockchain_hash_file)
+    #     )
 
-        await db.execute(blockchain_hash_update_stmt)
+    #     await db.execute(blockchain_hash_update_stmt)
 
     logger.warning("Closing database by encryption ...")
     await db.disconnect()  # * Shutdown the database instance.    db.execute()
@@ -533,19 +559,37 @@ def verify_hash_context(*, real_pwd: RawData, hashed_pwd: HashedData) -> bool:
 async def ensure_input_prompt(
     *,
     input_context: list[Any] | Any,
-    hide_fields: list[bool] | bool,
+    hide_input_from_field: list[bool] | bool,
     generalized_context: str,
     additional_context: str | None = None,
     enable_async: bool = False,
     delimiter: str = ":",
-) -> Any:
+) -> list[Any] | Any:
+    """
+    Ensures that a there will be an input / prompt for the user to interact.
+    Each `input_context` will be prompted, along with their properties such as `hide_input_fields` were rendered.
+
+    Note that this also renders input field to be asynchronous by `enable_async` by choice.
+    There are also configurations added as well for styling of the prompt.
+
+    Args:
+        input_context (list[Any] | Any): The string / a set of string that represents the field.
+        hide_fields (list[bool] | bool): A field / a set of fields that hides the input.
+        generalized_context (str): The string to display upon confirmation if their input is final.
+        additional_context (str | None, optional): Additional information added to the prompt upon finalization of inputs. Defaults to None.
+        enable_async (bool, optional): Allows to `await` this function or `run_in_executor` if false.. Defaults to False.
+        delimiter (_type_, optional): Basically, a divider. Defaults to ":".
+
+    Returns:
+        Any: _description_
+    """
 
     # * Assert in list form for all readable type.
     assert_lvalue: int = len(
         input_context if isinstance(input_context, list) else [input_context]
     )
     assert_rvalue: int = len(
-        hide_fields if isinstance(input_context, list) else [hide_fields]  # type: ignore # ??? | Resolve the `Sized` incompatibility with bool.
+        hide_input_from_field if isinstance(input_context, list) else [hide_input_from_field]  # type: ignore # ??? | Resolve the `Sized` incompatibility with bool.
     )
     assert (
         assert_lvalue == assert_rvalue
@@ -559,12 +603,12 @@ async def ensure_input_prompt(
         # TODO
         # # Implementation-wise, I understand that the code below is too redundant, but I can't fix it as of now.
 
-        if isinstance(input_context, list) and isinstance(hide_fields, list):
+        if isinstance(input_context, list) and isinstance(hide_input_from_field, list):
             for field_idx, each_context_to_input in enumerate(input_context):
                 while True:
                     _item_input = await handle_input_function(
                         awaited=enable_async,
-                        input_hidden=hide_fields[field_idx],
+                        input_hidden=hide_input_from_field[field_idx],
                         message=f"{each_context_to_input}{delimiter} ",
                     )
 
@@ -587,15 +631,15 @@ async def ensure_input_prompt(
                     break
 
         else:
-            if isinstance(hide_fields, bool):
+            if isinstance(hide_input_from_field, bool):
                 input_s = await handle_input_function(
                     awaited=enable_async,
-                    input_hidden=hide_fields,
+                    input_hidden=hide_input_from_field,
                     message=f"{input_context}{delimiter} ",
                 )
             else:
                 unconventional_terminate(
-                    message=f"Assertion Error: Input hidden is not a type 'bool'. This condition scope does not expect type {type(hide_fields)}."
+                    message=f"Assertion Error: Input hidden is not a type 'bool'. This condition scope does not expect type {type(hide_input_from_field)}."
                 )
 
             if not input_s:
@@ -694,49 +738,73 @@ async def handle_input_function(
 
 # # Blockchain
 # TODO: We need to import the HTTP here.
-async def look_for_nodes(*, role: NodeType, host: IPAddress, port: IPPort) -> None:
+async def look_for_master_node() -> None:
+
     logger.info(
-        f"Step 2.1 | Attempting to look {'for the master node' if role == NodeType.MASTER_NODE.name else 'at other nodes'} at host {host} in port {port} ..."
+        f"Attempting to look for the {NodeType.MASTER_NODE.name} at host {MASTER_NODE_IP_ADDR} in port {MASTER_NODE_IP_PORT} ..."
     )
 
+    for master_node_port_candidate in range(
+        MASTER_NODE_IP_PORT_FLOOR, MASTER_NODE_IP_PORT_CEILING + 1
+    ):
+        evaluated_master_port: int = MASTER_NODE_IP_PORT + master_node_port_candidate
+        try:
+            master_node_response = await get_http_client_instance().enqueue_request(
+                url=URLAddress(
+                    f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
+                ),
+                method=HTTPQueueMethods.GET,
+                await_result_immediate=True,
+                do_not_retry=True,
+                name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
+            )
 
-# TODO: Function to below is just a prototype. TO BE TESTED.
-async def verify_hash_blockchain(
-    *, blockchain_contents: str | bytes, db: Database = Depends(get_database_instance)
-) -> bool:
-    verify_hash_stmt = file_signatures.select(file_signatures.c.file == BLOCKCHAIN_NAME)
-    blockchain_file_hash = await db.execute(verify_hash_stmt)
+            stored_response: Coroutine = master_node_response
+            if not isinstance(stored_response, ClientResponse):
+                raise KeyError  # @o Since we are displaying the message, raise `KeyError` to hit the log to display.
 
-    resolve_type_contents: bytes = (
-        blockchain_contents.encode("utf-8")
-        if isinstance(blockchain_contents, str)
-        else blockchain_contents
-    )
+            # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
 
-    return sha256(resolve_type_contents).hexdigest() == blockchain_file_hash
+            set_master_node_properties(
+                key=REF_MASTER_BLOCKCHAIN_ADDRESS, context=MASTER_NODE_IP_ADDR
+            )
+            set_master_node_properties(
+                key=REF_MASTER_BLOCKCHAIN_PORT, context=evaluated_master_port
+            )
 
+            logger.info(
+                f"Master node found at {MASTER_NODE_IP_ADDR}:{evaluated_master_port}! (Assumption after response)"
+            )
 
-def process_blockchain_hash_state(
-    *,
-    blockchain_contents: str | bytes,
-    should_update: bool = False,
-) -> None:
+            break
 
-    resolved_blockchain_contents: bytes = (
-        blockchain_contents.encode("utf-8")
-        if isinstance(blockchain_contents, str)
-        else blockchain_contents
-    )
+        except KeyError:
+            logger.error(
+                f"Response for the {MASTER_NODE_IP_ADDR}:{evaluated_master_port} has returned okay but contains nothing (client response), continuing to find the right address ..."
+            )
 
-    if should_update:
-        file_signatures.update().where(
-            file_signatures.c.file == BLOCKCHAIN_NAME
-        ).values(signature=sha256(resolved_blockchain_contents))
+        except (
+            ConnectionRefusedError,
+            ConnectionAbortedError,
+            ConnectionResetError,
+            ClientConnectionError,
+            ClientConnectorError,
+        ):
+            continue
 
-    else:
-        file_signatures.insert().values(
-            filename=BLOCKCHAIN_NAME, signature=sha256(resolved_blockchain_contents)
+    # @o When we didn't get anything, then terminate.
+    if not get_master_node_properties(all=True).__len__():
+        unconventional_terminate(
+            message=f"Multiple retries of establishing connection to the master node IP address '{MASTER_NODE_IP_ADDR}', within the range of port {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_FLOOR} to {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_CEILING} were failed! Please check the IP address of the master node and try again.",
         )
+
+    return
+
+
+# # This may be moved inside BlockchainMechanism.
+async def look_for_archival_nodes() -> None:
+    logger.error("This function is NotYetImplemented.")
+    return
 
 
 # # Input Stoppers — START

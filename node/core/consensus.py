@@ -106,29 +106,21 @@ class ConsensusMechanism:
                 continue
             break
 
-        master_response, _ = await wait(
-            {
-                create_task(
-                    self.http_instance.enqueue_request(
-                        url=URLAddress(
-                            f"http://{master_origin_address}:{master_origin_port}/node/establish/receive_echo"
-                        ),
-                        headers={
-                            "x-source": auth_source,
-                            "x-session": auth_session,
-                            "x-acceptance": auth_acceptance,
-                        },
-                        method=HTTPQueueMethods.POST,
-                        await_result_immediate=True,
-                    )
-                )
-            }
+        master_response = await self.http_instance.enqueue_request(
+            url=URLAddress(
+                f"http://{master_origin_address}:{master_origin_port}/node/establish/receive_echo"
+            ),
+            headers={
+                "x-source": auth_source,
+                "x-session": auth_session,
+                "x-acceptance": auth_acceptance,
+            },
+            method=HTTPQueueMethods.POST,
+            await_result_immediate=True,
         )
 
         # - Add the credentials to the associated nodes as self.
-        association_certificate: RequestPayloadContext = (
-            await master_response.pop().result().json()
-        )
+        association_certificate: RequestPayloadContext = await master_response.json()
 
         insert_fetched_certificate_stmt = associated_nodes.insert().values(
             user_address=auth_source,

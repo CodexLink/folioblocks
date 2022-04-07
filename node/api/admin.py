@@ -76,6 +76,12 @@ async def generate_auth_token_for_other_nodes(
     if auth_instance.verify(x_passcode):
         generated_token: str = generate_auth_token()
 
+        await email_instance.send(
+            content=f"<html><body><h1>Auth Code as Folioblock's Archival Miner Node!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+            subject="Register Auth Code for Archival Miner Node Registration @ Folioblocks",
+            to=payload.email,
+        )
+
         try:
             insert_generated_token_stmt = auth_codes.insert().values(
                 code=generated_token,
@@ -92,11 +98,6 @@ async def generate_auth_token_for_other_nodes(
                 status_code=HTTPStatus.FORBIDDEN,
             )
 
-        await email_instance.send(
-            content=f"<html><body><h1>Auth Code as Folioblock's Archival Miner Node!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-            subject="Register Auth Code for Archival Miner Node Registration @ Folioblocks",
-            to=payload.email,
-        )
         return {"detail": "Invocation of the email for registration were successful."}
 
     raise HTTPException(
