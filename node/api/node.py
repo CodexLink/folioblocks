@@ -287,16 +287,10 @@ async def verify_given_hash(
         description=f"The input hash that is going to be compared against the {NodeType.MASTER_NODE.name}.",
     )
 ) -> JSONResponse:
-    blockchain_hash: str = await get_blockchain_instance().get_chain_hash()
-    blockchain_file: str = await get_blockchain_instance().get_chain()
-
-    print(
-        "Hash compare",
-        blockchain_hash,
-        x_hash,
-        sha256(blockchain_file.encode("utf-8")).hexdigest(),
-    )
 
     return JSONResponse(
-        content={"hash_valid": blockchain_hash == x_hash}, status_code=HTTPStatus.OK
+        content={
+            "hash_valid": await get_blockchain_instance().get_chain_hash() == x_hash
+        },
+        status_code=HTTPStatus.OK,
     )

@@ -40,7 +40,7 @@ COPY /backup ./backup
 
 # # Decide what node configuration to copy over Docker.
 RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/with_chain/** ./ ;\
-	else cp backup/archival/registered/** ./ ; fi
+	else cp backup/archival/with_chain/** ./ ; fi
 
 RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
 	&& rm -rf /usr/local/build ~/.cache/pip
