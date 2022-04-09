@@ -206,7 +206,7 @@ class ExplorerAPI(Enum):
 class NodeAPI(Enum):
     GENERAL_NODE_API = f"{BaseAPI.NODE.value}: Overview"
     MASTER_NODE_API = f"{BaseAPI.NODE.value}: Master Node"
-    SIDE_NODE_API = f"{BaseAPI.NODE.value}: Side Node"
+    ARCHIVAL_MINER_NODE_API = f"{BaseAPI.NODE.value}: Archival Miner (Side) Node"
     NODE_TO_NODE_API = f"{BaseAPI.NODE.value}: Node-to-Node"
 
 

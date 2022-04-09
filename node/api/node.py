@@ -102,31 +102,58 @@ async def get_node_info() -> NodeConsensusInformation:
 # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
 """
 
-"""
-# Node-to-Node Consensus Blockchain Operation Endpoints
 
-@o Whenever the blockchain's `MASTER_NODE` is looking for `ARCHIVAL_MINER_NODE`s. It has to ping them in a way that it shows their availability.
-@o However, since we already did some established connection between them, we need to pass them off from the `ARCHIVAL_MINER_NODE`s themselves to the
-@o `MASTER_NODE`. This was to ensure that the node under communication is not a fake node by providing the `AssociationCertificate`.
+@node_router.post(
+    "/blockchain/process_hashed_block",
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
+    summary=f"Receives a hashed block for the {NodeType.MASTER_NODE} to append from the blockchain.",
+    description=f"A special API endpoint that receives a raw bock to be mined.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+        )
+    ],
+)
+async def process_hashed_block() -> None:
+    # - Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
+    return
 
-! These endpoints are being used both.
-"""
 
-# @node_router.post(
-#     "/consensus/receive_echo",
-#     tags=[NodeAPI.NODE_TO_NODE_API.value],
-#     summary="Receives echo from the `ARCHIVAL_MINER_NODE` for establishment of their connection to the blockchain.",
-#     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
-#     dependencies=[
-#         Depends(
-#             EnsureAuthorized(
-#                 _as=UserEntity.MASTER_NODE_USER
-#             )
-#         )
-#     ],
-# )
-# async def acknowledge_as_response(x,x_acceptance) -> None:
-#     return
+@node_router.post(
+    "/blockchain/process_raw_block",
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.ARCHIVAL_MINER_NODE_API.value],
+    summary=f"Receives a raw block for the {NodeType.ARCHIVAL_MINER_NODE} to mine.",
+    description=f"A special API endpoint that receives a raw bock to be mined.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
+            )
+        )
+    ],
+)
+async def receive_block_to_mine() -> None:
+    # - Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
+    return
+
+
+@node_router.post(
+    "/blockchain/receive_action",
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
+    summary="Receives data that serves as an action of the user from the dashboard.",
+    description=f"A special API endpoint that accepts payload from the dashboard. This requires special credentials and handling outside the scope of node.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+        )
+    ],
+)
+async def recieve_action_from_dashboard() -> None:
+    # - Create a raw payload from here.
+    # - Encapsulate it in transaction.
+    # - Do something when there's a file involved.
+    # TODO: Classify Actions from here.
+    return
 
 
 """
@@ -154,8 +181,11 @@ async def get_node_info() -> NodeConsensusInformation:
 @node_router.post(
     "/establish/receive_echo",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API],
-    summary="Receives echo from the `ARCHIVAL_MINER_NODE` for establishment of their connection to the blockchain.",
+    summary=f"Receives echo from the {NodeType.ARCHIVAL_MINER_NODE} for establishment of their connection to the blockchain.",
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
+    dependencies=[
+        Depends(EnsureAuthorized(_as=[UserEntity.MASTER_NODE_USER])),
+    ],
 )
 async def acknowledge_as_response(
     request: Request,
@@ -253,9 +283,7 @@ async def acknowledge_as_response(
     description=f"A special API endpoint that allows '{NodeType.ARCHIVAL_MINER_NODE.name}' to fetch the latest version of the blockchain file from the '{NodeType.MASTER_NODE.name}'. This is mandatory before allowing the node to mine or participate from the blockchain.",
     dependencies=[
         Depends(
-            EnsureAuthorized(
-                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
-            )
+            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
         )
     ],
 )
@@ -286,11 +314,10 @@ async def verify_given_hash(
         ...,
         description=f"The input hash that is going to be compared against the {NodeType.MASTER_NODE.name}.",
     )
-) -> JSONResponse:
+) -> Response:
 
-    return JSONResponse(
-        content={
-            "hash_valid": await get_blockchain_instance().get_chain_hash() == x_hash
-        },
-        status_code=HTTPStatus.OK,
+    return Response(
+        status_code=HTTPStatus.OK
+        if await get_blockchain_instance().get_chain_hash() == x_hash
+        else HTTPStatus.NOT_ACCEPTABLE
     )

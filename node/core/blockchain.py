@@ -64,7 +64,7 @@ class BlockchainMechanism(ConsensusMechanism):
     def __init__(
         self,
         *,
-        block_timer_seconds: int = 5,
+        block_timer_seconds: int = 10,
         auth_tokens: IdentityTokens,
         node_role: NodeType,
     ) -> None:
@@ -195,12 +195,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(
                     "Genesis block generation has been finished! Blockchain system ready."
                 )
+
         else:
-            # TODO: Consensus by fetching a token or something that allows these node and the master to communicate. They need to save that token in-memory, by losing an instance we loss that token.
-            # TODO: Queue if the hash of this blockchain is the same as from the master (via database).
-
-            # TODO: Do fetch in database before calling this stupid shit.
-
             if self.identity is not None:
                 existing_certificate = await self._get_own_certificate()
 
@@ -727,27 +723,23 @@ class BlockchainMechanism(ConsensusMechanism):
                 do_not_retry=True,
             )
 
-            if master_hash_valid_response.ok:
-                hash_valid: RequestPayloadContext = (
-                    await master_hash_valid_response.json()
-                )  # * Parse in one-liner.
+            if not master_hash_valid_response.ok:
+                # - If that's the case then fetch the blockchain file.
+                blockchain_content = await self.http_instance.enqueue_request(
+                    url=URLAddress(
+                        f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
+                    ),
+                    method=HTTPQueueMethods.POST,
+                    await_result_immediate=True,
+                    headers={
+                        "x-token": self.identity[1],
+                        "x-certificate-token": await self._get_own_certificate(),
+                    },
+                )
 
-                if not hash_valid["hash_valid"]:
+                # - For some reason, in my implementation, I also returned the hash with respect to the content.
 
-                    # - If that's the case then fetch the blockchain file.
-                    blockchain_content = await self.http_instance.enqueue_request(
-                        url=URLAddress(
-                            f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
-                        ),
-                        method=HTTPQueueMethods.POST,
-                        await_result_immediate=True,
-                        headers={
-                            "x-token": self.identity[1],
-                            "x-certificate-token": await self._get_own_certificate(),
-                        },
-                    )
-
-                    # - For some reason, in my implementation, I also returned the hash with respect to the content.
+                if blockchain_content.ok:
                     dict_blockchain_content = await blockchain_content.json()
 
                     # TODO: Documentation.
@@ -771,20 +763,19 @@ class BlockchainMechanism(ConsensusMechanism):
                     logger.info(
                         f"Blockchain has been updated from upstream! Ready for blockchain operation from the {NodeType.MASTER_NODE.name}."
                     )
-
                 else:
-                    # - When the hash is fine, then standby and wait for the consensus timer.
-                    logger.info(
-                        f"Hash is currently the same as the upstream. Awaiting for orders from the `{NodeType.MASTER_NODE.name}`."
+                    logger.warning(
+                        f"Update or hash validation processing is not successful due to condition unmet from HTTP status. Re-attempting in 5 seconds ..."
                     )
-                    break
+                    await sleep(5)
+                    continue
 
             else:
-                logger.warning(
-                    f"Update or hash validation processing is not successful due to condition unmet from HTTP status. Re-attempting in 5 seconds ..."
+                # - When the hash is fine, then standby and wait for the consensus timer.
+                logger.info(
+                    f"Hash is currently the same as the upstream. Awaiting for orders from the `{NodeType.MASTER_NODE.name}`."
                 )
-                await sleep(5)
-                continue
+                break
 
             self.blockchain_ready = True
             return
