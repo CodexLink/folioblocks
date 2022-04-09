@@ -41,15 +41,15 @@ class HTTPClient:
         self._queue_running: bool = False
 
     async def initialize(self) -> None:
-        self._session = ClientSession()  # * Initialize the ClientSession.
+        self._session = ClientSession()
         logger.debug("HTTP client 'ClientSession' were initialized.")
 
-        self._is_ready = True
-        logger.info("HTTP client is ready to take some requests ...")
         create_task(
             name=f"{HTTPClient.__name__}_queue_iterator",
             coro=self._queue_iterator_runtime(),
         )
+        self._is_ready = True
+        logger.info("HTTP client is ready to take some requests.")
 
     async def enqueue_request(
         self,

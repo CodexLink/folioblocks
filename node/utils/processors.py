@@ -24,19 +24,13 @@ from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
 
-from aiohttp import ClientConnectionError, ClientConnectorError, ClientResponse
 from core.constants import (
-    MASTER_NODE_IP_ADDR,
-    MASTER_NODE_IP_PORT,
-    MASTER_NODE_IP_PORT_CEILING,
-    MASTER_NODE_IP_PORT_FLOOR,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
     HTTPQueueMethods,
     URLAddress,
 )
 from core.dependencies import set_master_node_properties
-from core.dependencies import get_master_node_properties
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -44,7 +38,7 @@ else:
     from signal import SIGTERM as CALL_TERMINATE_EVENT
 
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any, Coroutine, Final
+from typing import Any, Final
 
 from aioconsole import ainput
 from aiofiles import open as aopen
@@ -291,12 +285,6 @@ async def initialize_resources_and_return_db_context(
             with open(BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
                 blockchain_context_hash = sha256(blockchain_content.read()).hexdigest()
 
-            print(
-                "DIAGNOSE",
-                blockchain_context_hash,
-                blockchain_retrieved_hash,
-            )
-
             if blockchain_context_hash != blockchain_retrieved_hash:
                 # @o Despite mismatched, we can just fetch a new one from the NodeType.MASTER_NODE.
 
@@ -455,31 +443,13 @@ async def close_resources(*, key: KeyContext) -> None:
     )
 
     logger.warning("Closing blockchain by encryption ...")
-    raw_blockchain_encrypt = await crypt_file(
+    await crypt_file(
         filename=BLOCKCHAIN_RAW_PATH,
         key=key,
         process=CryptFileAction.TO_ENCRYPT,
         enable_async=True,
         return_file_hash=True,
     )
-
-    # blockchain_hash_file = raw_blockchain_encrypt
-
-    # ensure_blockchain_hash_diff_stmt = file_signatures.select().where(
-    #     file_signatures.c.hash_signature == blockchain_hash_file
-    # )
-    # ensure_blockchain_hash = await db.execute(ensure_blockchain_hash_diff_stmt)
-    # ensure_blockchain_hash = False if ensure_blockchain_hash == -1 else True  # Resolve.
-
-    # if not ensure_blockchain_hash:
-    #     logger.info("Blockchain file's hash upon close has been updated!")
-    #     blockchain_hash_update_stmt = (
-    #         file_signatures.update()
-    #         .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
-    #         .values(hash_signature=blockchain_hash_file)
-    #     )
-
-    #     await db.execute(blockchain_hash_update_stmt)
 
     logger.warning("Closing database by encryption ...")
     await db.disconnect()  # * Shutdown the database instance.    db.execute()
@@ -564,7 +534,7 @@ async def ensure_input_prompt(
     additional_context: str | None = None,
     enable_async: bool = False,
     delimiter: str = ":",
-) -> list[Any] | Any:
+) -> Any:
     """
     Ensures that a there will be an input / prompt for the user to interact.
     Each `input_context` will be prompted, along with their properties such as `hide_input_fields` were rendered.
@@ -738,65 +708,27 @@ async def handle_input_function(
 
 # # Blockchain
 # TODO: We need to import the HTTP here.
-async def look_for_master_node() -> None:
+async def contact_master_node(*, master_host: str, master_port: int) -> None:
 
     logger.info(
-        f"Attempting to look for the {NodeType.MASTER_NODE.name} at host {MASTER_NODE_IP_ADDR} in port {MASTER_NODE_IP_PORT} ..."
+        f"Attempting to contact the {NodeType.MASTER_NODE.name} at host {master_host} in port {master_port} ..."
     )
 
-    for master_node_port_candidate in range(
-        MASTER_NODE_IP_PORT_FLOOR, MASTER_NODE_IP_PORT_CEILING + 1
-    ):
-        evaluated_master_port: int = MASTER_NODE_IP_PORT + master_node_port_candidate
-        try:
-            master_node_response = await get_http_client_instance().enqueue_request(
-                url=URLAddress(
-                    f"http://{MASTER_NODE_IP_ADDR}:{evaluated_master_port}/explorer/chain"
-                ),
-                method=HTTPQueueMethods.GET,
-                await_result_immediate=True,
-                do_not_retry=True,
-                name=f"validate_master_node_conn_iter_{master_node_port_candidate}",
-            )
+    master_node_response = await get_http_client_instance().enqueue_request(
+        url=URLAddress(f"http://{master_host}:{master_port}/explorer/chain"),
+        method=HTTPQueueMethods.GET,
+        await_result_immediate=True,
+        name="contact_master_node",
+    )
 
-            stored_response: Coroutine = master_node_response
-            if not isinstance(stored_response, ClientResponse):
-                raise KeyError  # @o Since we are displaying the message, raise `KeyError` to hit the log to display.
-
-            # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
-
-            set_master_node_properties(
-                key=REF_MASTER_BLOCKCHAIN_ADDRESS, context=MASTER_NODE_IP_ADDR
-            )
-            set_master_node_properties(
-                key=REF_MASTER_BLOCKCHAIN_PORT, context=evaluated_master_port
-            )
-
-            logger.info(
-                f"Master node found at {MASTER_NODE_IP_ADDR}:{evaluated_master_port}! (Assumption after response)"
-            )
-
-            break
-
-        except KeyError:
-            logger.error(
-                f"Response for the {MASTER_NODE_IP_ADDR}:{evaluated_master_port} has returned okay but contains nothing (client response), continuing to find the right address ..."
-            )
-
-        except (
-            ConnectionRefusedError,
-            ConnectionAbortedError,
-            ConnectionResetError,
-            ClientConnectionError,
-            ClientConnectorError,
-        ):
-            continue
-
-    # @o When we didn't get anything, then terminate.
-    if not get_master_node_properties(all=True).__len__():
-        unconventional_terminate(
-            message=f"Multiple retries of establishing connection to the master node IP address '{MASTER_NODE_IP_ADDR}', within the range of port {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_FLOOR} to {MASTER_NODE_IP_PORT + MASTER_NODE_IP_PORT_CEILING} were failed! Please check the IP address of the master node and try again.",
+    if master_node_response.ok:
+        # - Since we do understand that it may be a `MASTER` node, then save its URL then attempt to negotiate by logging to them later.
+        set_master_node_properties(
+            key=REF_MASTER_BLOCKCHAIN_ADDRESS, context=master_host
         )
+        set_master_node_properties(key=REF_MASTER_BLOCKCHAIN_PORT, context=master_port)
+
+        logger.info(f"Master node responded at {master_host}:{master_port}!")
 
     return
 

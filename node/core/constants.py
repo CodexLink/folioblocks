@@ -154,16 +154,9 @@ BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
 
 # # Constraints — Node Operation Parameter
-MASTER_NODE_IP_ADDR: Final[IPAddress] = IPAddress(
-    "127.0.0.1"
-)  # - The host from where the master node will establish its connection, and the miners will attempt to connect to.
 MASTER_NODE_LIMIT_CONNECTED_NODES: Final[
     int
 ] = 4  # - The number of nodes that should exists in the network. Master node will reject any connections when the pool is full.
-MASTER_NODE_IP_PORT: Final[IPPort] = IPPort(
-    5000
-)  # - Contains the port from where the `MASTER_NODE` will attempt to live. Should be overridable.
-
 MASTER_NODE_IP_PORT_FLOOR: Final[int] = 0
 MASTER_NODE_IP_PORT_CEILING: Final[int] = 10
 
@@ -404,28 +397,28 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
     "The use of arguments are intended for debugging purposes and development only. Please be careful and be vigilant about the requirements to make certain arguments functioning."
 )
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
-    ArgumentParameter("DEBUG"): ArgumentDescription(
-        "Enables some of the debug features."
-    ),
-    ArgumentParameter("HOST"): ArgumentDescription(
-        "The IP address that this instance is going to allocate from a machine. This should be the base IP address that other nodes should use in order to communicate from each other."
+    ArgumentParameter("ASSIGNED_ROLE"): ArgumentDescription(
+        f"Assigns and represents the role of this node. Each role in {NodeType} represents different functionality. Please use the assigned role to avoid potential errors."
     ),
     ArgumentParameter("KEY_FILE"): ArgumentDescription(
-        "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is not required unless the file has a different name."
-    ),
-    ArgumentParameter("LOCAL"): ArgumentDescription(
-        "When specified, run the blockchain node system with hot reload and other elements that enable debug features. Note that this is discouraged since database does not get into the state of locking since hot reload is messing it. I suggest using external hot reloaders."
+        "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is a file name and is not required, unless the file has a different name."
     ),
     ArgumentParameter("LOG_LEVEL"): ArgumentDescription(
-        "Specifies the level to log in both console and to the file (if enabled). Refer to the Logging Levels of Logging Documentation."
+        "Specifies the level to log both console and to the file (if enabled). Refer to the Logging Levels of logging or uvicorn logs documentation for more information."
+    ),
+    ArgumentParameter("NODE_HOST"): ArgumentDescription(
+        "The IP address that this node instance is going to allocate from the machine."
+    ),
+    ArgumentParameter("NODE_PORT"): ArgumentDescription(
+        "The port associated from the host address where this instance will be established. Ensure that this instance is not conflicted with other instances as it will cause to fail before it can get to run its ASGI instance."
     ),
     ArgumentParameter("NO_LOG_FILE"): ArgumentDescription(
-        "Disables logging to a file. This assert that the log should be outputted in the CLI."
+        "Disables logging to a file. This does not however, disables logging through CLI."
     ),
-    ArgumentParameter("PORT"): ArgumentDescription(
-        "Specify the port for this instance. Ensure that this instance is not conflicted with other instances as it will cause to fail before it can get to running its ASGI instance."
+    ArgumentParameter("TARGET_HOST"): ArgumentDescription(
+        f"The IP address of the target node. This node must be a {NodeType.MASTER_NODE.name} and not a {NodeType.ARCHIVAL_MINER_NODE.name}."
     ),
-    ArgumentParameter("PREFER_ROLE"): ArgumentDescription(
-        f"Assigns a role supplied from this parameter. The role {NodeType.MASTER_NODE.name} can be enforced once. If there's a node that has a role of {NodeType.MASTER_NODE.name} before this node, then assign {NodeType.ARCHIVAL_MINER_NODE.name} to this node."
+    ArgumentParameter("TARGET_PORT"): ArgumentDescription(
+        "The port to connect based on the target host address."
     ),
 }

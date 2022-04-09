@@ -4,21 +4,24 @@
 # - You have to setup email credentials as well as the account from the master node, or just the credentials.
 # - Ensure that the nodes were able to initialize as well as shutdown gracefully in the sense that the files were able to encrypt-decrpyt such files.
 
-FROM python:3.10.2-slim-buster
+FROM python:3.10.4-slim-buster
 
+ARG NODE_HOST
+ARG NODE_PORT
 ARG NODE_ROLE
 
-# @o Be mindful of this one, since the system knows when the specified port is already in use, it does not however terminates the system. Which causes a mismatch port to port forward.
-ARG NODE_PORT=5001
+# ! I added default so that there would be less arguments upon running this when building 'ARCHIVAL_MINER_NODE'.
+ARG TARGET_MASTER_HOST=127.17.0.2
+ARG TARGET_MASTER_PORT=6001
 
-# ! Ensure that the `NODE_HOST` is the same as the docker's host instance IP address.
-ARG NODE_HOST=172.17.0.2
+ENV THIS_NODE_HOST=${NODE_HOST}
+ENV THIS_NODE_PORT=${NODE_PORT}
+ENV THIS_NODE_ROLE=${NODE_ROLE}
 
-ENV PORT=${NODE_PORT}
-ENV ROLE=${NODE_ROLE}
-ENV HOST=${NODE_HOST}
+ENV MASTER_NODE_HOST=${TARGET_MASTER_HOST}
+ENV MASTER_NODE_PORT=${TARGET_MASTER_PORT}
 
-EXPOSE $PORT
+EXPOSE $THIS_NODE_PORT
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
@@ -49,7 +52,7 @@ RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
 RUN chmod +x main.py
 
 # # Run the file.
-ENTRYPOINT python3 main.py --host $HOST --log-level INFO --prefer-role $ROLE --port $PORT
+ENTRYPOINT python3 main.py --assigned-role $THIS_NODE_ROLE --log-level INFO --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT
 
 # TODO: Not sure if this is working when the stop button is stopped.
 STOPSIGNAL SIGINT

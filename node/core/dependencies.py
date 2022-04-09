@@ -149,13 +149,13 @@ async def authenticate_node_client(
 
     if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
         logger.warning(
-            "Environment file doesn't contain the values for `NODE_USERNAME` and/or `NODE_PWD` or is entirely missing. Assuming first-time instance."
+            "Environment file doesn't contain the values for `NODE_USERNAME` and/or `NODE_PWD` or is entirely missing. Assuming first-time instance ..."
         )
 
         while True:
             try:
                 logger.info(
-                    f"{f'To start, the system will create an `auth_token` for you to register yourself.' if role == NodeType.MASTER_NODE else f'Since this a new instance, you need credentials for you to enter in blockchain.'} | Please enter your email address."
+                    f"As a {role.name}, {f'The system will perform to create keys such as an `auth_token` for you to register and authenticate yourself.' if role == NodeType.MASTER_NODE else f'you need to enter credentials for you to enter in blockchain.'} | Please enter your email address first."
                 )
 
                 if role == NodeType.MASTER_NODE:
@@ -198,7 +198,7 @@ async def authenticate_node_client(
 
                     register_node: Any = await get_http_client_instance().enqueue_request(
                         url=URLAddress(
-                            f"http://{instances[0].host}:{instances[0].port}/entity/register"
+                            f"http://{instances[0].target_host}:{instances[0].target_port}/entity/register"
                         ),
                         method=HTTPQueueMethods.POST,
                         data={
@@ -238,7 +238,7 @@ async def authenticate_node_client(
                 )
 
             logger.info(
-                f"A generated code has been sent. Please register from the '{instances[0].host}:{instances[0].port}/entity/register' endpoint and login with your credentials on the next prompt."
+                f"A generated code has been sent. Please register from the '{instances[0].node_host}:{instances[0].node_port}/entity/register' endpoint and login with your credentials on the next prompt."
             )
             break
 
@@ -254,9 +254,14 @@ async def authenticate_node_client(
 
         # Ensure that ENV will be covered here.
         try:
+            if role == NodeType.MASTER_NODE:
+                resolved_host, resolved_port = instances[0].node_host, instances[0].node_port
+            else:
+                resolved_host, resolved_port = instances[0].target_host, instances[0].target_port
+
             login_request = await get_http_client_instance().enqueue_request(
                 url=URLAddress(
-                    f"http://{instances[0].host}:{instances[0].port}/entity/login"
+                    f"http://{resolved_host}:{resolved_port}/entity/login"
                 ),
                 method=HTTPQueueMethods.POST,
                 await_result_immediate=True,
@@ -272,9 +277,9 @@ async def authenticate_node_client(
             )
 
             if login_request.ok:
-                # * Resolve via pydantic.
-                resolved_model = EntityLoginResult.parse_obj(await login_request.json())
-
+                resolved_model = EntityLoginResult.parse_obj(
+                    await login_request.json()
+                )  # * Resolve via pydantic.
                 resolve_entity_to_role = (
                     NodeType.MASTER_NODE
                     if resolved_model.user_role == UserEntity.MASTER_NODE_USER
@@ -282,11 +287,11 @@ async def authenticate_node_client(
                 )
 
                 # TODO: Please test this one.
-                if resolve_entity_to_role.value != get_args_value().prefer_role:
+                if resolve_entity_to_role.value != get_args_value().assigned_role:
                     from utils.processors import unconventional_terminate
 
                     unconventional_terminate(
-                        message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().prefer_role} instead.",
+                        message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().assigned_role} instead.",
                         early=True,
                     )
 
@@ -313,7 +318,7 @@ async def authenticate_node_client(
 
             else:
                 logger.error(
-                    f"Credentials are incorrect! Please try again. | Object: {login_req} | Additional Info: {await login_req.json()}"
+                    f"Credentials are incorrect! Please try again. | Object: {login_request} | Additional Info: {await login_request.json()}"
                 )
                 await sleep(1.5)
                 continue

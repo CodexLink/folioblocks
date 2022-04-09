@@ -26,8 +26,6 @@ from core.constants import (
     FOLIOBLOCKS_HELP,
     FOLIOBLOCKS_NODE_DESCRIPTION,
     FOLIOBLOCKS_NODE_TITLE,
-    MASTER_NODE_IP_ADDR,
-    MASTER_NODE_IP_PORT,
     ArgumentParameter,
     LoggerLevelCoverage,
     NodeType,
@@ -42,8 +40,9 @@ args_handler = ArgumentParser(
 # Before adding arguments, let's process and inject those IntEnums from the constants.py. We cannot use IntEnums legally because the author of argparse seems to be conflicted with the use case of the Enums.
 
 
-# Prep the RegExpr.
-compiled_pattern: Pattern[str] = compile(ENUM_NAME_PATTERN)
+compiled_pattern: Pattern[str] = compile(
+    ENUM_NAME_PATTERN
+)  # * Prepare the RegExpression.
 for each_enum in [LoggerLevelCoverage, NodeType]:
     temp_choice: list[str] = []
     re_matched: list[str] = compiled_pattern.findall(
@@ -58,20 +57,12 @@ for each_enum in [LoggerLevelCoverage, NodeType]:
 
 
 args_handler.add_argument(
-    "-d",
-    "--debug",
-    action="store_true",
-    help=FOLIOBLOCKS_HELP[ArgumentParameter("DEBUG")],
-    required=False,
+    "-ar",
+    "--assigned-role",
+    choices=locals()["_injected_nt_choices"],
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("ASSIGNED_ROLE")],
+    required=True,
 )
-
-args_handler.add_argument(
-    "-ho",
-    "--host",
-    default=MASTER_NODE_IP_ADDR,
-    help=FOLIOBLOCKS_HELP[ArgumentParameter("HOST")],
-)
-
 args_handler.add_argument(
     "-kf",
     "--key-file",
@@ -80,14 +71,6 @@ args_handler.add_argument(
     help=FOLIOBLOCKS_HELP[ArgumentParameter("KEY_FILE")],
     type=validate_file_keys,
 )
-
-args_handler.add_argument(
-    "-l",
-    "--local",
-    action="store_true",
-    help=FOLIOBLOCKS_HELP[ArgumentParameter("LOCAL")],
-)
-
 args_handler.add_argument(
     "-ll",
     "--log-level",
@@ -95,7 +78,20 @@ args_handler.add_argument(
     help=FOLIOBLOCKS_HELP[ArgumentParameter("LOG_LEVEL")],
     default=LoggerLevelCoverage.INFO.value,
 )
-
+args_handler.add_argument(
+    "-nh",
+    "--node-host",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("NODE_HOST")],
+    required=True,
+)
+args_handler.add_argument(
+    "-np",
+    "--node-port",
+    action="store",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("NODE_PORT")],
+    type=int,
+    required=True,
+)
 args_handler.add_argument(
     "-nlf",
     "--no-log-file",
@@ -103,21 +99,17 @@ args_handler.add_argument(
     help=FOLIOBLOCKS_HELP[ArgumentParameter("NO_LOG_FILE")],
     required=False,
 )
-
 args_handler.add_argument(
-    "-p",
-    "--port",
-    action="store",
-    default=MASTER_NODE_IP_PORT,
-    help=FOLIOBLOCKS_HELP[ArgumentParameter("PORT")],
-    type=int,
+    "-th",
+    "--target-host",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("TARGET_HOST")],
     required=False,
 )
-
 args_handler.add_argument(
-    "-pr",
-    "--prefer-role",
-    choices=locals()["_injected_nt_choices"],
-    help=FOLIOBLOCKS_HELP[ArgumentParameter("PREFER_ROLE")],
-    required=True,
+    "-tp",
+    "--target-port",
+    action="store",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("TARGET_PORT")],
+    type=int,
+    required=False,
 )

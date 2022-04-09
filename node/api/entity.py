@@ -48,7 +48,7 @@ from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
-evaluated_role: NodeType = NodeType(get_args_value().prefer_role)
+evaluated_role: NodeType = NodeType(get_args_value().assigned_role)
 
 entity_router = APIRouter(
     prefix="/entity",
