@@ -113,27 +113,39 @@ class ConsensusMechanism:
             headers={
                 "x-source": auth_source,
                 "x-session": auth_session,
+                "x-token": auth_session,
                 "x-acceptance": auth_acceptance,
             },
             method=HTTPQueueMethods.POST,
             await_result_immediate=True,
+            name="get_echo_from_master",
         )
 
         # - Add the credentials to the associated nodes as self.
-        association_certificate: RequestPayloadContext = await master_response.json()
+        if master_response.ok:
+            association_certificate: RequestPayloadContext = (
+                await master_response.json()
+            )
 
-        insert_fetched_certificate_stmt = associated_nodes.insert().values(
-            user_address=auth_source,
-            certificate=association_certificate["certificate_token"],
-            # * The following fields are not needed throughout the runtime, but is required due to constraint.
-            # ! Not that these variables does not represent the current node but rather the target node.
-            source_address=master_origin_address,
-            source_port=master_origin_port,
-        )
+            insert_fetched_certificate_stmt = associated_nodes.insert().values(
+                user_address=auth_source,
+                certificate=association_certificate["certificate_token"],
+                # * The following fields are not needed throughout the runtime, but is required due to constraint.
+                # ! Not that these variables does not represent the current node but rather the target node.
+                source_address=master_origin_address,
+                source_port=master_origin_port,
+            )
 
-        await db.execute(insert_fetched_certificate_stmt)
+            await db.execute(insert_fetched_certificate_stmt)
 
-        logger.info("Generation of Association certificate token were successful!")
+            logger.info("Generation of Association certificate token were successful!")
+
+        else:
+            logger.error(
+                f"Generation of association certificate is not successful due to rejection or no reply from the {NodeType.MASTER_NODE}"
+            )
+
+        return None
 
     @__restrict_call(on=NodeType.MASTER_NODE)
     async def negotiate(self) -> None:

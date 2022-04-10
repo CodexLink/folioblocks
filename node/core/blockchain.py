@@ -24,6 +24,8 @@ from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pympler.asizeof import asizeof
 from sqlalchemy import select
+from core.constants import AssociatedNodeStatus
+from core.constants import BlockchainNodeStatePayload
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
 
@@ -139,28 +141,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     return fn(self, *args, **kwargs)
 
                 self.warning(
-                    f"Your role {self.role} cannot call this method `{fn.__name__}` due to the role is restricted to {on}."
+                    f"Your role {self.role} cannot call the following method `{fn.__name__}` due to role restriction, which prohibits '{on}' from accessing this method."
                 )
                 return None
 
             return instance
 
         return deco
-
-    async def block_timer_executor(self) -> None:
-        while True:
-            await sleep(self.block_timer_seconds)
-
-            await self._get_available_archival_miner_nodes()
-
-            # - Process those transactions first.
-            # - Then, we create a block from it.
-            # - Queue for other nodes. (Since we record those nodes you just got AssociationCertificate, queue for them whose their state is ONLINE and is currently on available in the means of their state is not mining or something, whatever.) Use SQL relationship here.
-            # - Ping first then, check echo from them to see if their consensus timer is done.
-            # - If they are done, check if it is absolutely right. (Don't know the basis as of now)
-            # - When done, send it away, then we write that we have a transaction like this on SQL. It has to be fulfilled before labelled as done, as they are inserted from the blockchain.
-
-            # self._create_transaction()
 
     # async def close(self) -> None:
     #     raise NotImplemented
@@ -196,13 +183,19 @@ class BlockchainMechanism(ConsensusMechanism):
                     "Genesis block generation has been finished! Blockchain system ready."
                 )
 
+            else:
+                self.blockchain_ready = True
+                logger.info("Blockchain system is ready.")
+
+                create_task(self._block_timer_executor())
+
         else:
             if self.identity is not None:
                 existing_certificate = await self._get_own_certificate()
 
                 if not existing_certificate:
                     logger.warning(
-                        f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
+                        f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE} blockchain."
                     )
                     await self.establish()
                 else:
@@ -211,7 +204,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
             logger.info(
-                f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE.name} blockchain."
+                f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE} blockchain."
             )
 
             await self._update_chain()
@@ -240,7 +233,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return None
 
     @__ensure_blockchain_ready()
-    def get_blockchain_private_state(self) -> dict[str, Any]:  # TODO: BlockchainPayload
+    def get_blockchain_private_state(self) -> BlockchainNodeStatePayload:
         last_block: Block | None = self._get_last_block()
 
         return {
@@ -341,6 +334,40 @@ class BlockchainMechanism(ConsensusMechanism):
                 message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
             )
 
+    @__restrict_call(on=NodeType.MASTER_NODE)
+    async def _block_timer_executor(self) -> None:
+        logger.info(
+            f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
+        )
+        while True:
+            logger.warning(
+                f"Sleeping for {self.block_timer_seconds} seconds while accumulating transactions."
+            )
+            # - Sleep first.
+            await sleep(self.block_timer_seconds)
+
+            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes.
+            available_node = await self._get_available_archival_miner_nodes()
+
+            if available_node is None:
+                continue
+
+            # - Create a block from all of the transactions.
+            generated_block: Block | None = self._create_block(
+                transactions=self.transaction_container
+            )
+
+            # @o If there are no blocks to mine then ensure that we do nothing.
+
+            # - Create a negotiation ID based on the certificate token of the available miner node under SHA256 form + datetime.
+
+            # - Run the endpoint 'blockchain/send_raw_block' to 'available_node'.
+
+            # - Update database regarding this matter, though switch for the mining state should be on at this point.
+
+            # - Repeat.
+            continue
+
     def _consensus_calculate_sleep_time(self, *, mine_duration: float | int) -> None:
         if not self.is_blockchain_ready and not self.new_master_instance:
             self.consensus_timer = timedelta(
@@ -410,6 +437,11 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         _block.block_size = asizeof(_block.contents.json())
+
+        logger.info(
+            f"Block #{_block.id} with a size of ({_block.block_size} bytes) has been created."
+        )
+
         return _block
 
     async def _create_genesis_block(self) -> None:
@@ -436,8 +468,32 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def _get_available_archival_miner_nodes(
         self,
-    ) -> None:  # TODO: This should return something.
-        pass
+    ) -> None:
+        # Get all available miner nodes.
+
+        available_nodes_stmt = associated_nodes.select().where(
+            associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE
+        )
+
+        available_nodes = await self.db_instance.fetch_all(available_nodes_stmt)
+
+        if not len(available_nodes):
+            logger.info(
+                f"There are no available nodes to mine the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
+            )
+            return None
+
+        logger.info(f"There are {len(available_nodes)} candidates available!")
+
+        print(available_nodes, dir(available_nodes))
+
+        # Queue all of them at once.
+
+        # Iterate through to see who's first.
+
+        # Ping for their state
+
+        # If they are not mining and is available then return.
 
     def _get_last_block(self) -> Block | None:
         # ! This return seems confusing but I have to sacrafice for my own sake of readability.

@@ -8,6 +8,7 @@ from aiohttp import (
     ClientConnectorError,
     ClientResponse,
     ClientSession,
+    ContentTypeError,
 )
 from blueprint.schemas import HTTPRequestPayload
 from core.constants import (
@@ -223,9 +224,15 @@ class HTTPClient:
                         await fetched_task
 
                     if not fetched_task.result().ok:
-                        logger.error(
-                            f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
-                        )
+                        try:
+                            logger.error(
+                                f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                            )
+
+                        except ContentTypeError:
+                            logger.error(
+                                f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: Not Available' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                            )
 
                         if do_not_retry:
                             break

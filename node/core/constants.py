@@ -9,6 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from argparse import Namespace
+from datetime import timedelta
 from enum import Enum, IntEnum, auto
 from pathlib import Path
 from typing import Any, Callable, Final
@@ -65,6 +66,7 @@ BlockchainPayload = tuple[HashUUID, BlockchainFileContext]
 DocumentSet = list[dict[str, Any]]
 IdentityTokens = tuple[AddressUUID, JWTToken]
 NotificationContext = list[dict[str, Any]]
+BlockchainNodeStatePayload = dict[str, bool | timedelta | int]
 RequestPayloadContext = dict[str, Any]
 RoleContext = dict[str, Any]
 ArgsPlusDatabaseInstances = tuple[Namespace, Database]

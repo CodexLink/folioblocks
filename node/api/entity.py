@@ -17,7 +17,7 @@ from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
 import jwt
-from blueprint.models import auth_codes, tokens, users
+from blueprint.models import auth_codes, associated_nodes, tokens, users
 from blueprint.schemas import (
     EntityLoginCredentials,
     EntityLoginResult,
@@ -44,6 +44,7 @@ from core.constants import (
 from core.dependencies import get_args_value, get_database_instance
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
+from core.constants import AssociatedNodeStatus
 from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -180,6 +181,7 @@ async def login_entity(
             if isinstance(type(payload[each_item]), EnumMeta):
                 payload[each_item] = payload["activity"].name
 
+        # @o Parse the datetime object to be string literal.
         payload["date_registered"] = payload["date_registered"].isoformat()
 
         if verify_hash_context(
@@ -217,14 +219,59 @@ async def login_entity(
                 token=token,
                 expiration=jwt_expire_at,
             )
-            logged_user = (
+            logged_user_stmt = (
                 users.update()
                 .where(users.c.unique_address == fetched_credential_data.unique_address)
                 .values(activity=UserActivityState.ONLINE)
             )
 
             try:
-                await gather(db.execute(logged_user), db.execute(new_token))
+                await gather(db.execute(logged_user_stmt), db.execute(new_token))
+
+                # - Check if this node does have a association certificate token.
+
+                if fetched_credential_data.type == UserEntity.ARCHIVAL_MINER_NODE_USER:
+                    logger.info(
+                        "Checking if this node has its own associate node certificate token."
+                    )
+
+                    logged_user_has_association_token_stmt = (
+                        associated_nodes.select().where(
+                            associated_nodes.c.user_address
+                            == fetched_credential_data.unique_address
+                        )
+                    )
+
+                    associated_token_from_logged_user = await db.fetch_one(
+                        logged_user_has_association_token_stmt
+                    )
+
+                    print(
+                        associated_token_from_logged_user,
+                        type(associated_token_from_logged_user),
+                        dir(associated_token_from_logged_user),
+                    )
+
+                    if associated_token_from_logged_user is not None:
+                        update_associate_node_state_stmt = (
+                            associated_nodes.update()
+                            .where(
+                                associated_nodes.c.user_address
+                                == fetched_credential_data.unique_address
+                            )
+                            .values(status=AssociatedNodeStatus.CURRENTLY_AVAILABLE)
+                        )
+
+                        await db.execute(update_associate_node_state_stmt)
+
+                        logger.info(
+                            f"Associate Reference ({fetched_credential_data.unique_address}) of has been updated to {AssociatedNodeStatus.CURRENTLY_AVAILABLE.name}."
+                        )
+
+                    else:
+                        logger.warning(
+                            "This node user doesn't have a certificate token, assuming first instance."
+                        )
 
                 return EntityLoginResult(
                     user_address=fetched_credential_data.unique_address,
@@ -258,19 +305,62 @@ async def logout_entity(
     db: Any = Depends(get_database_instance),
 ) -> None:
 
-    fetched_token = tokens.select().where(
+    fetched_token_stmt = tokens.select().where(
         (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
     )
 
-    if await db.fetch_one(fetched_token):
+    fetched_token = await db.fetch_one(fetched_token_stmt)
+
+    if fetched_token is not None:
         token_ref = (
             tokens.update()
             .where(tokens.c.token == x_token)
             .values(state=TokenStatus.EXPIRED)
         )
 
-        if await db.execute(token_ref):
-            return
+        # - Fetch the user from this token for the extra step.
+        user_ref_stmt = users.select().where(
+            users.c.unique_address == fetched_token.from_user
+        )
+
+        user_ref = await db.fetch_one(user_ref_stmt)
+
+        if user_ref is not None:
+
+            # - Check if this user is ARCHIVAL_MINER_NODE_USER, otherwise ignore this extra step.
+            if user_ref.type == UserEntity.ARCHIVAL_MINER_NODE_USER:
+
+                # - Fetch first before updating.
+                associate_from_user_ref_stmt = associated_nodes.select().where(
+                    associated_nodes.c.user_address == user_ref.unique_address
+                )
+
+                associate_from_user_ref = await db.fetch_one(
+                    associate_from_user_ref_stmt
+                )
+
+                if associate_from_user_ref is not None:
+                    update_associate_state_from_user_stmt = (
+                        associated_nodes.update()
+                        .where(
+                            associated_nodes.c.user_address == user_ref.unique_address
+                        )
+                        .values(status=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE)
+                    )
+
+                    await db.execute(update_associate_state_from_user_stmt)
+
+                    logger.info(
+                        f"An associate ({associate_from_user_ref.user_address}) reference status has been updated to {AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE.name}."
+                    )
+
+            else:
+                logger.warning(
+                    "Ignoring this extra step due to condition regarding user role."
+                )
+
+        await db.execute(token_ref)
+        return
 
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND,

@@ -10,7 +10,6 @@ You should have received a copy of the GNU General Public License along with Fol
 
 
 from datetime import datetime
-from hashlib import sha256
 from http import HTTPStatus
 from os import environ as env
 from typing import Any
@@ -120,15 +119,13 @@ async def process_hashed_block() -> None:
 
 
 @node_router.post(
-    "/blockchain/process_raw_block",
+    "/blockchain/send_raw_block",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.ARCHIVAL_MINER_NODE_API.value],
     summary=f"Receives a raw block for the {NodeType.ARCHIVAL_MINER_NODE} to mine.",
     description=f"A special API endpoint that receives a raw bock to be mined.",
     dependencies=[
         Depends(
-            EnsureAuthorized(
-                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
-            )
+            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
         )
     ],
 )
@@ -184,7 +181,7 @@ async def recieve_action_from_dashboard() -> None:
     summary=f"Receives echo from the {NodeType.ARCHIVAL_MINER_NODE} for establishment of their connection to the blockchain.",
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
     dependencies=[
-        Depends(EnsureAuthorized(_as=[UserEntity.MASTER_NODE_USER])),
+        Depends(EnsureAuthorized(_as=[UserEntity.ARCHIVAL_MINER_NODE_USER])),
     ],
 )
 async def acknowledge_as_response(
