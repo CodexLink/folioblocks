@@ -471,9 +471,13 @@ class BlockchainMechanism(ConsensusMechanism):
     ) -> None:
         # Get all available miner nodes.
 
-        available_nodes_stmt = associated_nodes.select().where(
-            associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE
-        )
+        available_nodes_stmt = select(
+            [
+                associated_nodes.c.user_address,
+                associated_nodes.c.source_address,
+                associated_nodes.c.source_port,
+            ]
+        ).where(associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE)
 
         available_nodes = await self.db_instance.fetch_all(available_nodes_stmt)
 
@@ -485,7 +489,20 @@ class BlockchainMechanism(ConsensusMechanism):
 
         logger.info(f"There are {len(available_nodes)} candidates available!")
 
-        print(available_nodes, dir(available_nodes))
+        for each_candidate in available_nodes:
+            candidate_response = await get_http_client_instance().enqueue_request(
+                url=URLAddress(
+                    f"http://{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
+                ),
+                method=HTTPQueueMethods.POST,
+                await_result_immediate=True,
+                do_not_retry=True,
+                name=f"contact_archival_node_candidate_{each_candidate['user_address'][-6:]}",
+            )
+
+            print(
+                candidate_response, dir(candidate_response), candidate_response.result()
+            )
 
         # Queue all of them at once.
 

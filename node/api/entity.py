@@ -265,7 +265,7 @@ async def login_entity(
                         await db.execute(update_associate_node_state_stmt)
 
                         logger.info(
-                            f"Associate Reference ({fetched_credential_data.unique_address}) of has been updated to {AssociatedNodeStatus.CURRENTLY_AVAILABLE.name}."
+                            f"Associate Reference ({fetched_credential_data.unique_address}) has been updated to {AssociatedNodeStatus.CURRENTLY_AVAILABLE.name}."
                         )
 
                     else:

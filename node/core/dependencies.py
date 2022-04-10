@@ -201,6 +201,7 @@ async def authenticate_node_client(
                             f"http://{instances[0].target_host}:{instances[0].target_port}/entity/register"
                         ),
                         method=HTTPQueueMethods.POST,
+                        do_not_retry=True,
                         data={
                             "email": inputted_credentials[0],
                             "username": inputted_credentials[1],
@@ -255,14 +256,18 @@ async def authenticate_node_client(
         # Ensure that ENV will be covered here.
         try:
             if role == NodeType.MASTER_NODE:
-                resolved_host, resolved_port = instances[0].node_host, instances[0].node_port
+                resolved_host, resolved_port = (
+                    instances[0].node_host,
+                    instances[0].node_port,
+                )
             else:
-                resolved_host, resolved_port = instances[0].target_host, instances[0].target_port
+                resolved_host, resolved_port = (
+                    instances[0].target_host,
+                    instances[0].target_port,
+                )
 
             login_request = await get_http_client_instance().enqueue_request(
-                url=URLAddress(
-                    f"http://{resolved_host}:{resolved_port}/entity/login"
-                ),
+                url=URLAddress(f"http://{resolved_host}:{resolved_port}/entity/login"),
                 method=HTTPQueueMethods.POST,
                 await_result_immediate=True,
                 do_not_retry=True,
