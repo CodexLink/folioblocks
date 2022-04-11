@@ -38,7 +38,7 @@ from sqlalchemy import select
 from core.constants import NodeType
 from core.blockchain import BlockchainMechanism
 from blueprint.schemas import SourcePayload
-from node.blueprint.schemas import NodeInformation, NodeMasterInformation
+from blueprint.schemas import NodeInformation, NodeMasterInformation
 
 node_router = APIRouter(
     prefix="/node",

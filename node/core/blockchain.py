@@ -26,7 +26,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from core.constants import AssociatedNodeStatus
 from core.constants import BlockchainNodeStatePayload
-from node.blueprint.schemas import NodeConsensusInformation
+from blueprint.schemas import NodeConsensusInformation
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
 
