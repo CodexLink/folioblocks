@@ -187,7 +187,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 self.blockchain_ready = True
                 logger.info("Blockchain system is ready.")
 
-                create_task(self._block_timer_executor())
+            create_task(self._block_timer_executor())
 
         else:
             if self.identity is not None:
