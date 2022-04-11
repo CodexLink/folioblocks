@@ -207,19 +207,18 @@ async def terminate() -> None:
 
         # * Remove the token related to this master, as well as, change the state of this master account to Offline.
         if identity_tokens is not None:
-            token_to_invalidate_stmt = (
-                tokens.update()
-                .where(tokens.c.token == identity_tokens[1])
-                .values(state=TokenStatus.LOGGED_OUT)
-            )
-            users.update().where(users.c.unique_address == identity_tokens[0]).values(
-                activity=UserActivityState.OFFLINE
+
+            master_state = (
+                users.update()
+                .where(users.c.unique_address == identity_tokens[0])
+                .values(activity=UserActivityState.OFFLINE)
             )
 
-            await get_database_instance().execute(token_to_invalidate_stmt)
+            await get_database_instance().execute(master_state)
             logger.info(
                 f"Master Node's token has been invalidated due to Logout session."
             )
+
     else:
         if identity_tokens is not None:
             # - Ignore this if this node wasn't even logged on.
@@ -262,11 +261,15 @@ if parsed_args.assigned_role == NodeType.MASTER_NODE.name:
     )
 
     @api_handler.on_event("startup")
+    # T
     @repeat_every(seconds=120, wait_first=True)
-    async def jwt_invalidation() -> None:
+    async def jwt_invalidation_on_users() -> None:
         ## Query available tokens.
         token_query = tokens.select().where(tokens.c.state != TokenStatus.EXPIRED)
         tokens_available = await get_database_instance().fetch_all(token_query)
+
+        # TODO: Target users from the dashboard instead of nodes.
+        # # LOOK OUT FOR INNER JOIN IN SQLALCHEMY.
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")
