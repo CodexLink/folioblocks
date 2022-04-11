@@ -61,6 +61,7 @@ class HTTPClient:
         headers: RequestPayloadContext | None = None,
         await_result_immediate: bool = True,
         do_not_retry: bool = False,
+        retry_attempt: int = 5,
         name: str | None = None,
     ) -> Any:
         """
@@ -146,7 +147,7 @@ class HTTPClient:
             logger.debug(
                 f"Await-immediate enabled on the following task name '{name}' ..."
             )
-            while True:
+            for _ in range(0, retry_attempt):
                 res_req_equiv = self.get_remaining_responses.get(name, None)
 
                 if res_req_equiv is not None:
@@ -158,14 +159,20 @@ class HTTPClient:
                     ):
                         return returned_response
 
-                    if not do_not_retry:
+                    if not do_not_retry and _ <= retry_attempt - 1:
                         logger.warning(
                             f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
                         )
 
                         self._queue.append(wrapped_request)
+                        await sleep(2)
 
-                await sleep(1)
+                    else:
+                        logger.error(
+                            "The request attempt has been exceeded. There's something wrong with the request. Please try again later."
+                        )
+
+                        return None
 
         elif await_result_immediate and not self._is_ready:
             logger.critical(
