@@ -150,11 +150,19 @@ class HTTPClient:
                 res_req_equiv = self.get_remaining_responses.get(name, None)
 
                 if res_req_equiv is not None:
-                    return await self.get_finished_task(
-                        task_name=name, do_not_retry=do_not_retry
-                    )
+                    returned_response = await self.get_finished_task(task_name=name)
 
-                await sleep(0)
+                    if isinstance(returned_response, ClientResponse):
+                        return returned_response
+
+                    if not do_not_retry:
+                        logger.warning(
+                            f"Seems like the following request {wrapped_request.name} has failed. Retrying... "
+                        )
+
+                        self._queue.append(wrapped_request)
+
+                await sleep(0.2)
 
         elif await_result_immediate and not self._is_ready:
             logger.critical(
@@ -203,9 +211,7 @@ class HTTPClient:
                 f"Task-Wrapped Request '{loaded_request.name}' has been enqueued. | Wrapped Object Info: {requested_item}"
             )
 
-    async def get_finished_task(
-        self, *, task_name: str, do_not_retry: bool = False
-    ) -> Any:
+    async def get_finished_task(self, *, task_name: str) -> Any:
         fetched_task = self._response.get(task_name, None)
 
         if not self._is_ready:
@@ -215,52 +221,39 @@ class HTTPClient:
             return
 
         if fetched_task is not None:
-            while True:
-                try:
-                    if not fetched_task.done():
-                        logger.warning(
-                            f"The following task '{task_name}' is not yet finished! Awaiting ..."
-                        )
-                        await fetched_task
-
-                    if not fetched_task.result().ok:
-                        try:
-                            logger.error(
-                                f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
-                            )
-
-                        except ContentTypeError:
-                            logger.error(
-                                f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: Not Available' if isinstance(fetched_task.result(), ClientResponse) else ''}"
-                            )
-
-                        if do_not_retry:
-                            break
-
-                        await sleep(2)
-                        continue
-
-                    break
-
-                except (
-                    ConnectionRefusedError,
-                    ConnectionAbortedError,
-                    ConnectionResetError,
-                    ClientConnectionError,
-                    ClientConnectorError,
-                ) as e:
-                    logger.critical(
-                        f"There was error during processing of request. | Info: {e}"
+            try:
+                if not fetched_task.done():
+                    logger.warning(
+                        f"The following task '{task_name}' is not yet finished! Awaiting ..."
                     )
-                    await sleep(2)
+                    await fetched_task
 
-                    if do_not_retry:
-                        break
+                if not fetched_task.result().ok:
+                    try:
+                        logger.error(
+                            f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                        )
 
-                    continue
+                    except ContentTypeError:
+                        logger.error(
+                            f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: Not Available' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                        )
 
-            self._response.pop(task_name)
-            logger.debug(f"Request '{task_name}' has been popped.")
+            except (
+                ConnectionRefusedError,
+                ConnectionAbortedError,
+                ConnectionResetError,
+                ClientConnectionError,
+                ClientConnectorError,
+            ) as e:
+                logger.critical(
+                    f"There was error during processing of request. | Info: {e}"
+                )
+                return None
+
+            finally:
+                self._response.pop(task_name)
+                logger.debug(f"Request '{task_name}' has been popped.")
 
             return fetched_task.result()
 
