@@ -185,6 +185,8 @@ async def recieve_action_from_dashboard() -> None:
     ],
 )
 async def acknowledge_as_response(
+    address: str,
+    port: int,
     request: Request,
     x_source: AddressUUID = Header(..., description="The address of the requestor."),
     x_session: JWTToken = Header(
@@ -194,8 +196,6 @@ async def acknowledge_as_response(
         ...,
         description="The auth code that is known as acceptance code, used for extra validation.",
     ),
-    address: str,
-    port
 ) -> Response:
     db: Any = get_database_instance()  # * Initialized on scope.
 
