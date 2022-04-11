@@ -37,7 +37,8 @@ from sqlalchemy import select
 
 from core.constants import NodeType
 from core.blockchain import BlockchainMechanism
-from node.blueprint.schemas import SourcePayload
+from blueprint.schemas import SourcePayload
+from node.blueprint.schemas import NodeInformation, NodeMasterInformation
 
 node_router = APIRouter(
     prefix="/node",
@@ -55,37 +56,17 @@ node_router = APIRouter(
     response_model=NodeConsensusInformation,
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
-    dependencies=[
-        Depends(
-            EnsureAuthorized(
-                _as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
-            )
-        ),
-    ],
+    # # Notes: I left this one in open-air since there are no credentials to steal (maybe maybe maybe).
 )
-async def get_node_info() -> NodeConsensusInformation:
-    blockchain_state: dict[
-        str, Any
-    ] = get_blockchain_instance().get_blockchain_private_state()
-
-    identity_tokens = get_identity_tokens()
-
-    if identity_tokens is not None:
-        node_address = identity_tokens[0]
-
-        return NodeConsensusInformation(
-            owner=AddressUUID(node_address),
-            is_sleeping=blockchain_state["sleeping"],
-            is_mining=blockchain_state["mining"],
-            node_role=blockchain_state["role"],
-            consensus_timer=blockchain_state["consensus_timer"],
-            last_mined_block=blockchain_state["last_mined_block"],
-        )
-
-    raise HTTPException(
-        detail="Identity tokens from this node is missing. This is a developer-logic issue. Please report this problem as possible.",
-        status_code=HTTPStatus.FORBIDDEN,
+async def get_node_info() -> NodeInformation:
+    node_state: NodeConsensusInformation = (
+        get_blockchain_instance().get_blockchain_private_state()
     )
+    node_statistics: NodeMasterInformation | None = (
+        get_blockchain_instance().get_blockchain_public_state()
+    )
+
+    return NodeInformation(properties=node_state, statistics=node_statistics)
 
 
 """

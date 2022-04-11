@@ -202,7 +202,7 @@ class NodeConsensusInformation(BaseModel):
     is_sleeping: bool
     is_mining: bool
     node_role: NodeType
-    consensus_timer: datetime
+    consensus_timer_seconds: int
     last_mined_block: int
 
 
@@ -213,6 +213,9 @@ class NodeMasterInformation(
     total_blocks: int
     total_transactions: int
 
+class NodeInformation(BaseModel):
+    properties: NodeConsensusInformation
+    statistics: NodeMasterInformation | None
 
 class Blockchain(BaseModel):
     block: list[BlockOverview] | None

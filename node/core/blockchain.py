@@ -26,6 +26,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from core.constants import AssociatedNodeStatus
 from core.constants import BlockchainNodeStatePayload
+from node.blueprint.schemas import NodeConsensusInformation
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
 
@@ -76,7 +77,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self.auth_token: IdentityTokens = auth_tokens
 
         self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.consensus_timer: timedelta  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
+        self.consensus_timer: int  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
 
         self.transaction_container: list[Transaction] = []
 
@@ -233,15 +234,17 @@ class BlockchainMechanism(ConsensusMechanism):
         return None
 
     @__ensure_blockchain_ready()
-    def get_blockchain_private_state(self) -> BlockchainNodeStatePayload:
+    def get_blockchain_private_state(self) -> NodeConsensusInformation:
         last_block: Block | None = self._get_last_block()
 
-        return {
-            "sleeping": self.is_node_ready,
-            "mining": self.is_blockchain_ready,
-            "consensus_timer": self.consensus_timer,
-            "last_mined_block": last_block.id if last_block is not None else 0,
-        }
+        return NodeConsensusInformation(
+            consensus_timer_seconds=self.consensus_timer,
+            is_mining=self.is_blockchain_ready,
+            is_sleeping=self.is_node_ready,
+            last_mined_block=last_block.id if last_block is not None else 0,
+            node_role=self.role,
+            owner=self.auth_token[0],
+        )
 
     async def get_chain_hash(self) -> HashUUID:
         fetch_chain_hash_stmt = select([file_signatures.c.hash_signature]).where(
@@ -494,15 +497,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 url=URLAddress(
                     f"http://{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
                 ),
-                method=HTTPQueueMethods.POST,
+                method=HTTPQueueMethods.GET,
                 await_result_immediate=True,
                 do_not_retry=True,
                 name=f"contact_archival_node_candidate_{each_candidate['user_address'][-6:]}",
             )
 
-            print(
-                candidate_response, dir(candidate_response), candidate_response.result()
-            )
+            print(candidate_response, dir(candidate_response))
 
         # Queue all of them at once.
 
