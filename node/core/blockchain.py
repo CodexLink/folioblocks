@@ -241,7 +241,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return NodeConsensusInformation(
             consensus_timer_seconds=self.consensus_timer.total_seconds(),
-            is_mining=self.is_blockchain_ready,
+            is_mining=not self.is_blockchain_ready,
             is_sleeping=self.is_node_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
             node_role=self.role,
