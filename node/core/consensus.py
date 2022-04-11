@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from blueprint.models import associated_nodes
 from databases import Database
-from node.core.dependencies import get_args_value
+from core.dependencies import get_args_value
 from utils.http import get_http_client_instance
 from utils.processors import load_env
 
@@ -83,7 +83,10 @@ class ConsensusMechanism:
         ), self.master_target(key=REF_MASTER_BLOCKCHAIN_PORT)
 
         node_instance_args = get_args_value()
-        node_address, node_port = node_instance_args.node_host, node_instance_args.node_port
+        node_address, node_port = (
+            node_instance_args.node_host,
+            node_instance_args.node_port,
+        )
 
         stored_session_token: IdentityTokens | None = get_identity_tokens()
         db: Database = get_database_instance()
@@ -120,10 +123,7 @@ class ConsensusMechanism:
                 "x-token": auth_session,
                 "x-acceptance": auth_acceptance,
             },
-            data={
-                "address": node_address,
-                "port": node_address
-            },
+            data={"address": node_address, "port": node_address},
             method=HTTPQueueMethods.POST,
             await_result_immediate=True,
             name="get_echo_from_master",
