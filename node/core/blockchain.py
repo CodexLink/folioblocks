@@ -473,7 +473,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def _get_available_archival_miner_nodes(
         self,
-    ) -> None:
+    ) -> Any:
         # Get all available miner nodes.
 
         available_nodes_stmt = select(
@@ -505,7 +505,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 name=f"contact_archival_node_candidate_{each_candidate['user_address'][-6:]}",
             )
 
-            print(candidate_response, dir(candidate_response))
+            if candidate_response.ok:
+                parsed_candidate_state_info = await candidate_response.json()
+                logger.info(f"Archival Miner Candidate {parsed_candidate_state_info}")
+
+                print("test", parsed_candidate_state_info.properties.is_mining, parsed_candidate_state_info.properties.node_role)
+
+                return each_candidate
 
         # Queue all of them at once.
 
