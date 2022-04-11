@@ -2,7 +2,7 @@
   "name": "folioblocks-out-of-scope-script",
   "Description": "Technically, I created this to reduce my time on looking up the commands.",
   "scripts": {
-    "_backend-master": "python node/main.py -ar MASTER_NODE -ll DEBUG -nh 0.0.0.0 -np 6001",
+    "_backend-master": "python node/main.py -ar MASTER_NODE -ll DEBUG -nh 127.0.0.1 -np 6001",
     "_backend-archival": "python node/main.py -ar ARCHIVAL_MINER_NODE -ll DEBUG -nh 127.0.0.1 -np 5001 -th 127.0.0.1 -tp 6001",
     "clean-logs": "rmdir /s /q logs",
     "clean-processes": "taskkill /im python.exe /f",
