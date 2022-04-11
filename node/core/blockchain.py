@@ -352,10 +352,16 @@ class BlockchainMechanism(ConsensusMechanism):
             await sleep(self.block_timer_seconds)
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes.
-            available_node = await self._get_available_archival_miner_nodes()
+            available_node: NodeConsensusInformation | None = (
+                await self._get_available_archival_miner_nodes()
+            )
 
             if available_node is None:
                 continue
+
+            print("Available node get!", available_node)
+
+            input()
 
             # - Create a block from all of the transactions.
             generated_block: Block | None = self._create_block(
@@ -473,7 +479,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def _get_available_archival_miner_nodes(
         self,
-    ) -> Any:
+    ) -> NodeConsensusInformation | None:
         # Get all available miner nodes.
 
         available_nodes_stmt = select(
@@ -507,19 +513,26 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if candidate_response.ok:
                 parsed_candidate_state_info = await candidate_response.json()
-                logger.info(f"Archival Miner Candidate {parsed_candidate_state_info}")
+                logger.info(
+                    f"Archival Miner Candidate {parsed_candidate_state_info['owner']} has responded from the mining request!"
+                )
 
-                print("test", parsed_candidate_state_info.properties.is_mining, parsed_candidate_state_info.properties.node_role)
+                if not parsed_candidate_state_info["is_mining"]:
+                    if (
+                        parsed_candidate_state_info["node_role"]
+                        == NodeType.ARCHIVAL_MINER_NODE.name
+                    ):
+                        return NodeConsensusInformation(**parsed_candidate_state_info)
 
-                return each_candidate
+                    continue
+                logger.warning(
+                    f"Archival Miner Candidate {parsed_candidate_state_info['owner']} seem to be mining but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
+                )
 
-        # Queue all of them at once.
-
-        # Iterate through to see who's first.
-
-        # Ping for their state
-
-        # If they are not mining and is available then return.
+        logger.warning(
+            f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.block_timer_seconds} seconds)"
+        )
+        return None
 
     def _get_last_block(self) -> Block | None:
         # ! This return seems confusing but I have to sacrafice for my own sake of readability.
