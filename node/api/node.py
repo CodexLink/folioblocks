@@ -237,6 +237,7 @@ async def acknowledge_as_response(
                     store_authored_token_stmt = associated_nodes.insert().values(
                         user_address=validated_source_address.unique_address,
                         certificate=encrypted_authored_token.decode("utf-8"),
+                        # TODO
                         # # We need to ensure that the source address and port is right when this was deployed in external.
                         # source_address=request.client.host,
                         # source_port=request.client.port,

@@ -134,7 +134,7 @@ auth_codes = Table(
     Column("is_used", Boolean, server_default="False"),
     Column(
         "expiration", DateTime, server_default=func.now()
-    ),  # TODO: Move this server_default  + 2 days from creation of auth_codes.
+    ),  # TODO: Move this server_default + 2 days from creation of auth_codes.
 )
 
 auth_codes.user_ref = relationship(users, foreign_keys="generated_by")  # type: ignore

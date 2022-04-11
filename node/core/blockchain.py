@@ -27,6 +27,8 @@ from sqlalchemy import select
 from core.constants import AssociatedNodeStatus
 from core.constants import BlockchainNodeStatePayload
 from blueprint.schemas import NodeConsensusInformation
+from core.constants import BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+from core.constants import BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
 
@@ -82,11 +84,13 @@ class BlockchainMechanism(ConsensusMechanism):
         )  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
 
         self.transaction_container: list[Transaction] = []
+        self.hashed_block_container: list[Block] = []
+        self.unsent_block_container: list[Block] = []
 
         # # Instances
         self.db_instance: Final[Database] = get_database_instance()
         self.http_instance: HTTPClient = get_http_client_instance()
-        self.identity = auth_tokens  # @o Equivalent to get_identity_tokens()
+        self.identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
         # # State and Variable References
         self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
@@ -346,38 +350,94 @@ class BlockchainMechanism(ConsensusMechanism):
         )
         while True:
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while accumulating transactions."
+                f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions."
             )
-            # - Sleep first.
+
+            # - Sleep first due to block timer.
             await sleep(self.block_timer_seconds)
 
-            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes.
+            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can mine the block.
             available_node: NodeConsensusInformation | None = (
                 await self._get_available_archival_miner_nodes()
             )
 
+            # @o When there's no miner, then sleep for a while and requeue again.
             if available_node is None:
                 continue
 
             print("Available node get!", available_node)
 
-            input()
+            # @o When there's a miner, do a closed-loop process.
 
-            # - Create a block from all of the transactions.
-            generated_block: Block | None = self._create_block(
-                transactions=self.transaction_container
-            )
+            # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
+            # - Wait until a number of sufficient transactions were received.
+            # - Since we already have a node, do not let this one go.
+            if (
+                len(self.transaction_container)
+                > BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+            ):
 
-            # @o If there are no blocks to mine then ensure that we do nothing.
+                logger.info(
+                    f"Number of required transactions were sufficient! There are {len(self.transaction_container)} transactions that will be converted to a block for processing."
+                )
 
-            # - Create a negotiation ID based on the certificate token of the available miner node under SHA256 form + datetime.
+                # @o We need to deepcopy the container to ensure that when we did something from them, the source of this transactions are not modified.
+                # @o Note that whenever you pass an object, specially the `dict` objects, their reference is not mangled or not referred as a new object.
+                # @o With that, any changes being done to one object will be reflected from the other object that you recently modified, this was due to references were still the same.
+                # - Create a deepcopy of the object to process its last state.
+                last_state_transaction_container = deepcopy(self.transaction_container)
 
-            # - Run the endpoint 'blockchain/send_raw_block' to 'available_node'.
+                # - Create a block from all of the transactions.
+                generated_block: Block | None = self._create_block(
+                    transactions=last_state_transaction_container
+                )
 
-            # - Update database regarding this matter, though switch for the mining state should be on at this point.
+            elif len(self.unsent_block_container):
+                logger.info(
+                    f"Block {self.unsent_block_container[0]} has been left from mining due to previous miner unable to respond in time. Using this block to for the process instead."
+                )
 
-            # - Repeat.
-            continue
+                generated_block = self.unsent_block_container.pop(0)
+
+                return  # TODO
+
+                # @o When a block was created. Create a negotiation ID for the nodes to remember that this happened.
+
+                # - Create a negotiation ID based on the certificate token of the available miner node as well as this master under SHA256 form + datetime.
+
+                # @o Even though we already have the certification token, we still need this one to prove that we are actually know what the heck are we doing and we should be remembering it since it contains transactions or tokens which shouldn't go loss.
+                # - Insert the negotiation ID.
+
+                # # Send the context via create_task() with a custom function with retry_attempts of 99.
+                # # As deliver_block_or_store().
+
+                # # Send it at node/blockchain/send_raw_block.
+                # @o Require certification, and insert the negotiation ID for it to be sent later.
+
+                # - If that failed after numerous retries then insert the block as unsent_blocks.
+                # - And unbind the negotiation ID.
+
+                # ! Repeat.
+
+                # * The miner node has to hit the endpoint along with the negotiation ID for it to give its final processed block.
+
+                # # TODO AS FINAL.
+                # Prune the transaction container beyond this point.
+                # self.transaction_container = [leftover_transactions for leftover_transactions in self.]
+            else:
+                logger.warning(
+                    f"There isn't enough transactions to create a block. Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                )
+
+                await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
+
+            # # MOVE THE REST AFTER CONFIRMING THE FLOW FROM ALL CONDITIONALS.
+
+            # TODO: process_hashed_block.
+
+            # NOTE: After all of these, file handling left and we are done with the core backend =).
+
+            # However, when there's a time that this chosen node is not available, then it will be skipped.
 
     def _consensus_calculate_sleep_time(self, *, mine_duration: float | int) -> None:
         if not self.is_blockchain_ready and not self.new_master_instance:
