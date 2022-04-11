@@ -388,5 +388,8 @@ class HTTPRequestPayload(BaseModel):
         description="The name of this HTTP request, required whenever `await_result_immediate` is set to `True`.",
     )
 
+class SourcePayload(BaseModel):
+    source_address: str
+    source_port: int
 
 # # HTTP Methods — END

@@ -123,7 +123,7 @@ class ConsensusMechanism:
                 "x-token": auth_session,
                 "x-acceptance": auth_acceptance,
             },
-            data={"address": node_address, "port": node_address},
+            data={"address": node_address, "port": node_port},
             method=HTTPQueueMethods.POST,
             await_result_immediate=True,
             name="get_echo_from_master",

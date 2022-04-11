@@ -37,6 +37,7 @@ from sqlalchemy import select
 
 from core.constants import NodeType
 from core.blockchain import BlockchainMechanism
+from node.blueprint.schemas import SourcePayload
 
 node_router = APIRouter(
     prefix="/node",
@@ -185,8 +186,7 @@ async def recieve_action_from_dashboard() -> None:
     ],
 )
 async def acknowledge_as_response(
-    address: str,
-    port: int,
+    origin: SourcePayload,
     request: Request,
     x_source: AddressUUID = Header(..., description="The address of the requestor."),
     x_session: JWTToken = Header(
@@ -256,8 +256,8 @@ async def acknowledge_as_response(
                         # # We need to ensure that the source address and port is right when this was deployed in external.
                         # source_address=request.client.host,
                         # source_port=request.client.port,
-                        source_address=address,
-                        source_port=port
+                        source_address=origin.source_address,
+                        source_port=origin.source_port,
                     )
                     await db.execute(store_authored_token_stmt)
 
