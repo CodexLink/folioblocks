@@ -513,20 +513,23 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if candidate_response.ok:
                 parsed_candidate_state_info = await candidate_response.json()
+                resolved_candidate_state_info = parsed_candidate_state_info["properties"]
+
+                print(resolved_candidate_state_info)
                 logger.info(
-                    f"Archival Miner Candidate {parsed_candidate_state_info['owner']} has responded from the mining request!"
+                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the mining request!"
                 )
 
-                if not parsed_candidate_state_info["is_mining"]:
+                if not resolved_candidate_state_info["is_mining"]:
                     if (
-                        parsed_candidate_state_info["node_role"]
+                        resolved_candidate_state_info["node_role"]
                         == NodeType.ARCHIVAL_MINER_NODE.name
                     ):
                         return NodeConsensusInformation(**parsed_candidate_state_info)
 
                     continue
                 logger.warning(
-                    f"Archival Miner Candidate {parsed_candidate_state_info['owner']} seem to be mining but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
+                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be mining but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
                 )
 
         logger.warning(
