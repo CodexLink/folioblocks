@@ -219,7 +219,7 @@ class BlockchainMechanism(ConsensusMechanism):
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
         if self.node_role == NodeType.MASTER_NODE:
 
-            # # THIS IS NOT OKAY, GET THE CACHED INSTEAD.
+            # # This may not be okay.
             return NodeMasterInformation(
                 block_timer=self.block_timer_seconds,
                 total_blocks=len(self._chain["chain"])
@@ -525,7 +525,10 @@ class BlockchainMechanism(ConsensusMechanism):
             last_block_ref = Block.parse_obj(
                 self._chain["chain"][len(self._chain["chain"]) - 1 :][0]
             )
-            logger.debug(f"Last block has been fetched. Context | {last_block_ref}")
+            logger.debug(
+                f"Last block has been fetched. Context | ID: {last_block_ref.id}, Hash: {last_block_ref.hash_block}, Date: {last_block_ref.contents.timestamp.isoformat()}"
+            )
+
             return last_block_ref
 
         logger.warning("There's no block inside blockchain.")

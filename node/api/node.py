@@ -53,7 +53,7 @@ node_router = APIRouter(
         NodeAPI.NODE_TO_NODE_API.value,
         NodeAPI.MASTER_NODE_API.value,
     ],
-    response_model=NodeConsensusInformation,
+    response_model=NodeInformation,
     summary="Fetch information from the master node.",
     description="An API endpoint that returns information based on the authority of the client's requests. This requires special headers.",
     # # Notes: I left this one in open-air since there are no credentials to steal (maybe maybe maybe).
@@ -66,7 +66,10 @@ async def get_node_info() -> NodeInformation:
         get_blockchain_instance().get_blockchain_public_state()
     )
 
-    return NodeInformation(properties=node_state, statistics=node_statistics)
+    return NodeInformation(
+        properties=node_state,
+        statistics=node_statistics,
+    )
 
 
 """
