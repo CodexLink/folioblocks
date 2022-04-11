@@ -77,7 +77,9 @@ class BlockchainMechanism(ConsensusMechanism):
         self.auth_token: IdentityTokens = auth_tokens
 
         self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.consensus_timer: int  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
+        self.consensus_timer: timedelta = timedelta(
+            seconds=0
+        )  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
 
         self.transaction_container: list[Transaction] = []
 
@@ -238,7 +240,7 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self._get_last_block()
 
         return NodeConsensusInformation(
-            consensus_timer_seconds=self.consensus_timer,
+            consensus_timer_seconds=self.consensus_timer.total_seconds(),
             is_mining=self.is_blockchain_ready,
             is_sleeping=self.is_node_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
