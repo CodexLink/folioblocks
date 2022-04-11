@@ -513,7 +513,9 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if candidate_response.ok:
                 parsed_candidate_state_info = await candidate_response.json()
-                resolved_candidate_state_info = parsed_candidate_state_info["properties"]
+                resolved_candidate_state_info = parsed_candidate_state_info[
+                    "properties"
+                ]
 
                 print(resolved_candidate_state_info)
                 logger.info(
@@ -525,7 +527,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         resolved_candidate_state_info["node_role"]
                         == NodeType.ARCHIVAL_MINER_NODE.name
                     ):
-                        return NodeConsensusInformation(**parsed_candidate_state_info)
+                        return NodeConsensusInformation(**resolved_candidate_state_info)
 
                     continue
                 logger.warning(

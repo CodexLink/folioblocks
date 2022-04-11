@@ -152,17 +152,20 @@ class HTTPClient:
                 if res_req_equiv is not None:
                     returned_response = await self.get_finished_task(task_name=name)
 
-                    if isinstance(returned_response, ClientResponse):
+                    if (
+                        isinstance(returned_response, ClientResponse)
+                        and returned_response.ok
+                    ):
                         return returned_response
 
                     if not do_not_retry:
                         logger.warning(
-                            f"Seems like the following request {wrapped_request.name} has failed. Retrying... "
+                            f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
                         )
 
                         self._queue.append(wrapped_request)
 
-                await sleep(0.2)
+                await sleep(1)
 
         elif await_result_immediate and not self._is_ready:
             logger.critical(

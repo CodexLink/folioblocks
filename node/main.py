@@ -143,7 +143,6 @@ async def pre_initialize() -> None:
     )
 
     if parsed_args.assigned_role == NodeType.ARCHIVAL_MINER_NODE.name:
-        print("parsed", parsed_args)
         if parsed_args.target_host is None or parsed_args.target_port is None:
             unconventional_terminate(
                 message=f"Your instance (as a {parsed_args.assigned_role}) requires a `TARGET_HOST` as well as `TARGET_PORT` to contact the master node blockchain. Please try again with those parameters supplied.",
