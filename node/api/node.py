@@ -194,6 +194,8 @@ async def acknowledge_as_response(
         ...,
         description="The auth code that is known as acceptance code, used for extra validation.",
     ),
+    address: str,
+    port
 ) -> Response:
     db: Any = get_database_instance()  # * Initialized on scope.
 
@@ -251,8 +253,11 @@ async def acknowledge_as_response(
                     store_authored_token_stmt = associated_nodes.insert().values(
                         user_address=validated_source_address.unique_address,
                         certificate=encrypted_authored_token.decode("utf-8"),
-                        source_address=request.client.host,
-                        source_port=request.client.port,
+                        # # We need to ensure that the source address and port is right when this was deployed in external.
+                        # source_address=request.client.host,
+                        # source_port=request.client.port,
+                        source_address=address,
+                        source_port=port
                     )
                     await db.execute(store_authored_token_stmt)
 
