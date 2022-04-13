@@ -13,8 +13,7 @@ you should have received a copy of the gnu general public license along with Fol
 from typing import Final
 
 from core.constants import (
-    BlacklistDuration,
-    GroupType,
+    AssociationGroupType,
     TokenStatus,
     UserActivityState,
     UserEntity,
@@ -25,6 +24,7 @@ from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
 from sqlalchemy.orm import relationship
 
 from core.constants import AssociatedNodeStatus
+from core.constants import EmploymentApplicationState, TransactionContextMappingType
 
 # TODO: We might wanna create a key where it combines all of the certain fields and when it was inserted for reset password, it should resulted to that!
 
@@ -48,27 +48,35 @@ associations = Table(
     Column("name", String(64), nullable=False),
     Column(
         "group",
-        SQLEnum(GroupType),
-        server_default=GroupType.ORGANIZATION.name,
+        SQLEnum(AssociationGroupType),
+        server_default=AssociationGroupType.ORGANIZATION.name,
         nullable=False,
     ),
     Column("date_added", DateTime, default=func.now()),
 )
-associations.associates = relationship("users", back_populates="association")  # type: ignore
+
+
+file_signatures = Table(
+    "file_signatures",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column("filename", String(64), nullable=False, unique=True),
+    Column("hash_signature", Text, nullable=False, unique=True),
+)
 
 users = Table(
     "users",
     model_metadata,
     Column(
         "unique_address",
-        String(35),
+        String(38),
         nullable=False,
         primary_key=True,
         autoincrement=False,
     ),
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
-    # association = # TODO.
+    Column("association", String(32), nullable=True, unique=False),
     Column("username", String(24), nullable=False, unique=True),
     Column("password", String(64), nullable=False),
     Column("email", String(128), nullable=False, unique=True),
@@ -81,34 +89,100 @@ users = Table(
     Column("date_registered", DateTime, server_default=func.now()),
 )
 
-users.association = relationship(associations, back_populates="associates")  # type: ignore
-user_id_ref: Final[str] = "users.unique_address"
+users.association_ref = relationship(associations, foreign_keys="association")  # type: ignore
 
-blacklisted_users = Table(
-    "blacklisted_users",
+# ! The following element will be used throughout to refer to the user.
+user_addr_ref: Final[str] = "users.unique_address"
+
+associated_nodes = Table(
+    "associated_nodes",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("user", String(38), ForeignKey(user_id_ref), nullable=False),
-    Column("reason", Text, nullable=False),
     Column(
-        "duration",
-        SQLEnum(BlacklistDuration),
-        server_default=BlacklistDuration.WARN_1.name,
+        "user_address",
+        String(38),
+        ForeignKey(user_addr_ref),
+        nullable=False,
+        unique=False,
     ),
-    Column("expiration", DateTime, nullable=True),
-    Column("issued_on", DateTime, server_default=func.now()),
+    Column("certificate", Text, unique=False, nullable=False),
+    Column(
+        "status",
+        SQLEnum(AssociatedNodeStatus),
+        nullable=True,
+        server_default=AssociatedNodeStatus.CURRENTLY_AVAILABLE.name,
+    ),
+    Column("source_address", String(15), nullable=False, unique=False),
+    Column("source_port", Integer, nullable=False, unique=False),
+    Column("consensus_sleep_expiration", DateTime, nullable=True, unique=False),
 )
 
-blacklisted_users.user_ref = relationship(users, foreign_keys="user")  # type: ignore
+associated_nodes.user_ref = relationship(  # type: ignore
+    associated_nodes, foreign_keys="user_address"
+)
+
+auth_codes = Table(
+    "auth_codes",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column("generated_by", String(38), ForeignKey(user_addr_ref), nullable=True),
+    Column(
+        "code", String(64), nullable=False, unique=True
+    ),  # @o 64 characters because token_hex-based restriction is not enforced, meaning its resultant length is unpredictable for some reason.
+    Column("account_type", SQLEnum(UserEntity), nullable=False),
+    Column("to_email", String(128), nullable=False, unique=True),
+    Column("is_used", Boolean, server_default="False"),
+    Column("expiration", DateTime, server_default=func.now()),
+)
+
+auth_codes.user_ref = relationship(users, foreign_keys="generated_by")  # type: ignore
+
+applications = Table(
+    "applications",
+    model_metadata,
+    Column("id", Integer, nullable=False, primary_key=True, unique=False),
+    Column("requestor", String(38), nullable=False, unique=False),
+    Column("to", String(38), nullable=False, unique=False),
+    Column(
+        "state",
+        SQLEnum(EmploymentApplicationState),
+        nullable=False,
+        server_default=EmploymentApplicationState.REQUESTED.name,
+        unique=False,
+    ),
+    Column(
+        "date_created",
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        unique=False,
+    ),
+)
+
+consensus_negotiation = Table(
+    "consensus_negotiation",
+    model_metadata,
+    Column("id", Integer, nullable=False, primary_key=True, unique=False),
+    Column("block_no_ref", Integer, nullable=False, unique=True),
+    Column("negotiation_id", String(32), nullable=False, unique=True),
+    Column("peer_address_ref", String(38), nullable=False, unique=False),
+    Column(
+        "date_negotiation",
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        unique=False,
+    ),
+)
 
 tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("from_user", String(38), ForeignKey(user_id_ref), nullable=False),
+    Column("from_user", String(38), ForeignKey(user_addr_ref), nullable=False),
     Column(
         "token", Text, nullable=False
-    ),  # ! For some reason, SQL doesn't like anything more than 128 when asserting its UNIQUE.
+    ),  # # For some reason, SQL doesn't like anything more than 128 when asserting its UNIQUE.
     Column(
         "state",
         SQLEnum(TokenStatus),
@@ -121,57 +195,20 @@ tokens = Table(
 
 tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 
-auth_codes = Table(
-    "auth_codes",
+tx_content_mappings = Table(
+    "tx_content_mappings",
     model_metadata,
-    Column("id", Integer, primary_key=True),
-    Column("generated_by", String(38), ForeignKey(user_id_ref), nullable=True),
+    Column("id", Integer, nullable=False, primary_key=True, unique=False),
+    Column("address_ref", ForeignKey(user_addr_ref), nullable=True, unique=False),
+    Column("block_no_ref", Integer, nullable=False, unique=False),
+    Column("block_hash", String(64), nullable=False, unique=False),
+    Column("tx_ref", String(64), nullable=False, unique=False),
     Column(
-        "code", String(64), nullable=False, unique=True
-    ),  # 64 because token_hex-based restriction is not enforced, meaning len is unpredictable for some reason.
-    Column("account_type", SQLEnum(UserEntity), nullable=False),
-    Column("to_email", String(128), nullable=False, unique=True),
-    Column("is_used", Boolean, server_default="False"),
-    Column(
-        "expiration", DateTime, server_default=func.now()
-    ),  # TODO: Move this server_default + 2 days from creation of auth_codes.
-)
-
-auth_codes.user_ref = relationship(users, foreign_keys="generated_by")  # type: ignore
-
-file_signatures = Table(
-    "file_signatures",
-    model_metadata,
-    Column("id", Integer, primary_key=True),
-    Column("filename", String(64), nullable=False, unique=True),
-    Column("hash_signature", Text, nullable=False, unique=True),
-)
-
-
-associated_nodes = Table(
-    "associated_nodes",
-    model_metadata,
-    Column("id", Integer, primary_key=True),
-    Column(
-        "user_address",
-        String(38),
-        ForeignKey(user_id_ref),
+        "content_type",
+        SQLEnum(TransactionContextMappingType),
         nullable=False,
         unique=False,
     ),
-    Column("certificate", Text, unique=False, nullable=False),
-    Column(
-        "status",
-        SQLEnum(AssociatedNodeStatus),
-        nullable=True,
-        server_default=AssociatedNodeStatus.CURRENTLY_AVAILABLE.name,
-    ),
-    # Column("negotiation_id", String(16), nullable=True, unique=True),
-    Column("source_address", String(15), nullable=False, unique=False),
-    Column("source_port", Integer, nullable=False, unique=False),
-    Column("sleep_expiration", DateTime, nullable=True, unique=False),
 )
 
-associated_nodes.user_ref = relationship(  # type: ignore
-    associated_nodes, foreign_keys="user_address"
-)
+tx_content_mappings.address_user_ref = relationship(users, foreign_keys="address_ref")  # type: ignore

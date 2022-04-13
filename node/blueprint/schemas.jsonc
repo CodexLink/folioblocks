@@ -33,8 +33,7 @@
       },
 
       // # For the instance of genesis.
-      "info__": {
-      },
+      "info__": {},
 
       // # For the instance of certificate,
       "info___": {
@@ -45,15 +44,14 @@
       // # For the instance of consensus.
       // - Sync
       "info____": {
-          "addr": ""
+        "addr": ""
       },
 
       // - Negotiation, Mine Negotiation
       "info_____": {
-          "candidate_no": "nth miner to be called",
-          "block_hash": ""
+        "candidate_no": "nth miner to be called",
+        "block_hash": ""
       },
-
 
       // - Negotiation, Receive Miner Proof
       "info______": {
@@ -61,47 +59,46 @@
         "block_hash": "",
         "time_delivery": ""
       }
-    }
+    },
 
     // ! These payloads will be overwritten whenever
     // - EMPLOYMENT | PAYLOAD SCHEMA.
     {
       // We don't know how to search for them. We can basically bind their address in the MASTER's database.
-      "employee": {
+      "applicant": {
         "identity": "", // As address. Should be assert by to on tx_hash section.
-        "company": "", // We can basically refer to the ID of association from the table database. Should be resolved when inserted the company.
-        "role": "", // We cannot create a custom enum for this.
-        "status": "", // Resolves to EmploymentStatus.enum // ACTIVE | TERMINATED | RESIGNED | INACTIVE.
-        "activities": {
-          "type": "", // Resolves to PROJECTS | ACTIVITIES | PROMOTION.
+        "institution_ref": "", // We can basically refer to the ID of association from the table database. Should be resolved when inserted the company.
+        "course": "", // IF APPLICABLE.
+        "year": "", // IF APPLICABLE | We cannot create a custom enum for this.
+        "prefer-role": "", // We cannot create a custom enum for this.
+        "log": {
+          "type": "", // Resolves to PROJECTS | ACTIVITIES | PROMOTION | EMPLOYMENT.
           "name": "",
-          "description": "",
+          "description": "Employed at something.",
+          "role": "", // Can be None.
           "duration_start": "",
-          "duration_end": "",
-          "document_rep": "", // This should contain the hash of the original file, which should be AES'd.
-          "role": "",
+          "duration_end": "", // If this was not specified, assume ongoing.
           "validated_by": "" // An address. Should be assert `from` on tx_hash_section.
+        },
+        "extra": {
+          "title": "",
+          "description": "",
+          "inserted_by": "",
+          "datetime": ""
         }
       }
     },
     // - SCHOOL | ORGANIZATION | PAYLOAD SCHEMA.
     {
-      "school | organization": {
-        "identity": "", // As address. Should be assert by to on tx_hash section.
-        "name": "", // We can basically refer to the ID of association from the table database. Should be resolved when inserted the company.
-        "year": "", // IF APPLICABLE | We cannot create a custom enum for this.
-        "course": "", // IF APPLICABLE.
-        "status": "", // Resolves to EmploymentStatus.enum // ACTIVE | TERMINATED | RESIGNED | INACTIVE.
-        "activities": {
-          "type": "", // Resolves to AWARDS | RECOGNITION | PROJECTS
-          "name": "",
-          "description": "",
-          "duration_start": "",
-          "duration_end": "",
-          "document_rep": "", // This should contain the hash of the original file, which should be AES'd.
-          "validated_by": "" // An address. Should be assert `from` on tx_hash_section.
+      "school | organization | company": {
+        "org_type": "", // ^^
+        "founded": "", // int
+        "description": "", // text
+        "associations": {
+          // Can be none.
+          "address": ""
         },
-        "other_info": {
+        "extra": {
           "title": "",
           "description": "",
           "inserted_by": ""

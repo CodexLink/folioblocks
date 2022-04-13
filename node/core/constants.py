@@ -244,25 +244,40 @@ class NodeType(Enum):
 
 
 # # Enums, Database
-# TODO: May be deprecated.
-class BlacklistDuration(Enum):
-    INDEFINITE = "Indefine."
-    WARN_1 = "Warn 1: 1 Day."
-    WARN_2 = "Warn 2: 3 Days."
-    WARN_3 = "Warn 3: 7 Days."
-    FINAL_WARNING = "Final Warning: 2 Weeks."
 
 
-class GroupType(Enum):
-    ORGANIZATION = "Organization Member"
-    COMPANY_EMPLOYER = "Company Employer"
-    APPLICANTS = "Applicants / Course Graduate"
+class AssociatedNodeStatus(IntEnum):
+    CURRENTLY_AVAILABLE = auto()
+    CURRENTLY_MINING = auto()
+    CURRENTLY_NOT_AVAILABLE = auto()
+    CURRENTLY_SLEEPING = auto()
+
+
+class AssociationGroupType(IntEnum):
+    COMPANY = auto()
+    INSTITUTION = auto()
+    ORGANIZATION = auto()
+
+
+class EmploymentApplicationState(IntEnum):
+    REQUESTED = auto()
+    REJECTED = auto()
+    ACCEPTED = auto()
 
 
 class TokenStatus(Enum):
     EXPIRED = "Token Expired"
     CREATED_FOR_USE = "Token Recently Created"
     LOGGED_OUT = "Token Disposed: Logged Out"
+
+
+class TransactionContextMappingType(IntEnum):
+    APPLICANT_INFO = auto()
+    APPLICANT_LOG = auto()
+    APPLICANT_ADDITIONAL = auto()
+    SCHOOL_INFO = auto()
+    SCHOOL_ASSOCIATIONS = auto()
+    SCHOOL_EXTRA_INFO = auto()
 
 
 class UserActivityState(Enum):
@@ -277,13 +292,6 @@ class UserEntity(Enum):
     ADMIN_USER = "Administrator"
 
 
-class AssociatedNodeStatus(IntEnum):
-    CURRENTLY_AVAILABLE = auto()
-    CURRENTLY_MINING = auto()
-    CURRENTLY_NOT_AVAILABLE = auto()
-    CURRENTLY_SLEEPING = auto()
-
-
 # # Enums, Generic
 class CryptFileAction(IntEnum):
     TO_DECRYPT = auto()
@@ -291,10 +299,6 @@ class CryptFileAction(IntEnum):
 
 
 # # Enums, HTTP Queues
-class HTTPQueueStatus(IntEnum):
-    ON_QUEUE = auto()
-    UP_NEXT = auto()
-    CURRENTLY_WORKING = auto()
 
 
 class HTTPQueueMethods(IntEnum):
@@ -311,38 +315,38 @@ class HTTPQueueResponseFormat(IntEnum):
     AS_DICT = auto()
 
 
+class HTTPQueueStatus(IntEnum):
+    ON_QUEUE = auto()
+    UP_NEXT = auto()
+    CURRENTLY_WORKING = auto()
+
+
 # # Enums, Transaction-Related Attributes
-
-
 class NodeTransactionInternalActions(IntEnum):
     CONSENSUS = auto()
     INIT = auto()
 
 
 # # SORT THIS.
-class StudentActivities(IntEnum):
-    AWARDS = auto()
-    PROJECTS = auto()
-    RECOGNITION = auto()
 
 
-class StudentStatus(IntEnum):
-    ACTIVE = auto()
-    INACTIVE = auto()
-    TRANSFERRED = auto()
+class ApplicantLogContentType(IntEnum):
+    PROJECT = auto()
+    ACTIVITY = auto()
+    PROMOTION = auto()
+    EMPLOYMENT = auto()
+
+
+class OrganizationType(IntEnum):
+    COMPANY = auto()
+    LITERAL = auto()
+    SCHOOL = auto()
 
 
 class EmploymentActivityType(IntEnum):
     ACTIVITIES = auto()
     PROJECTS = auto()
     PROMOTION = auto()
-
-
-class EmploymentStatus(IntEnum):
-    ACTIVE = auto()
-    TERMINATED = auto()
-    RESIGNED = auto()
-    INACTIVE = auto()
 
 
 class TransactionContentCategory(IntEnum):
@@ -368,9 +372,12 @@ class TransactionActions(Enum):
     NEGOTIATION_MINE = "Consensus: Mine Negotiation"
     NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Miner Proof"
 
+    # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
+
     # - For Students as Applicants.
     # * Note that their data cannot be modified since it was the administrator of the institution who does that.
-    APPLICANT_FROM_STUDENT_CONVERSION = "Student to Applicant Conversion"
+
+    # @o For the blockchain, just display this, literally.
     APPLICANT_APPLY = "Applicant: Apply Process"
     APPLICANT_APPLY_CONFIRMED = (
         "Applicant: Apply Confirmed"  # * Association should be assigned here.
@@ -381,7 +388,7 @@ class TransactionActions(Enum):
     # # Groups with classification of organization should refer to the actual classification instead of just organization.
 
     # - For Company / Organization.
-    # ! Note that these will not be used since our scenario is leaning towards to applicants wanting to get hired by them doing the process.
+    # ! Note that this/these may not be used since our scenario is leaning towards to applicants wanting to get hired by them doing the process.
     COMPANY_INVITE_APPLICANTS = "Company: Invite Applicants"  # * As a workaround, we can do some email send module.
 
     # - For Institutions / Organization.
@@ -390,10 +397,11 @@ class TransactionActions(Enum):
         "Invoke Document Reference"  # * This is a seperate action. THIS REQUIRES FILE.
     )
     INSTITUATION_ORG_APPLICANT_REFER_INFO = "Applicant: New Info"
-    INSTITUATION_ORG_APPLICANT_REFER_UPDATE = (
-        "Applicant: Update"  # We cannot delete here.
-    )
     INSTITUTION_ORG_DISREGARD_APPLICANT = "Revoke Applicant Access"
+
+    # - For Organization, in general.
+    ORGANIZATION_USER_REGISTER = "Org: Authority Register"
+    ORGANIZATION_INIT = "Org: Associate Init"
 
     UNSPECIFIED = "Undetermined"
 

@@ -156,7 +156,7 @@ async def crypt_file(
 
     except InvalidToken:
         logger.critical(
-            f"{'Decryption' if process == CryptFileAction.TO_DECRYPT else 'Encryption'} failed. Please check your argument and try again. This may be a developer's problem, please report the issue at the repository (CodexLink/folioblocks)."
+            f"{'Decryption' if process == CryptFileAction.TO_DECRYPT else 'Encryption'} failed. This may likely corrupted your file! Please check your argument and try again after reloading the backup. If persists, please report to the developer."
         )
         _exit(1)
 

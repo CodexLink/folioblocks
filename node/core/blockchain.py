@@ -225,7 +225,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             # # This may not be okay.
             return NodeMasterInformation(
-                block_timer=self.block_timer_seconds,
+                chain_block_timer=self.block_timer_seconds,
                 total_blocks=len(self._chain["chain"])
                 if self._chain is not None
                 else 0,

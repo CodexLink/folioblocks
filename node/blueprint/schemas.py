@@ -8,7 +8,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
@@ -29,9 +29,6 @@ from core.constants import (
     StudentStatus,
     TokenStatus,
     TransactionActions,
-    TransactionContentCategory,
-    TransactionContentOperation,
-    TransactionContentType,
     TransactionStatus,
     UserActivityState,
     UserEntity,
@@ -39,7 +36,12 @@ from core.constants import (
 )
 from pydantic import BaseModel, EmailStr, Field
 
-from node.core.constants import NodeTransactionInternalActions
+from core.constants import NodeTransactionInternalActions
+from node.core.constants import (
+    ApplicantLogContentType,
+    EmploymentApplicationState,
+    OrganizationType,
+)
 
 # # Dashboard API — START
 
@@ -87,59 +89,46 @@ class GenerateAuthInput(BaseModel):
 
 
 """
-# Block Structure Models
-- The following pydantic models are made out of the `Block`. Note that the fields for the `Block` and the `Blockchain` is here as well.
+# Block Node Structure Models
+- The following pydantic models are made from the `Transaction` of the `Block`.
 @o Notice that the the declaration of the classes were done in descending form to the actual declaration of the `Block`.
 @o There are some fields were declared as `None` as they are defined during or after a certain processes.
 """
 
-
-class TransactionStudentActivities(BaseModel):
-    type: StudentActivities
-    name: str
-    description: str | None
-    duration_start: datetime
-    duration_end: datetime
-    document_rep: HashUUID | None
-    validated_by: AddressUUID
-
-
-class TransactionStudentOtherInfo(BaseModel):
+# @o This is used for both fields under `extra` of Applicant and Organization.
+class AdditionalContextTransaction(BaseModel):
     title: str
-    description: str | None
+    description: str
     inserted_by: AddressUUID
+    timestamp: datetime
 
 
-class TransactionStudentPayload(BaseModel):
-    identity: AddressUUID
+class ApplicantLogTransaction(BaseModel):
+    type: ApplicantLogContentType
     name: str
-    course: str
-    course_level: int
-    status: StudentStatus
-    activities: list[TransactionStudentActivities] | None
-    other_info: list[TransactionStudentOtherInfo] | None
-
-
-class TransactionEmployeeActivites(BaseModel):
-    type: EmploymentActivityType
-    name: str
-    deescription: str | None
+    description: str
+    role: str
     duration_start: datetime
     duration_end: datetime | None
-    document_rep: HashUUID | None
-    role: str
     validated_by: AddressUUID
 
 
-class TransactionEmployeePayload(BaseModel):
+class ApplicantTransaction(BaseModel):
     identity: AddressUUID
-    company: AddressUUID
-    role: str
-    status: EmploymentStatus
-    activities: list[TransactionEmployeeActivites] | None
+    institution_ref: int
+    course: str
+    year: int
+    prefer_role: str
+    log: ApplicantLogTransaction | None
+    extra: AdditionalContextTransaction | None
 
 
-# # For Blockchain Node Transactions - Desc Order.
+class OrganizationTransaction(BaseModel):
+    org_type: OrganizationType
+    founded: int
+    description: str
+    associations: list[AddressUUID] | None
+    extra: AdditionalContextTransaction
 
 
 class NodeTransactionContext(BaseModel):
@@ -155,25 +144,23 @@ class NodeTransaction(BaseModel):
     context: NodeTransactionContext
 
 
+class ApplicantProcessTransaction(BaseModel):
+    state: EmploymentApplicationState
+    requestor: AddressUUID
+    receiver: AddressUUID
+    signature: HashUUID
+
+
 class Transaction(
     BaseModel
-):  # TODO | We need TransactionDetail if we were able to fetch it.
-    tx_hash: AddressUUID
+):  # TODO: https://fastapi.tiangolo.com/tutorial/response-model/?h=exclude+on+response#response_model_include-and-response_model_exclude
+    tx_hash: AddressUUID | None
     action: TransactionActions
     status: TransactionStatus
-    payload: NodeTransaction
+    payload: ApplicantProcessTransaction | ApplicantTransaction | ApplicantLogTransaction | NodeTransaction | OrganizationTransaction
     from_address: AddressUUID
-    to_address: AddressUUID
+    to_address: AddressUUID | None
     prev_hash_ref: HashUUID | None
-    timestamp: datetime
-
-
-# * For the Explorer API.
-class TransactionMini(BaseModel):
-    tx_hash: AddressUUID
-    action: TransactionActions
-    status: TransactionStatus
-    tx_count: int
     timestamp: datetime
 
 
@@ -213,10 +200,8 @@ class NodeConsensusInformation(BaseModel):
     last_mined_block: int
 
 
-class NodeMasterInformation(
-    BaseModel
-):  # TODO: We may remove transactions and addresses.
-    block_timer: int
+class NodeMasterInformation(BaseModel):
+    chain_block_timer: int
     total_blocks: int
     total_transactions: int
 
