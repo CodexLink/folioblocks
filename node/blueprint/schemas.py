@@ -27,7 +27,6 @@ from core.constants import (
     GenericUUID,
     HashUUID,
     HTTPQueueMethods,
-    HTTPQueueTaskType,
     # InternExperience,
     JWTToken,
     KeyContext,
@@ -213,9 +212,11 @@ class NodeMasterInformation(
     total_blocks: int
     total_transactions: int
 
+
 class NodeInformation(BaseModel):
     properties: NodeConsensusInformation
     statistics: NodeMasterInformation | None
+
 
 class Blockchain(BaseModel):
     block: list[BlockOverview] | None
@@ -391,8 +392,10 @@ class HTTPRequestPayload(BaseModel):
         description="The name of this HTTP request, required whenever `await_result_immediate` is set to `True`.",
     )
 
+
 class SourcePayload(BaseModel):
     source_address: str
     source_port: int
+
 
 # # HTTP Methods — END

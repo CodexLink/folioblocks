@@ -120,21 +120,26 @@ async def receive_block_to_mine() -> None:
 
 
 @node_router.post(
-    "/blockchain/receive_action",
+    "/blockchain/receive_context",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary="Receives data that serves as an action of the user from the dashboard.",
     description=f"A special API endpoint that accepts payload from the dashboard. This requires special credentials and handling outside the scope of node.",
     dependencies=[
         Depends(
-            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+            EnsureAuthorized(
+                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
+            )  # TODO: We need to use the `UserEntity.DASHBOARD_USER` here.
         )
     ],
 )
 async def recieve_action_from_dashboard() -> None:
-    # - Create a raw payload from here.
-    # - Encapsulate it in transaction.
-    # - Do something when there's a file involved.
-    # TODO: Classify Actions from here.
+    # - Identify the type of the transaction.
+    # - If there's a file, process it under, files.
+    # - Encrypt it via AES from the generated file. (Code should be derived from the existing Fernet() or should we create another one? [such as, AUTH (mid 16 characters) of master + sender ]) and make the filename as UUID with datetime with no extensions.
+
+    # - Field of the file should be changed to a SHA256 with UUID as a base location from where it was located.
+    # TODO: We need an API regarding returning it.
+    #
     return
 
 

@@ -175,14 +175,9 @@ class BaseAPI(Enum):
     EXPLORER = "Explorer API"
     NODE = "Node API"
 
-    """
-    Note that, we only need to govern the user for becoming as a Node User or as an organization representative.
-    """
-
 
 class AdminAPI(Enum):
     REQUEST_TO_ACCESS = f"{BaseAPI.ADMIN.value}: Access Generators"
-    # REQUEST_AS_ORG = ""
 
 
 class DashboardAPI(Enum):
@@ -226,9 +221,7 @@ class BlockchainContentType(IntEnum):
 
 
 # # Enums, Constraints
-# ! Blockchain (Explorer) Query
-# These are the min and max constraint for querying blockchain data.
-class ItemReturnCount(IntEnum):
+class ExplorerBlockItemReturnCount(IntEnum):
     LOW = 5
     MIN = 25
     MID = 50
@@ -236,7 +229,6 @@ class ItemReturnCount(IntEnum):
     MAX = 100
 
 
-# ! Logger Level
 class LoggerLevelCoverage(Enum):
     DEBUG = "DEBUG"
     INFO = "INFO"
@@ -252,7 +244,8 @@ class NodeType(Enum):
 
 
 # # Enums, Database
-class BlacklistDuration(Enum):  # TODO: These may not be official.
+# TODO: May be deprecated.
+class BlacklistDuration(Enum):
     INDEFINITE = "Indefine."
     WARN_1 = "Warn 1: 1 Day."
     WARN_2 = "Warn 2: 3 Days."
@@ -318,17 +311,6 @@ class HTTPQueueResponseFormat(IntEnum):
     AS_DICT = auto()
 
 
-class HTTPQueueTaskType(Enum):
-    UNSPECIFIED_HTTP_REQUEST = "HTTP Request"
-    UNSPECIFIED = "Unspecified Task"
-    INITIATE_CONSENSUS = "Consensus Initialization"
-    CHECKPOINT_FILE = "In-Memory to File Checkpoint"
-    NEGOTIATION_INITIAL = "Negotiation Phase: Initial"
-    NEGOTIATION_PROCESSING = "Negotiation: Processing"
-    NEGOTIATION_RECEIVE_RESULT = "Negotiation: End, Receive Result"
-    CONSENSUS_MODE = "Consensus Mode, Block Sync"
-
-
 # # Enums, Transaction models and beyond of a `Block` model.
 class StudentActivities(IntEnum):
     AWARDS = auto()
@@ -376,18 +358,41 @@ class TransactionStatus(IntEnum):
     FAILED = auto()
 
 
-# TODO: This will be expanded later on.
-class TransactionActions(IntEnum):
-    ACCOUNT_GENERATED = auto()
-    DOCUMENT_INSUANCE = auto()
-    GENESIS_INITIALIZATION = auto()
-    REQUEST_INITIATION = auto()
-    REQUEST_MARKED_ENDED = auto()
-    REQUEST_SPECIFIC_DOC = auto()
+class TransactionActions(Enum):
+    # - Node-based Transactions: General
+    NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"
+    NODE_GENERAL_INIT = "Node: Register"
+    NODE_GENESIS_INITIALIZATION = "Node: Genesis Initialization"
 
+    # - Node-based Transaction: Negotiation (Consensus)
+    NODE_GENERAL_CONSENSUS_MODE = "Consensus: Block Sync"
+    NEGOTIATION_MINE = "Consensus: Mine Negotiation"
+    NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Processing Proof"
 
-class TransactionActionString(Enum):
-    pass
+    # - For Students as Applicants.
+    # * Note that their data cannot be modified since it was the administrator of the institution who does that.
+    APPLICANT_FROM_STUDENT_CONVERSION = "Student to Applicant Conversion"
+    APPLICANT_APPLY = "Applicant: Apply Confirmed"
+    APPLICANT_APPLY_CONFIRMED = (
+        "Applicant: Apply Confirmed"  # * Association should be assigned here.
+    )
+    APPLICANT_APPLY_REJECTED = "Applicant: Apply Rejected"
+
+    # ! About Classification / Organization
+    # # Groups with classification of organization should refer to the actual classification instead of just organization.
+
+    # - For Company / Organization.
+    # ! Note that these will not be used since our scenario is leaning towards to applicants wanting to get hired by them doing the process.
+    COMPANY_INVITE_APPLICANTS = "Company: Invite Applicants"  # * As a workaround, we can do some email send module.
+
+    # - For Institutions / Organization.
+    INSTITUTION_ORG_GENERATE_APPLICANT = "Generate Applicants"
+    INSTITUTION_ORG_REFER_DOCUMENT = (
+        "Invoke Document Reference"  # * This is a seperate action.
+    )
+    INSTITUTION_ORG_DISREGARD_APPLICANT = "Revoke Applicant Access"
+
+    UNSPECIFIED = "Undetermined"
 
 
 # # Program Metadata

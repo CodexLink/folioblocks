@@ -22,7 +22,7 @@ from core.constants import (
     AddressUUID,
     BaseAPI,
     DashboardAPI,
-    ItemReturnCount,
+    ExplorerBlockItemReturnCount,
 )
 from fastapi import APIRouter, Query
 
@@ -58,7 +58,7 @@ async def get_applicants(
     *,
     applicant_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title="Number of Applicants to Return",
         description="The number of applicants to return.",
     ),
@@ -135,7 +135,7 @@ async def get_issuances(
     *,
     issuance_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title="Number of Issued Documents to Return",
         description="The number of documents issued to return.",
     ),
@@ -182,7 +182,7 @@ async def get_students(
     *,
     student_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title="Number of Students to Return",
         description="The number of students to return.",
     ),

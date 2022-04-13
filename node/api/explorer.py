@@ -35,7 +35,7 @@ from core.constants import (
     BaseAPI,
     BlockID,
     ExplorerAPI,
-    ItemReturnCount,
+    ExplorerBlockItemReturnCount,
     TxID,
 )
 from fastapi import APIRouter, HTTPException, Query
@@ -103,7 +103,7 @@ async def get_blocks(
     *,
     block_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title="Number of Block Return",
         description="The value that signifies the number of blocks to return from the requestor.",
     ),
@@ -132,7 +132,7 @@ async def get_certain_block(
     block_id: BlockID,
     tx_count: int
     | None = Query(
-        ItemReturnCount.MID,
+        ExplorerBlockItemReturnCount.MID,
         title=QUERY_TRANSACTION_RETURN_NAME,
         description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
     ),
@@ -160,7 +160,7 @@ async def get_transactions(
     *,
     tx_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title=QUERY_TRANSACTION_RETURN_NAME,
         description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
     ),
@@ -202,7 +202,7 @@ async def get_addresses(
     *,
     addr_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title="Number of Address Return",
         description="The number of addresses to return.",
     ),
@@ -231,7 +231,7 @@ async def get_particular_addresses(
     address_uuid: AddressUUID,
     tx_count: int
     | None = Query(
-        ItemReturnCount.MIN,
+        ExplorerBlockItemReturnCount.MIN,
         title=QUERY_TRANSACTION_RETURN_NAME,
         description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
     ),
