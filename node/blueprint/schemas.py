@@ -14,25 +14,15 @@ from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
-    AcademicExperience,
     AddressUUID,
-    # Certificates,
     CredentialContext,
-    DocRequestType,
-    DocumentMeta,
-    # DocumentProof,
-    # Documents,
     EmploymentActivityType,
     EmploymentStatus,
-    GenericUUID,
     HashUUID,
     HTTPQueueMethods,
-    # InternExperience,
     JWTToken,
-    KeyContext,
     NodeType,
     NotificationContext,
-    RequestContext,
     RequestPayloadContext,
     RoleContext,
     StudentActivities,
@@ -43,13 +33,13 @@ from core.constants import (
     TransactionContentOperation,
     TransactionContentType,
     TransactionStatus,
-    URLAddress,
     UserActivityState,
     UserEntity,
     UserRole,
-    # WorkExperience,
 )
 from pydantic import BaseModel, EmailStr, Field
+
+from node.core.constants import NodeTransactionInternalActions
 
 # # Dashboard API — START
 
@@ -149,11 +139,20 @@ class TransactionEmployeePayload(BaseModel):
     activities: list[TransactionEmployeeActivites] | None
 
 
-class TransactionContent(BaseModel):
-    category: TransactionContentCategory
-    type: TransactionContentType
-    operation: TransactionContentOperation
-    payload: TransactionEmployeePayload | TransactionStudentPayload
+# # For Blockchain Node Transactions - Desc Order.
+
+
+class NodeTransactionContext(BaseModel):
+    signature: HashUUID  # Hash of the whole transaction. If `info` is None, then keep it hashed along with the context of the time it was done.
+
+    # ! I cannot do pydantic models here anymore, please refer to the schemas.jsonc for more information about these comments.
+    # * Note that some actions prohibits `None` at serialization.
+    info: str | dict | None
+
+
+class NodeTransaction(BaseModel):
+    action: NodeTransactionInternalActions
+    context: NodeTransactionContext
 
 
 class Transaction(
@@ -162,10 +161,19 @@ class Transaction(
     tx_hash: AddressUUID
     action: TransactionActions
     status: TransactionStatus
-    content: TransactionContent
+    payload: NodeTransaction
     from_address: AddressUUID
     to_address: AddressUUID
-    prev_hash: HashUUID | None
+    prev_hash_ref: HashUUID | None
+    timestamp: datetime
+
+
+# * For the Explorer API.
+class TransactionMini(BaseModel):
+    tx_hash: AddressUUID
+    action: TransactionActions
+    status: TransactionStatus
+    tx_count: int
     timestamp: datetime
 
 

@@ -5,20 +5,64 @@
     // - TRANSACTIONS SCHEMA.
     {
       "tx_hash": "0xCCCCCCCC", // Automatically computed with tx_hash as None.
+
       "action": "", // Resolved to TransactionActions
+      "category": "", // Resolves to TransactionCategory.
       "status": "", // Resolved to TransactionStatus
-      "content": {
+
+      "payload": {
         // Resolves to TransactionContent
-        "category": "", // Resolves to TransactionCategory.
-        "type": "", // Resolves to TransactionContentType.
-        "operation": "", // Resolves to TransactionContentOperation.
-        "payload": {} // The following field should change.
       },
-      "from": "", // This is resolved only when action is P2P.
-      "to": "", // This is resolved only when action is P2P.
-      "prev_hash": "", // The previous transaction hash that reflects from this hash.
+
+      "from_address": "", // This is resolved only when action is P2P.
+      "to_address": "", // This is resolved only when action is P2P.
+      "prev_hash_ref": "", // The previous transaction hash that reflects from this hash.
       "timestamp": "" // Resolved to datetime.
     },
+
+    // - SCHEMA FOR BLOCKCHAIN
+    {
+      "signature": "HashUUID",
+
+      // # For the instance of register.
+      // ! There's nothing to hide here I guess?
+      "info_": {
+        "role": "str",
+        "new_address": "str",
+        "timestamp": "str"
+      },
+
+      // # For the instance of genesis.
+      "info__": {
+      },
+
+      // # For the instance of certificate,
+      "info___": {
+        "to": "", // Who will receive the the certificate.
+        "referral": "" // Who made the certificate.
+      },
+
+      // # For the instance of consensus.
+      // - Sync
+      "info____": {
+          "addr": ""
+      },
+
+      // - Negotiation, Mine Negotiation
+      "info_____": {
+          "candidate_no": "nth miner to be called",
+          "block_hash": ""
+      },
+
+
+      // - Negotiation, Receive Miner Proof
+      "info______": {
+        "negotiation_id": "",
+        "block_hash": "",
+        "time_delivery": ""
+      }
+    }
+
     // ! These payloads will be overwritten whenever
     // - EMPLOYMENT | PAYLOAD SCHEMA.
     {

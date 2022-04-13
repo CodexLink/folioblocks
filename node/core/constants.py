@@ -311,7 +311,15 @@ class HTTPQueueResponseFormat(IntEnum):
     AS_DICT = auto()
 
 
-# # Enums, Transaction models and beyond of a `Block` model.
+# # Enums, Transaction-Related Attributes
+
+
+class NodeTransactionInternalActions(IntEnum):
+    CONSENSUS = auto()
+    INIT = auto()
+
+
+# # SORT THIS.
 class StudentActivities(IntEnum):
     AWARDS = auto()
     PROJECTS = auto()
@@ -338,19 +346,10 @@ class EmploymentStatus(IntEnum):
 
 
 class TransactionContentCategory(IntEnum):
-    EMPLOYMENT = auto()
-    SCHOOL = auto()
-    ORGANIZATION = auto()
-
-
-class TransactionContentType(IntEnum):
-    pass
-
-
-class TransactionContentOperation(IntEnum):
-    INSERT = auto()
-    INVALIDATE = auto()
-    UPDATE = auto()
+    APPLICANT = auto()
+    INSTITUTION_ORG = auto()
+    COMPANY_ORG = auto()
+    NODE_INTERNAL = auto()
 
 
 class TransactionStatus(IntEnum):
@@ -361,18 +360,18 @@ class TransactionStatus(IntEnum):
 class TransactionActions(Enum):
     # - Node-based Transactions: General
     NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"
-    NODE_GENERAL_INIT = "Node: Register"
-    NODE_GENESIS_INITIALIZATION = "Node: Genesis Initialization"
+    NODE_REGISTER_INIT = "Node: Register"
+    NODE_GENESIS_INITIALIZATION = "Node: Genesis Block Init"
 
     # - Node-based Transaction: Negotiation (Consensus)
-    NODE_GENERAL_CONSENSUS_MODE = "Consensus: Block Sync"
+    NODE_GENERAL_CONSENSUS_MODE = "Consensus: Blockchain Sync"
     NEGOTIATION_MINE = "Consensus: Mine Negotiation"
-    NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Processing Proof"
+    NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Miner Proof"
 
     # - For Students as Applicants.
     # * Note that their data cannot be modified since it was the administrator of the institution who does that.
     APPLICANT_FROM_STUDENT_CONVERSION = "Student to Applicant Conversion"
-    APPLICANT_APPLY = "Applicant: Apply Confirmed"
+    APPLICANT_APPLY = "Applicant: Apply Process"
     APPLICANT_APPLY_CONFIRMED = (
         "Applicant: Apply Confirmed"  # * Association should be assigned here.
     )
@@ -388,7 +387,11 @@ class TransactionActions(Enum):
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = "Generate Applicants"
     INSTITUTION_ORG_REFER_DOCUMENT = (
-        "Invoke Document Reference"  # * This is a seperate action.
+        "Invoke Document Reference"  # * This is a seperate action. THIS REQUIRES FILE.
+    )
+    INSTITUATION_ORG_APPLICANT_REFER_INFO = "Applicant: New Info"
+    INSTITUATION_ORG_APPLICANT_REFER_UPDATE = (
+        "Applicant: Update"  # We cannot delete here.
     )
     INSTITUTION_ORG_DISREGARD_APPLICANT = "Revoke Applicant Access"
 
