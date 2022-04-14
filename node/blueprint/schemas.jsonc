@@ -13,6 +13,10 @@
       "payload": {
         // Resolves to TransactionContent
       },
+      "signatures": {
+        "raw": "",
+        "payload": ""
+      },
 
       "from_address": "", // This is resolved only when action is P2P.
       "to_address": "", // This is resolved only when action is P2P.
@@ -21,9 +25,8 @@
     },
 
     // - SCHEMA FOR BLOCKCHAIN
+    // - This will be under the AES form, when unlocked, should be the following output.
     {
-      "signature": "HashUUID",
-
       // # For the instance of register.
       // ! There's nothing to hide here I guess?
       "info_": {
@@ -76,6 +79,7 @@
           "name": "",
           "description": "Employed at something.",
           "role": "", // Can be None.
+          "file": "path?",
           "duration_start": "",
           "duration_end": "", // If this was not specified, assume ongoing.
           "validated_by": "" // An address. Should be assert `from` on tx_hash_section.
@@ -84,7 +88,7 @@
           "title": "",
           "description": "",
           "inserted_by": "",
-          "datetime": ""
+          "timestamp": ""
         }
       }
     },
@@ -101,7 +105,8 @@
         "extra": {
           "title": "",
           "description": "",
-          "inserted_by": ""
+          "inserted_by": "",
+          "timestamp": ""
         }
       }
     }

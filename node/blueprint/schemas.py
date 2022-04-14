@@ -34,7 +34,7 @@ from core.constants import (
     UserEntity,
     UserRole,
 )
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, FileUrl
 
 from core.constants import NodeTransactionInternalActions
 from node.core.constants import (
@@ -107,7 +107,8 @@ class ApplicantLogTransaction(BaseModel):
     type: ApplicantLogContentType
     name: str
     description: str
-    role: str
+    role: str | None
+    file: FileUrl  # TODO: Unsure about this one.
     duration_start: datetime
     duration_end: datetime | None
     validated_by: AddressUUID
@@ -128,39 +129,36 @@ class OrganizationTransaction(BaseModel):
     founded: int
     description: str
     associations: list[AddressUUID] | None
-    extra: AdditionalContextTransaction
-
-
-class NodeTransactionContext(BaseModel):
-    signature: HashUUID  # Hash of the whole transaction. If `info` is None, then keep it hashed along with the context of the time it was done.
-
-    # ! I cannot do pydantic models here anymore, please refer to the schemas.jsonc for more information about these comments.
-    # * Note that some actions prohibits `None` at serialization.
-    info: str | dict | None
+    extra: AdditionalContextTransaction | None
 
 
 class NodeTransaction(BaseModel):
     action: NodeTransactionInternalActions
-    context: NodeTransactionContext
+
+    # ! I cannot do pydantic models here anymore, please refer to the schemas.jsonc for more information about these comments.
+    # * Note that some actions prohibits `None` at serialization.
+    context: str | dict | None
 
 
 class ApplicantProcessTransaction(BaseModel):
     state: EmploymentApplicationState
     requestor: AddressUUID
     receiver: AddressUUID
-    signature: HashUUID
 
 
-class Transaction(
-    BaseModel
-):  # TODO: https://fastapi.tiangolo.com/tutorial/response-model/?h=exclude+on+response#response_model_include-and-response_model_exclude
+class TransactionSignatures(BaseModel):
+    raw: HashUUID
+    payload: HashUUID
+
+
+class Transaction(BaseModel):
     tx_hash: AddressUUID | None
     action: TransactionActions
     status: TransactionStatus
     payload: ApplicantProcessTransaction | ApplicantTransaction | ApplicantLogTransaction | NodeTransaction | OrganizationTransaction
+    signatures: TransactionSignatures
     from_address: AddressUUID
     to_address: AddressUUID | None
-    prev_hash_ref: HashUUID | None
     timestamp: datetime
 
 
@@ -386,6 +384,7 @@ class HTTPRequestPayload(BaseModel):
     )
 
 
+# # Uncategorized
 class SourcePayload(BaseModel):
     source_address: str
     source_port: int

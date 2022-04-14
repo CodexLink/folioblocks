@@ -217,6 +217,8 @@ class BlockchainMechanism(ConsensusMechanism):
             await self._update_chain()
 
     async def insert_transaction(self, data: RequestPayloadContext) -> None:
+        # Do some processing from the transaction first.
+
         self.transaction_container.append(await self._create_transaction(data))
 
     @__ensure_blockchain_ready()
@@ -406,6 +408,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - Create a negotiation ID based on the certificate token of the available miner node as well as this master under SHA256 form + datetime.
 
                 # @o Even though we already have the certification token, we still need this one to prove that we are actually know what the heck are we doing and we should be remembering it since it contains transactions or tokens which shouldn't go loss.
+
                 # - Insert the negotiation ID.
 
                 # # Send the context via create_task() with a custom function with retry_attempts of 99.
@@ -676,6 +679,12 @@ class BlockchainMechanism(ConsensusMechanism):
                 return block
 
             nth += 1
+
+    async def _process_block_transactions(
+        self,
+    ) -> Any:
+        # Processes the block along with the transactions, to be embedded from the blockchain (deserialize) or convert the block transactions object / datatype to a universally acceptable format.
+        pass
 
     # Overwrites existing buffer from the frozendict if consensus has been established.
     async def _process_blockchain_file_to_current_state(

@@ -31,12 +31,13 @@ from core.constants import EmploymentApplicationState, TransactionContextMapping
 """
     @o Notes:
     - SQLAlchemy doesn't use enum.Enum as their Enum.
-    - Therefore, I have to subclass sqlalchemy.Enum as SQLEnum and subclass it to all classified enums that will be used in the database.
+    - Therefore, I have to subclass sqlalchemy.Enum as `SQLEnum` and subclass it to all classified enums that will be used in the database.
     - Their use-case on non-database is possible since their `dir()` shows that we can access items just like what we have in enum.Enum.
+
     - # !! Creation of tables is in the core.py.
     - # ! Unsupported: Running engine.all(engine=engine) is not possible as it is blocking when using sqlite+aiosqlite as protocol.
-    - The use case of DeclarativeModel (declarative_base()) is not possible and is not supported by encode/databases. An example of instantiating
-    - sqlalchemy.Metadata() is only possible. Though even we are going to use encode/databases with SQLAlchemy ORM, then I'm not sure why they didn't support it.
+    - The use case of DeclarativeModel (declarative_base()) is not possible and is not supported by encode/databases.
+    - An example of instantiating `sqlalchemy.Metadata()` is only possible. Though even we are going to use encode/databases with SQLAlchemy ORM, then I'm not sure why they didn't support it.
 """
 
 model_metadata: MetaData = MetaData()
@@ -195,19 +196,36 @@ tokens = Table(
 
 tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 
+"""
+# Regarding Transaction Content Mapping
+
+@o This model does not adapt semantically on the approach of ManyToOne. (Many addresses, there can only be one unique transaction)
+
+- `address_ref` - Refers to the user itself.
+- `block_no_ref` - Secondary reference from where the master node will look at.
+- `tx_ref` - The actual transaction where the content will be resolved.
+
+! Note
+* For multiple transactions, previous `tx_ref` referring to the same `address_ref` with respect to the `content_type` will be only be displayed as reference, not the actual content. This situation only applies to fields for `log` and `extra` under Applicant and Organization scope.
+* Replacement of the existing data (Base structure) for the Applicant and Organization scope will be prohibited when there's an existing entry of the following (under Enum `TransactionContextMappingType`): APPLICANT_INFO, and SCHOOL_INFO.
+* Updating any entries unspecified from the statement #2, does not resort to updating existing data, but should rather log the actual state instead.
+"""
+
 tx_content_mappings = Table(
     "tx_content_mappings",
     model_metadata,
     Column("id", Integer, nullable=False, primary_key=True, unique=False),
-    Column("address_ref", ForeignKey(user_addr_ref), nullable=True, unique=False),
+    Column("address_ref", ForeignKey(user_addr_ref), nullable=False, unique=False),
     Column("block_no_ref", Integer, nullable=False, unique=False),
-    Column("block_hash", String(64), nullable=False, unique=False),
     Column("tx_ref", String(64), nullable=False, unique=False),
     Column(
         "content_type",
         SQLEnum(TransactionContextMappingType),
         nullable=False,
         unique=False,
+    ),
+    Column(
+        "timestamp", DateTime, nullable=False, unique=True, server_default=func.now()
     ),
 )
 

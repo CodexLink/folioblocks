@@ -53,6 +53,7 @@ But before we deal with this matter, we need to ensure that we can first do the 
 Since this endpoint is just returning by reading through file, we can make this one good to go or a little bit easy but not underestimated.
 
 """
+# TODO: https://fastapi.tiangolo.com/tutorial/response-model/?h=exclude+on+response#response_model_include-and-response_model_exclude
 
 explorer_router = APIRouter(
     prefix="/explorer",
