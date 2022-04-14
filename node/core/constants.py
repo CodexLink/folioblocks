@@ -21,12 +21,6 @@ from secrets import SystemRandom
 
 from databases import Database
 
-# ! Priority Classification Types
-class DocToRequestTypes(IntEnum):
-    # TODO: We need more information. Preferrable under
-    TOR = auto()
-    SPECIFIED = auto()
-
 
 # # Custom Assertable Types
 # TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.
@@ -37,16 +31,12 @@ ArgumentDescription = _N("ArgumentDescription", str)
 AuthAcceptanceCode = _N("AuthAcceptanceCode", str)
 BlockID = _N("BlockID", str)
 BlockchainFileContext = _N("BlockchainFileContext", str)
-# Certificates = _N("Certificates", DocumentSet)
 CredentialContext = _N("CredentialContext", str)
 DocRequestType = _N("DocRequestType", DocToRequestTypes)
-# Documents = _N("Documents", DocumentSet)
 DocumentMeta = _N("DocumentMeta", str)
-# DocumentProof = _N("DocumentProof", DocumentSet)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
 HashedData = _N("HashedData", str)
-# InternExperience = _N("InternExperience", DocumentSet)
 IPAddress = _N("IPAddress", str)
 IPPort = _N("IPPort", int)
 NodeRole = _N("NodeRole", str)
@@ -60,7 +50,6 @@ RequestContext = _N("RequestContext", str)
 URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
-# WorkExperience = _N("WorkExperience", DocumentSet)
 
 # # Custom Variable Types
 BlockchainPayload = tuple[HashUUID, BlockchainFileContext]
@@ -77,10 +66,8 @@ NodeCredentials = tuple[CredentialContext, CredentialContext]
 
 # # Custom Typed Types
 # * For the exceptions.
-# BlockAttribute = TypeVar("BlockAttribute", int, str, list["Transaction"], None)  # TODO.
 Expects = TypeVar("Expects", str, object)
 Has = TypeVar("Has", str, object)
-# IdentityTokens = TypeVar("IdentityTokens", AddressUUID, JWTToken) # ???
 KeyContext = TypeVar("KeyContext", str, bytes, None)
 fn = TypeVar(  # ! Doesn't work for now.
     "fn", bound=Callable[..., Any]
