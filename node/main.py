@@ -10,7 +10,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 import logging
 from argparse import Namespace
-from asyncio import Task, create_task, sleep, wait
+from asyncio import create_task, sleep
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
 from logging.config import dictConfig

@@ -71,7 +71,7 @@ users = Table(
     model_metadata,
     Column(
         "unique_address",
-        String(38),
+        String(32),
         nullable=False,
         primary_key=True,
         autoincrement=False,
@@ -104,7 +104,6 @@ associated_nodes = Table(
     Column("id", Integer, primary_key=True),
     Column(
         "user_address",
-        String(38),
         ForeignKey(user_addr_ref),
         nullable=False,
         unique=False,
@@ -129,7 +128,7 @@ auth_codes = Table(
     "auth_codes",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("generated_by", String(38), ForeignKey(user_addr_ref), nullable=True),
+    Column("generated_by", ForeignKey(user_addr_ref), nullable=True),
     Column(
         "code", String(64), nullable=False, unique=True
     ),  # @o 64 characters because token_hex-based restriction is not enforced, meaning its resultant length is unpredictable for some reason.
@@ -145,8 +144,8 @@ applications = Table(
     "applications",
     model_metadata,
     Column("id", Integer, nullable=False, primary_key=True, unique=False),
-    Column("requestor", String(38), nullable=False, unique=False),
-    Column("to", String(38), nullable=False, unique=False),
+    Column("requestor", ForeignKey(user_addr_ref), nullable=False, unique=False),
+    Column("to", ForeignKey(user_addr_ref), nullable=False, unique=False),
     Column(
         "state",
         SQLEnum(EmploymentApplicationState),
@@ -163,13 +162,16 @@ applications = Table(
     ),
 )
 
+applications.requestor_ref = relationship(users, foreign_keys="requestor")  # type: ignore
+applications.to_ref = relationship(users, foreign_keys="to")  # type: ignore
+
 consensus_negotiation = Table(
     "consensus_negotiation",
     model_metadata,
     Column("id", Integer, nullable=False, primary_key=True, unique=False),
     Column("block_no_ref", Integer, nullable=False, unique=True),
     Column("negotiation_id", String(32), nullable=False, unique=True),
-    Column("peer_address_ref", String(38), nullable=False, unique=False),
+    Column("peer_address", ForeignKey(user_addr_ref), nullable=False, unique=False),
     Column(
         "date_negotiation",
         DateTime,
@@ -179,11 +181,13 @@ consensus_negotiation = Table(
     ),
 )
 
+consensus_negotiation.peer_address_ref = relationship(users, foreign_keys="peer_address")  # type: ignore
+
 tokens = Table(
     "tokens",
     model_metadata,
     Column("id", Integer, primary_key=True),
-    Column("from_user", String(38), ForeignKey(user_addr_ref), nullable=False),
+    Column("from_user", String(32), ForeignKey(user_addr_ref), nullable=False),
     Column(
         "token", Text, nullable=False
     ),  # # For some reason, SQL doesn't like anything more than 128 when asserting its UNIQUE.

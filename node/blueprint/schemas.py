@@ -10,14 +10,14 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from datetime import datetime
 
+from fastapi import UploadFile
+
 from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
     AddressUUID,
     CredentialContext,
-    EmploymentActivityType,
-    EmploymentStatus,
     HashUUID,
     HTTPQueueMethods,
     JWTToken,
@@ -25,8 +25,6 @@ from core.constants import (
     NotificationContext,
     RequestPayloadContext,
     RoleContext,
-    StudentActivities,
-    StudentStatus,
     TokenStatus,
     TransactionActions,
     TransactionStatus,
@@ -116,14 +114,16 @@ class AgnosticTransactionUserCredentials(BaseModel):
 
 
 class ApplicantLogTransaction(BaseModel):
+    entity_address_ref: AddressUUID | None
     type: ApplicantLogContentType
     name: str
     description: str
     role: str | None
-    file: FileUrl  # TODO: Unsure about this one.
+    file: UploadFile | HashUUID | None
     duration_start: datetime
     duration_end: datetime | None
     validated_by: AddressUUID
+    timestamp: datetime
 
 
 class ApplicantUserTransaction(BaseModel):

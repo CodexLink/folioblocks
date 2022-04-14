@@ -10,6 +10,7 @@ from typing import Any, Callable, Final
 from uuid import uuid4
 
 from aiofiles import open as aopen
+from fastapi import UploadFile
 from blueprint.models import associations, associated_nodes, file_signatures, users
 from blueprint.schemas import (
     ApplicantLogTransaction,
@@ -38,10 +39,11 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from blueprint.schemas import OrganizationTransactionInitializer
 from core.constants import ADDRESS_UUID_KEY_PREFIX, RawData
-from node.blueprint.schemas import (
+from blueprint.schemas import (
     ApplicantUserTransaction,
     OrganizationTransaction,
 )
+from utils.processors import validate_user_address
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
@@ -303,7 +305,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 for fetched_address in [existing_to_address, existing_from_address]
             ):
 
-                resolved_context: AdditionalContextTransaction | ApplicantUserTransaction | OrganizationTransaction
+                resolved_context: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantUserTransaction | OrganizationTransaction
 
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
                 # # [4]
@@ -441,13 +443,62 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
                 # @o This needs special handling due to the fact that it may contain an actual file.
-                # # [3]
+                # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: multipart/form-data. Therefore, this method expects to have an `ApplicantLogTransaction`.
                 elif (
                     action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
                     and isinstance(data, ApplicantLogTransaction)
                 ):
-                    # Is there a file?
-                    pass
+                    if (
+                        data.entity_address_ref is not None
+                        and await validate_user_address(
+                            supplied_address=AddressUUID(data.entity_address_ref)
+                        )
+                    ):
+
+                        if isinstance(data.file, UploadFile):
+                            # @o We combine the current time under isoformat string + given filename + referred user address in full length.
+
+                            # ! We need to create our own key because we are going to access these files.
+
+                            # * Since this project is under repository, we will keep it this way.
+                            # * In actual real world, we ain't gonna be doing this.
+
+                            # @o Create the key based from the user address (target or `to`), truncated from the first 12 character + datetime in custom format, please see the variable `current_date` below.
+
+                            timestamp: datetime = datetime.now()
+                            current_date: str = timestamp.strftime("%y%m%d%H%M%S")
+                            encrypter_key: bytes = f"{to_address}{current_date}".encode(
+                                "utf-8"
+                            )
+
+                            file_encrypter: Fernet = Fernet(encrypter_key)
+
+                            async with aopen(
+                                f"../userfiles/{timestamp.isoformat()}{data.file.filename}{to_address}",
+                                "wb",
+                            ) as file_writer:
+                                raw_context: bytes | str = await data.file.read()
+                                encrypted_context: bytes = file_encrypter.encrypt(
+                                    raw_context.encode("utf-8")
+                                    if isinstance(raw_context, str)
+                                    else raw_context
+                                )
+
+                                await file_writer.write(encrypted_context)
+
+                            # - Since we got the file and encrypted it, get the SHA256 of the payload.
+                            # - And replace it on the field of the data.file so that nothing will be loss.
+                            data.file = HashUUID(
+                                sha256(
+                                    raw_context.encode("utf-8")
+                                    if isinstance(raw_context, str)
+                                    else raw_context
+                                ).hexdigest()
+                            )
+
+                        # - Do the following for all condition.
+                        data.entity_address_ref = None
+                        resolved_context = data
 
                 # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
                 # # [2]
@@ -457,21 +508,12 @@ class BlockchainMechanism(ConsensusMechanism):
                 ] and isinstance(data, AdditionalContextTransaction):
                     # * Just validate if the specified entity address does exists.
 
-                    if data.entity_address_ref is None:
-                        logger.error(
-                            "Entity address reference does not exist! Please add an address reference for this extra information to be attached."
+                    if (
+                        data.entity_address_ref is not None
+                        and not validate_user_address(
+                            supplied_address=AddressUUID(data.entity_address_ref)
                         )
-                        return False
-
-                    address_existence_checker_stmt = select(
-                        [users.c.unique_address]
-                    ).where(users.c.unique_address == data.entity_address_ref)
-
-                    address = await self.db_instance.fetch_one(
-                        address_existence_checker_stmt
-                    )
-
-                    if address is not None:
+                    ):
                         data.entity_address_ref = None
                         resolved_context = data
 

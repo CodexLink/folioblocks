@@ -31,6 +31,7 @@ from core.constants import (
     URLAddress,
 )
 from core.dependencies import set_master_node_properties
+from core.constants import AddressUUID
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -72,6 +73,7 @@ from sqlalchemy import create_engine, select
 
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 from utils.http import get_http_client_instance
+from blueprint.schemas import users
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -224,6 +226,11 @@ async def initialize_resources_and_return_db_context(
 
     db_file_ref: Path = Path(DATABASE_RAW_PATH)
     bc_file_ref: Path = Path(BLOCKCHAIN_RAW_PATH)
+
+    file_folder = Path(f"{Path(__file__).cwd()}/userfiles")
+
+    if not file_folder.exists():
+        file_folder.mkdir(parents=True, exist_ok=False)
 
     logger.debug(
         f"SQL Engine Connector (Reference) and Async Instance for the {DATABASE_URL_PATH} has been instantiated."
@@ -778,3 +785,33 @@ def mask(data: bytes | int | str) -> str:
 
 
 # # Output Filters — END
+
+# # Blockchain DRY Handlers — START
+
+
+async def validate_user_address(
+    *,
+    supplied_address: AddressUUID,
+) -> bool:
+    if not isinstance(supplied_address, str):
+        logger.error(
+            f"Supplied address is invalid! Please ensure that the address is a type of {type(str)}."
+        )
+        return False
+
+    address_existence_checker_stmt = select([users.c.unique_address]).where(
+        users.c.unique_address == supplied_address
+    )
+
+    address = await get_database_instance().fetch_one(address_existence_checker_stmt)
+
+    if address is None:
+        logger.error(
+            "Supplied address seems to not exist. Please check your input and try again."
+        )
+        return False
+
+    return True
+
+
+# # Blockchain DRY Handlers — END
