@@ -1,34 +1,43 @@
-from asyncio import Task, create_task, get_event_loop, sleep, wait
+from asyncio import create_task, get_event_loop, sleep
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
-from http import HTTPStatus
 from logging import Logger, getLogger
+from os import environ as env
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
-from typing import Any, Callable, Coroutine, Final
+from typing import Any, Callable, Final
 
 from aiofiles import open as aopen
-from aiohttp import ClientResponse
-from blueprint.models import associated_nodes, file_signatures
+from blueprint.models import associated_nodes, file_signatures, users
 from blueprint.schemas import (
+    ApplicantLogTransaction,
+    ApplicantProcessTransaction,
+    ApplicantUserTransactionInternal,
     Block,
     BlockOverview,
     HashableBlock,
+    NodeConsensusInformation,
     NodeMasterInformation,
+    NodeTransaction,
+    OrganizationTransaction,
     Transaction,
 )
+from cryptography.fernet import Fernet
 from databases import Database
 from frozendict import frozendict
+from node.blueprint.schemas import (
+    AdditionalContextTransaction,
+    ApplicantUserTransactionInternal,
+    TransactionSignatures,
+    UserTransaction,
+)
+from node.core.constants import AUTH_KEY, SECRET_KEY, NodeTransactionInternalActions
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
+from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import select
-from core.constants import AssociatedNodeStatus
-from core.constants import BlockchainNodeStatePayload
-from blueprint.schemas import NodeConsensusInformation
-from core.constants import BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-from core.constants import BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
 
@@ -37,12 +46,15 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
+    BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
     BLOCKCHAIN_NAME,
     BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
+    BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
     AddressUUID,
+    AssociatedNodeStatus,
     BlockchainContentType,
     BlockchainFileContext,
     BlockchainIOAction,
@@ -51,8 +63,8 @@ from core.constants import (
     HTTPQueueMethods,
     IdentityTokens,
     NodeType,
-    RequestPayloadContext,
-    TxID,
+    TransactionActions,
+    TransactionStatus,
     URLAddress,
     random_generator,
 )
@@ -156,9 +168,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return deco
 
-    # async def close(self) -> None:
-    #     raise NotImplemented
-
     async def initialize(self) -> None:
         """
         # A method that initialize resources needed for the blockchain system to work.
@@ -216,10 +225,157 @@ class BlockchainMechanism(ConsensusMechanism):
 
             await self._update_chain()
 
-    async def insert_transaction(self, data: RequestPayloadContext) -> None:
-        # Do some processing from the transaction first.
+    @__restrict_call(on=NodeType.MASTER_NODE)
+    async def insert_external_transaction(
+        self,
+        action: TransactionActions,
+        from_address: AddressUUID,
+        to_address: AddressUUID,
+        data: ApplicantLogTransaction
+        | ApplicantProcessTransaction
+        | ApplicantUserTransactionInternal
+        | OrganizationTransaction
+        | AdditionalContextTransaction,
+    ) -> bool:
+        """
+        @o A method that is callable outside scope that can create a transaction as well as the entity from the database, if possible. It handles the content to render from the transaction as this will be used for content viewing later from the frontend.
 
-        self.transaction_container.append(await self._create_transaction(data))
+        ### Args:
+            * action (TransactionActions): An enum that describes the cause of instantiation of this transaction.
+            * from_address (AddressUUID): A unique identifier that instantiated this transaction.
+            * to_address (AddressUUID): A unique identifier that is being referred from the content of this transaction.
+            * data (ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInternal | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
+
+        ### Returns:
+            * bool: Returns `True` or `False` depending whether this function success or fails on execution of resolving the transaction for block minin.
+
+        ### Note:
+            * For `NodeTransactions`, it was already handled from the method `self._insert_transaction`. It doesn't need extra parameters since those contains internal actions that doesn't need extra handling as they were displayed on Explorer API.
+        """
+
+        supported_models: Final[list[Any]] = [
+            ApplicantLogTransaction,
+            ApplicantProcessTransaction,
+            ApplicantUserTransactionInternal,
+            OrganizationTransaction,
+            AdditionalContextTransaction,
+        ]
+
+        # - Check if data is a pydantic model instance.
+        # @o If data is an `instance` from one of the elements of `supported_structures` AND `action` provided is under the scope of `TransactionActions`. AND `from_address` as well as `to_address` contains something like a string. Proceed.
+        if (
+            any(isinstance(data, each_model) for each_model in supported_models)
+            and action in TransactionActions
+            and isinstance(from_address, str)
+            and isinstance(to_address, str)
+        ):
+
+            # - [1] Ensure that the from_address is existing.
+            # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
+            # ! I will be dividing those two statements.
+            get_existing_from_address_stmt = select([users.c.unique_address]).where(
+                users.c.unique_address == from_address
+            )
+
+            get_existing_to_address_stmt = select([users.c.unique_address]).where(
+                users.c.unique_address == to_address
+            )
+
+            existing_from_address = await self.db_instance.fetch_one(
+                get_existing_from_address_stmt
+            )
+
+            existing_to_address = await self.db_instance.fetch_one(
+                get_existing_to_address_stmt
+            )
+
+            # @o If all fetched addresses has context (as `str`), proceed.
+            # ! These addresses will either contain a `str` or a `None` (`NoneType`).
+            # ! If one of them contains `None` or `NoneType` this statement will result to false.
+            if all(
+                fetched_address is not None
+                for fetched_address in [existing_to_address, existing_from_address]
+            ):
+
+                # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
+
+                # - For the applicant application attempt actions.
+                if action in [
+                    TransactionActions.APPLICANT_APPLY,
+                    TransactionActions.APPLICANT_APPLY_CONFIRMED,
+                    TransactionActions.APPLICANT_APPLY_REJECTED,
+                ] and isinstance(data, ApplicantProcessTransaction):
+                    pass
+
+                # - For transactions that require generation of `user` under Organization or as an Applicant.
+                elif action in [
+                    TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
+                    TransactionActions.ORGANIZATION_USER_REGISTER,
+                ] and (
+                    isinstance(data, ApplicantUserTransactionInternal)
+                    or isinstance(data, UserTransaction)
+                ):
+                    pass
+
+                # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
+                # @o This needs special handling due to the fact that it may contain an actual file.
+                elif (
+                    action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
+                    and isinstance(data, ApplicantLogTransaction)
+                ):
+                    # Is there a file?
+                    pass
+
+                # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
+                elif action in [
+                    TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
+                    TransactionActions.INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO,
+                ] and isinstance(data, AdditionalContextTransaction):
+                    pass
+
+                else:
+                    logger.error(
+                        "There was an error during conditional check. Are you sure this combination is right? Please check the declaration and try again."
+                    )
+                    return False
+
+                # - [3] For each pydantic model, validate if such entries is possible. Note that we have restrictions for ApplicationTransaction and OrganizationTransaction being inserted once.
+
+                # @o This ensures that the resolved `else` clause will be an `OrganizationTransaction`.
+                if any(
+                    isinstance(data, restricted_models)
+                    for restricted_models in [
+                        ApplicantTransaction,
+                        OrganizationTransaction,
+                    ]
+                ):
+                    if isinstance(data, ApplicantTransaction):
+                        pass
+                    else:
+                        pass
+
+                # - [File]
+                try:
+                    # Transaction(action=)
+
+                    return True
+
+                except PydanticValidationError as e:
+                    logger.error(
+                        f"There was an error during payload transformation. Info: {e}"
+                    )
+                    return False
+
+            logger.error(
+                f"{'Sender' if existing_from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be inserted disregarded."
+            )  # TODO: Send to email when this happened, only when `from_address` exists.
+
+        logger.error(
+            f"There was a missing or invalid parameter of the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `TransactionActions`, `from_address` should contain a valid string and `data` may not be a pydantic model! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
+        )
+        return False
+
+        # - Attempt to recognize the action by referring to the instance of the data.
 
     @__ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
@@ -277,6 +433,77 @@ class BlockchainMechanism(ConsensusMechanism):
     @property
     def is_node_ready(self) -> bool:
         return self.node_ready and self.is_blockchain_ready
+
+    @__restrict_call(on=NodeType.MASTER_NODE)
+    async def _insert_internal_transaction(
+        self, action: TransactionActions, data: NodeTransaction
+    ) -> None:
+
+        if not isinstance(data, NodeTransaction) or action not in TransactionActions:
+            logger.error(
+                f"Passed parameters is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
+            )
+            return None
+
+        # @o Since we can see some patterns for the Node-based Transactions, instead of explicitly declaring them, we are going to use its name with a prefix finder.
+        if not action.name.startswith("NODE_GENERAL_"):
+            logger.error(
+                "The parameter `action` is invalid. Please invoke `TransactionActions` with enum members prefixes starts with `NODE_GENERAL_`."
+            )
+            return None
+
+        # - Prepare the context encrypter.
+        key_payload: bytes = Fernet.generate_key()
+
+        encrypter_payload: Fernet = Fernet(key_payload)
+        logger.debug(
+            f"Keys has been generated for the action {action}. | Info: {key_payload.decode('utf-8')}"
+        )
+
+        # - Deepcopy the `data` (NodeTransaction) and encrypt its context.
+        data_encrypted: NodeTransaction = deepcopy(data)
+        data_encrypted.context = (
+            encrypter_payload.encrypt(export_to_json(data.context))
+        ).decode("utf-8")
+
+        # - Build the transaction
+        built_transaction: Transaction = Transaction(
+            tx_hash=None,
+            action=action,
+            status=TransactionStatus.SUCCESS,
+            payload=NodeTransaction(**data_encrypted.dict()),
+            signatures=TransactionSignatures(
+                raw=HashUUID(sha256(export_to_json(data.dict())).hexdigest()),
+                encrypted=HashUUID(
+                    sha256(export_to_json(data_encrypted.dict())).hexdigest()
+                ),
+            ),
+            from_address=AddressUUID(self.identity[0]),
+            to_address=None,
+            timestamp=datetime.now(),
+        )
+
+        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash.
+        premature_transaction_copy: dict = built_transaction.dict()
+
+        # @o We don't want to influence `tx_hash` from this even though its a `NoneType`.
+        del premature_transaction_copy["tx_hash"]
+
+        # - Calculate
+        premature_calc_sha256: str = sha256(
+            export_to_json(premature_transaction_copy)
+        ).hexdigest()
+
+        # @o After calculation, invoke this new hash from the `tx_hash` of the built_transaction.
+        built_transaction.tx_hash = HashUUID(premature_calc_sha256)
+
+        # @o Append this and we are good to go!
+        self.transaction_container.append(built_transaction)
+        logger.info(
+            f"Transaction {built_transaction.tx_hash} has been created and is on-queue for block generation!"
+        )
+
+        return None
 
     @__ensure_blockchain_ready()
     async def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
@@ -536,10 +763,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         await self._append_block(context=mined_genesis_block)
 
-    # TODO Do something here.
-    async def _create_transaction(self, data: RequestPayloadContext) -> Transaction:
-        return Transaction()
-
     async def _get_available_archival_miner_nodes(
         self,
     ) -> NodeConsensusInformation | None:
@@ -731,7 +954,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 else:
                     raw_data = await content_buffer.read()
                     partial_deserialized_data = import_raw_json_to_dict(raw_data)
-                    deserialized_data = self._process_deserialized_and_load_blockchain(
+                    deserialized_data = self._process_deserialize_to_load_blockchain(
                         partial_deserialized_data
                     )
                     logger.info(
@@ -745,12 +968,12 @@ class BlockchainMechanism(ConsensusMechanism):
         )
         return None
 
-    def _process_deserialized_and_load_blockchain(
+    def _process_deserialize_to_load_blockchain(
         self,
         context: dict[str, Any],
     ) -> frozendict:
         """
-        A method that deserializes the blockchain into an immutable dictionary (frozendict) from the outsourced-data of the blockchain file.
+        A method that deserializes the universally readable (JSON) format from the blockchain file into an immutable dictionary (frozendict) containing a series of pydantic objects.
 
         Args:
             context (dict[str, Any]): The consumable data (type-compatible) that is loaded by the orjson.
@@ -822,7 +1045,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     def _process_serialize_to_file_blockchain(self, o: frozendict) -> dict[str, Any]:
         """
-        A method that serializes the python objects to the blockchain file. This represents the JSON form of the blockchain.
+        A method that serializes the python objects to a much more universally-readable JSON format to the blockchain file.
 
         Args:
             o (frozendict): The whole chain, wrapped in frozendict.
@@ -917,7 +1140,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     # TODO: Documentation.
                     # - When we got a result, pop from the asyncio._Tasks to expose the `ClientResponse`.
                     # - With that, parse the `ClientResponse` to be converted to a pythonic dictionary data type.
-                    self._chain = self._process_deserialized_and_load_blockchain(
+                    self._chain = self._process_deserialize_to_load_blockchain(
                         import_raw_json_to_dict(dict_blockchain_content["content"])
                     )
 

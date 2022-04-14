@@ -97,6 +97,8 @@ QUERY_TRANSACTION_RETURN_DESCRIPTION: Final[
 ] = "The number of transactions to return."
 
 # # Constants / Constraints, Auth
+AUTH_KEY: Final[str] = "AUTH_KEY"
+SECRET_KEY: Final[str] = "SECRET_KEY"
 BLOCK_HASH_LENGTH: Final[int] = 64
 FERNET_KEY_LENGTH: Final[int] = 44
 SECRET_KEY_LENGTH: Final[int] = 32
@@ -272,6 +274,12 @@ class TokenStatus(Enum):
 
 
 class TransactionContextMappingType(IntEnum):
+    """This `IntEnum` is an equivalence to <class 'TransactionActions'> from the context of database data insertion. It will be used to identity the data to render from the frontend.
+
+    Args:
+        IntEnum: Uses integer `auto()` to classify choices per declaration.
+    """
+
     APPLICANT_INFO = auto()
     APPLICANT_LOG = auto()
     APPLICANT_ADDITIONAL = auto()
@@ -364,13 +372,15 @@ class TransactionStatus(IntEnum):
 class TransactionActions(Enum):
     # - Node-based Transactions: General
     NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"
-    NODE_REGISTER_INIT = "Node: Register"
-    NODE_GENESIS_INITIALIZATION = "Node: Genesis Block Init"
+    NODE_GENERAL_REGISTER_INIT = "Node: Register"
+    NODE_GENERAL_GENESIS_INITIALIZATION = "Node: Genesis Block Init"
 
     # - Node-based Transaction: Negotiation (Consensus)
-    NODE_GENERAL_CONSENSUS_MODE = "Consensus: Blockchain Sync"
-    NEGOTIATION_MINE = "Consensus: Mine Negotiation"
-    NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Miner Proof"
+    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = "Consensus: Blockchain Sync"
+    NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = "Consensus: Mine Negotiation"
+    NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = (
+        "Consensus: Receive Miner Proof"
+    )
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
 
@@ -393,17 +403,12 @@ class TransactionActions(Enum):
 
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = "Generate Applicants"
-    INSTITUTION_ORG_REFER_DOCUMENT = (
-        "Invoke Document Reference"  # * This is a seperate action. THIS REQUIRES FILE.
-    )
-    INSTITUATION_ORG_APPLICANT_REFER_INFO = "Applicant: New Info"
-    INSTITUTION_ORG_DISREGARD_APPLICANT = "Revoke Applicant Access"
+    INSTITUTION_ORG_REFER_NEW_DOCUMENT = "Applicant: Document Reference"  # * This is a seperate action. THIS REQUIRES FILE.
+    INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO = "Applicant: New Info"
 
     # - For Organization, in general.
     ORGANIZATION_USER_REGISTER = "Org: Authority Register"
-    ORGANIZATION_INIT = "Org: Associate Init"
-
-    UNSPECIFIED = "Undetermined"
+    ORGANIZATION_REFER_EXTRA_INFO = "Org: Extra Info"
 
 
 # # Program Metadata

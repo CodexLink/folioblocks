@@ -37,7 +37,7 @@ from core.constants import (
 from pydantic import BaseModel, EmailStr, Field, FileUrl
 
 from core.constants import NodeTransactionInternalActions
-from node.core.constants import (
+from core.constants import (
     ApplicantLogContentType,
     EmploymentApplicationState,
     OrganizationType,
@@ -51,15 +51,6 @@ class DashboardContext(BaseModel):
     role: UserRole
     notifications: NotificationContext
     role_context: RoleContext
-
-
-class Students(BaseModel):
-    first_name: str
-    last_name: str
-    address_equiv: AddressUUID
-    program: str
-    semester: str
-    date_created: datetime
 
 
 class Student(BaseModel):  # This may or may not be possible.
@@ -114,9 +105,12 @@ class ApplicantLogTransaction(BaseModel):
     validated_by: AddressUUID
 
 
-class ApplicantTransaction(BaseModel):
+class UserTransaction(BaseModel):
     identity: AddressUUID
     institution_ref: int
+
+
+class ApplicantUserTransactionExternal(UserTransaction):
     course: str
     year: int
     prefer_role: str
@@ -124,7 +118,14 @@ class ApplicantTransaction(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
+class ApplicantUserTransactionInternal(ApplicantUserTransactionExternal):
+    first_name: str
+    last_name: str
+    email: EmailStr
+
+
 class OrganizationTransaction(BaseModel):
+    institution_ref: str
     org_type: OrganizationType
     founded: int
     description: str
@@ -137,7 +138,7 @@ class NodeTransaction(BaseModel):
 
     # ! I cannot do pydantic models here anymore, please refer to the schemas.jsonc for more information about these comments.
     # * Note that some actions prohibits `None` at serialization.
-    context: str | dict | None
+    context: dict | str
 
 
 class ApplicantProcessTransaction(BaseModel):
@@ -148,14 +149,14 @@ class ApplicantProcessTransaction(BaseModel):
 
 class TransactionSignatures(BaseModel):
     raw: HashUUID
-    payload: HashUUID
+    encrypted: HashUUID
 
 
 class Transaction(BaseModel):
-    tx_hash: AddressUUID | None
+    tx_hash: HashUUID | None
     action: TransactionActions
     status: TransactionStatus
-    payload: ApplicantProcessTransaction | ApplicantTransaction | ApplicantLogTransaction | NodeTransaction | OrganizationTransaction
+    payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInternal | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction
     signatures: TransactionSignatures
     from_address: AddressUUID
     to_address: AddressUUID | None
