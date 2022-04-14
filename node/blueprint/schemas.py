@@ -43,6 +43,7 @@ from core.constants import (
     OrganizationType,
 )
 from core.constants import RandomUUID
+from core.constants import AssociationGroupType
 
 # # Dashboard API — START
 
@@ -88,11 +89,29 @@ class GenerateAuthInput(BaseModel):
 """
 
 # @o This is used for both fields under `extra` of Applicant and Organization.
+
+# # Generalized Transactions — END
+
+
 class AdditionalContextTransaction(BaseModel):
     title: str
     description: str
     inserted_by: AddressUUID
     timestamp: datetime
+
+
+# # Generalized Transactions — END
+
+# # Organization-based Transactions — START
+class AgnosticTransactionUserCredentials(BaseModel):
+    association_address: AddressUUID | None
+    association_name: str | None
+    association_group_type: AssociationGroupType | None
+    first_name: str
+    last_name: str
+    email: EmailStr
+    username: str
+    password: str
 
 
 class ApplicantLogTransaction(BaseModel):
@@ -106,12 +125,9 @@ class ApplicantLogTransaction(BaseModel):
     validated_by: AddressUUID
 
 
-class UserTransaction(BaseModel):
+class ApplicantUserTransactionExternal(BaseModel):
     identity: AddressUUID
-    institution_ref: int
-
-
-class ApplicantUserTransactionExternal(UserTransaction):
+    institution_ref: AddressUUID
     course: str
     year: int
     prefer_role: str
@@ -119,19 +135,28 @@ class ApplicantUserTransactionExternal(UserTransaction):
     extra: AdditionalContextTransaction | None
 
 
-class ApplicantUserTransactionInternal(ApplicantUserTransactionExternal):
-    first_name: str
-    last_name: str
-    email: EmailStr
+class ApplicantUserTransactionInternal(
+    AgnosticTransactionUserCredentials, ApplicantUserTransactionExternal
+):
+    pass
 
 
-class OrganizationTransaction(BaseModel):
+class OrganizationTransactionExternal(BaseModel):
     institution_ref: str
     org_type: OrganizationType
     founded: int
     description: str
     associations: list[AddressUUID] | None
     extra: AdditionalContextTransaction | None
+
+
+class OrganizationTransactionInternal(
+    AgnosticTransactionUserCredentials, OrganizationTransactionExternal
+):
+    pass
+
+
+# # Organization-based Transactions — END
 
 
 class NodeRegisterTransaction(BaseModel):

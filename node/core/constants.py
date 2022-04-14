@@ -92,7 +92,7 @@ FERNET_KEY_LENGTH: Final[int] = 44
 SECRET_KEY_LENGTH: Final[int] = 32
 MAX_JWT_HOLD_TOKEN: Final[int] = 5
 
-UUID_KEY_PREFIX: Final[str] = "fl"
+ADDRESS_UUID_KEY_PREFIX: Final[str] = "fl"
 UUID_KEY_LENGTH: Final[int] = 35
 AUTH_ENV_FILE_NAME: Final[str] = "node-env.vars"
 

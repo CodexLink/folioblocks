@@ -3,13 +3,14 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
 from logging import Logger, getLogger
-from os import environ as env
+from sqlite3 import IntegrityError
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
 from typing import Any, Callable, Final
+from uuid import uuid4
 
 from aiofiles import open as aopen
-from blueprint.models import associated_nodes, file_signatures, users
+from blueprint.models import associations, associated_nodes, file_signatures, users
 from blueprint.schemas import (
     ApplicantLogTransaction,
     ApplicantProcessTransaction,
@@ -20,7 +21,6 @@ from blueprint.schemas import (
     NodeConsensusInformation,
     NodeMasterInformation,
     NodeTransaction,
-    OrganizationTransaction,
     Transaction,
 )
 from cryptography.fernet import Fernet
@@ -30,14 +30,19 @@ from blueprint.schemas import (
     AdditionalContextTransaction,
     ApplicantUserTransactionInternal,
     TransactionSignatures,
-    UserTransaction,
 )
-from core.constants import AUTH_KEY, SECRET_KEY, NodeTransactionInternalActions
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import select
+from blueprint.schemas import OrganizationTransactionInternal
+from core.constants import ADDRESS_UUID_KEY_PREFIX, RawData
+from node.blueprint.schemas import (
+    ApplicantUserTransactionExternal,
+    OrganizationTransactionExternal,
+)
+from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import unconventional_terminate
 
@@ -299,6 +304,7 @@ class BlockchainMechanism(ConsensusMechanism):
             ):
 
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
+                # # [4]
 
                 # - For the applicant application attempt actions.
                 if action in [
@@ -309,17 +315,134 @@ class BlockchainMechanism(ConsensusMechanism):
                     pass
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
+                # # [1]
                 elif action in [
                     TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
                     TransactionActions.ORGANIZATION_USER_REGISTER,
                 ] and (
                     isinstance(data, ApplicantUserTransactionInternal)
-                    # or isinstance(data, UserTransaction)
+                    or isinstance(data, OrganizationTransactionInternal)
                 ):
-                    pass
+                    # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
+                    # @d With that, we need to seperate this transaction with Internal and External.
+                    # @o XXXInternal -> Contains fields that is classified as credentials.
+                    # @o XXXExternal -> Contains fields that does not contain anything sensitive as it only describes something out of context.
+
+                    # @o Since XXXInternal subclasses XXXExternal, we only need `Internal` and break down until we get to the `XXXExternal`.
+
+                    # - Validate conditions before user generation.
+                    if (
+                        isinstance(data, ApplicantUserTransactionInternal)
+                        and data.association_address is None
+                        and data.association_name is None
+                        and data.association_group_type is None
+                    ):
+                        logger.error(
+                            "Association context is empty. Please add references as it is required to identify where do you belong. This is a developer-issue, please contact as possible."
+                        )
+                        return False
+
+                    elif isinstance(data, OrganizationTransactionInternal):
+
+                        # - Validate if there's an association under the following condition.
+                        if (
+                            data.association_address is not None
+                            and data.association_group_type is not None
+                            and data.association_name is None
+                        ):
+                            validate_existence_association_stmt = select(
+                                [associations.c.address]
+                            ).where(associations.c.address == data.association_address)
+
+                            validated_association = await self.db_instance.fetch_one(
+                                validate_existence_association_stmt
+                            )
+
+                            if validated_association is None:
+                                logger.error(
+                                    "The supplied parameter for the `association` address reference does not exist! This is a developer-issue, please contact as possible."
+                                )
+                                return False
+
+                        # - Create an organization when name is only provided assuming its a new instance.
+                        elif (
+                            data.association_address is None
+                            and data.association_group_type is not None
+                            and data.association_name is not None
+                        ):
+                            generated_address: Final[AddressUUID] = AddressUUID(
+                                f"{ADDRESS_UUID_KEY_PREFIX}:{uuid4().hex}"
+                            )
+
+                            new_association_stmt = associations.insert().values(
+                                address=generated_address,
+                                name=data.association_name,
+                                group=data.association_group_type,
+                            )
+
+                            await self.db_instance.execute(new_association_stmt)
+
+                            # @o Since our approach is cascading, we need to assign this `generated_address` instead so that we don't need to do some resolution steps to get the newly inserted association address from the database again.
+                            data.association_address = generated_address
+
+                        else:
+                            logger.error(
+                                "Condition regarding `association` and `association_name` were unmet. Please refer to the developer for more information on how to use the API."
+                            )
+
+                    else:
+                        logger.error(
+                            f"Instances has condition unmet. Either the `association` contains nothing or the instance along with the `association` condition does not met. Please try again."
+                        )
+
+                    # @o When all of the checks are done, then create the user.
+                    try:
+                        insert_user_stmt = users.insert().values(
+                            association=data.association_address,
+                            first_name=data.first_name,
+                            last_name=data.last_name,
+                            email=data.email,
+                            username=data.username,
+                            password=hash_context(pwd=RawData(data.password)),
+                        )
+
+                        await self.db_instance.execute(insert_user_stmt)
+
+                    except IntegrityError as e:
+                        logger.error(
+                            f"There was an error during account generation. This may likely be a cause of duplication or uniqueness issue. Please check your credentials and try again. | Info: {e}"
+                        )
+                        return False
+
+                    # @o After that, its time to resolve those context for the `External` (for the blockchain to record).
+                    # ! Excluding fields via Model is not possible.
+                    # ! https://github.com/samuelcolvin/pydantic/issues/1862.
+                    # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
+                    removed_credentials_context: dict = data.dict(
+                        exclude={
+                            "association_address": True,
+                            "association_name": True,
+                            "association_group_type": True,
+                            "first_name": True,
+                            "last_name": True,
+                            "email": True,
+                            "username": True,
+                            "password": True,
+                        }
+                    )
+
+                    # TODO: Declare this variable on the top.
+                    resolved_context: ApplicantUserTransactionExternal | OrganizationTransactionExternal = (
+                        ApplicantUserTransactionExternal(**removed_credentials_context)
+                        if isinstance(data, ApplicantUserTransactionInternal)
+                        else OrganizationTransactionExternal(
+                            **removed_credentials_context
+                        )
+                    )
 
                 # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
                 # @o This needs special handling due to the fact that it may contain an actual file.
+                # # [3]
                 elif (
                     action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
                     and isinstance(data, ApplicantLogTransaction)
@@ -328,6 +451,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     pass
 
                 # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
+                # # [2]
                 elif action in [
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
                     TransactionActions.INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO,

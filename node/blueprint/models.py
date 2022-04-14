@@ -46,6 +46,7 @@ associations = Table(
     "associations",
     model_metadata,
     Column("id", Integer, primary_key=True),
+    Column("address", String(38), nullable=False, unique=True),
     Column("name", String(64), nullable=False),
     Column(
         "group",
@@ -77,7 +78,9 @@ users = Table(
     ),
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
-    Column("association", String(32), nullable=True, unique=False),
+    Column(
+        "association", ForeignKey("associations.address"), nullable=True, unique=False
+    ),
     Column("username", String(24), nullable=False, unique=True),
     Column("password", String(64), nullable=False),
     Column("email", String(128), nullable=False, unique=True),

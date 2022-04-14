@@ -29,7 +29,7 @@ from core.constants import (
     JWT_ALGORITHM,
     JWT_DAY_EXPIRATION,
     MAX_JWT_HOLD_TOKEN,
-    UUID_KEY_PREFIX,
+    ADDRESS_UUID_KEY_PREFIX,
     AddressUUID,
     BaseAPI,
     EntityAPI,
@@ -74,7 +74,9 @@ async def register_entity(
     # If there are no association then push that first.
     # db.execute(Association(name="Test"))
 
-    unique_address_ref: AddressUUID = AddressUUID(f"{UUID_KEY_PREFIX}:{uuid4().hex}")
+    unique_address_ref: AddressUUID = AddressUUID(
+        f"{ADDRESS_UUID_KEY_PREFIX}:{uuid4().hex}"
+    )
     dict_credentials: dict[str, Any] = credentials.dict()
 
     # - Our auth code should contain the information if that is applicable at certain role.
