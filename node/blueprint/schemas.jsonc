@@ -36,24 +36,31 @@
       },
 
       // # For the instance of genesis.
-      "info__": {},
+      "info__": {
+        "block_genesis_no": "",
+        "generator_address": "",
+        "time_delivery": ""
+      },
 
       // # For the instance of certificate,
       "info___": {
-        "to": "", // Who will receive the the certificate.
-        "referral": "" // Who made the certificate.
+        "reqestor_address": "", // Who will receive the the certificate.
+        "timestamp": "" // Who made the certificate.
       },
 
       // # For the instance of consensus.
       // - Sync
       "info____": {
-        "addr": ""
+        "addr": "",
+        "timestamp": ""
       },
 
       // - Negotiation, Mine Negotiation
       "info_____": {
         "candidate_no": "nth miner to be called",
-        "block_hash": ""
+        "negotiation_id": "",
+        "miner_address": "",
+        "master_address": ""
       },
 
       // - Negotiation, Receive Miner Proof

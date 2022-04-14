@@ -26,13 +26,13 @@ from blueprint.schemas import (
 from cryptography.fernet import Fernet
 from databases import Database
 from frozendict import frozendict
-from node.blueprint.schemas import (
+from blueprint.schemas import (
     AdditionalContextTransaction,
     ApplicantUserTransactionInternal,
     TransactionSignatures,
     UserTransaction,
 )
-from node.core.constants import AUTH_KEY, SECRET_KEY, NodeTransactionInternalActions
+from core.constants import AUTH_KEY, SECRET_KEY, NodeTransactionInternalActions
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
 from pydantic import ValidationError as PydanticValidationError
@@ -273,19 +273,20 @@ class BlockchainMechanism(ConsensusMechanism):
             # - [1] Ensure that the from_address is existing.
             # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
             # ! I will be dividing those two statements.
-            get_existing_from_address_stmt = select([users.c.unique_address]).where(
-                users.c.unique_address == from_address
-            )
-
-            get_existing_to_address_stmt = select([users.c.unique_address]).where(
+            get_existing_from_address_stmt, get_existing_to_address_stmt = select(
+                [users.c.unique_address]
+            ).where(users.c.unique_address == from_address), select(
+                [users.c.unique_address]
+            ).where(
                 users.c.unique_address == to_address
             )
 
-            existing_from_address = await self.db_instance.fetch_one(
+            (
+                existing_from_address,
+                existing_to_address,
+            ) = await self.db_instance.fetch_one(
                 get_existing_from_address_stmt
-            )
-
-            existing_to_address = await self.db_instance.fetch_one(
+            ), await self.db_instance.fetch_one(
                 get_existing_to_address_stmt
             )
 
@@ -313,7 +314,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.ORGANIZATION_USER_REGISTER,
                 ] and (
                     isinstance(data, ApplicantUserTransactionInternal)
-                    or isinstance(data, UserTransaction)
+                    # or isinstance(data, UserTransaction)
                 ):
                     pass
 
@@ -345,11 +346,11 @@ class BlockchainMechanism(ConsensusMechanism):
                 if any(
                     isinstance(data, restricted_models)
                     for restricted_models in [
-                        ApplicantTransaction,
+                        ApplicantUserTransactionInternal,
                         OrganizationTransaction,
                     ]
                 ):
-                    if isinstance(data, ApplicantTransaction):
+                    if isinstance(data, ApplicantUserTransactionInternal):
                         pass
                     else:
                         pass
@@ -433,77 +434,6 @@ class BlockchainMechanism(ConsensusMechanism):
     @property
     def is_node_ready(self) -> bool:
         return self.node_ready and self.is_blockchain_ready
-
-    @__restrict_call(on=NodeType.MASTER_NODE)
-    async def _insert_internal_transaction(
-        self, action: TransactionActions, data: NodeTransaction
-    ) -> None:
-
-        if not isinstance(data, NodeTransaction) or action not in TransactionActions:
-            logger.error(
-                f"Passed parameters is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
-            )
-            return None
-
-        # @o Since we can see some patterns for the Node-based Transactions, instead of explicitly declaring them, we are going to use its name with a prefix finder.
-        if not action.name.startswith("NODE_GENERAL_"):
-            logger.error(
-                "The parameter `action` is invalid. Please invoke `TransactionActions` with enum members prefixes starts with `NODE_GENERAL_`."
-            )
-            return None
-
-        # - Prepare the context encrypter.
-        key_payload: bytes = Fernet.generate_key()
-
-        encrypter_payload: Fernet = Fernet(key_payload)
-        logger.debug(
-            f"Keys has been generated for the action {action}. | Info: {key_payload.decode('utf-8')}"
-        )
-
-        # - Deepcopy the `data` (NodeTransaction) and encrypt its context.
-        data_encrypted: NodeTransaction = deepcopy(data)
-        data_encrypted.context = (
-            encrypter_payload.encrypt(export_to_json(data.context))
-        ).decode("utf-8")
-
-        # - Build the transaction
-        built_transaction: Transaction = Transaction(
-            tx_hash=None,
-            action=action,
-            status=TransactionStatus.SUCCESS,
-            payload=NodeTransaction(**data_encrypted.dict()),
-            signatures=TransactionSignatures(
-                raw=HashUUID(sha256(export_to_json(data.dict())).hexdigest()),
-                encrypted=HashUUID(
-                    sha256(export_to_json(data_encrypted.dict())).hexdigest()
-                ),
-            ),
-            from_address=AddressUUID(self.identity[0]),
-            to_address=None,
-            timestamp=datetime.now(),
-        )
-
-        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash.
-        premature_transaction_copy: dict = built_transaction.dict()
-
-        # @o We don't want to influence `tx_hash` from this even though its a `NoneType`.
-        del premature_transaction_copy["tx_hash"]
-
-        # - Calculate
-        premature_calc_sha256: str = sha256(
-            export_to_json(premature_transaction_copy)
-        ).hexdigest()
-
-        # @o After calculation, invoke this new hash from the `tx_hash` of the built_transaction.
-        built_transaction.tx_hash = HashUUID(premature_calc_sha256)
-
-        # @o Append this and we are good to go!
-        self.transaction_container.append(built_transaction)
-        logger.info(
-            f"Transaction {built_transaction.tx_hash} has been created and is on-queue for block generation!"
-        )
-
-        return None
 
     @__ensure_blockchain_ready()
     async def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
@@ -871,6 +801,77 @@ class BlockchainMechanism(ConsensusMechanism):
         # ! If we wanted to fetch everything then don't add size and put recently to False.
 
         return
+
+    @__restrict_call(on=NodeType.MASTER_NODE)
+    async def _insert_internal_transaction(
+        self, action: TransactionActions, data: NodeTransaction
+    ) -> None:
+
+        if not isinstance(data, NodeTransaction) or action not in TransactionActions:
+            logger.error(
+                f"Passed parameters is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
+            )
+            return None
+
+        # @o Since we can see some patterns for the Node-based Transactions, instead of explicitly declaring them, we are going to use its name with a prefix finder.
+        if not action.name.startswith("NODE_GENERAL_"):
+            logger.error(
+                "The parameter `action` is invalid. Please invoke `TransactionActions` with enum members prefixes starts with `NODE_GENERAL_`."
+            )
+            return None
+
+        # - Prepare the context encrypter.
+        key_payload: bytes = Fernet.generate_key()
+
+        encrypter_payload: Fernet = Fernet(key_payload)
+        logger.debug(
+            f"Keys has been generated for the action {action}. | Info: {key_payload.decode('utf-8')}"
+        )
+
+        # - Deepcopy the `data` (NodeTransaction) and encrypt its context.
+        data_encrypted: NodeTransaction = deepcopy(data)
+        data_encrypted.context = HashUUID(
+            (encrypter_payload.encrypt(export_to_json(data.context))).decode("utf-8")
+        )
+
+        # - Build the transaction
+        built_transaction: Transaction = Transaction(
+            tx_hash=None,
+            action=action,
+            status=TransactionStatus.SUCCESS,
+            payload=NodeTransaction(**data_encrypted.dict()),
+            signatures=TransactionSignatures(
+                raw=HashUUID(sha256(export_to_json(data.dict())).hexdigest()),
+                encrypted=HashUUID(
+                    sha256(export_to_json(data_encrypted.dict())).hexdigest()
+                ),
+            ),
+            from_address=AddressUUID(self.identity[0]),
+            to_address=None,
+            timestamp=datetime.now(),
+        )
+
+        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash.
+        premature_transaction_copy: dict = built_transaction.dict()
+
+        # @o We don't want to influence `tx_hash` from this even though its a `NoneType`.
+        del premature_transaction_copy["tx_hash"]
+
+        # - Calculate
+        premature_calc_sha256: str = sha256(
+            export_to_json(premature_transaction_copy)
+        ).hexdigest()
+
+        # @o After calculation, invoke this new hash from the `tx_hash` of the built_transaction.
+        built_transaction.tx_hash = HashUUID(premature_calc_sha256)
+
+        # @o Append this and we are good to go!
+        self.transaction_container.append(built_transaction)
+        logger.info(
+            f"Transaction {built_transaction.tx_hash} has been created and is on-queue for block generation!"
+        )
+
+        return None
 
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
     def _mine_block(self, block: Block) -> Block:

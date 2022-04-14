@@ -42,6 +42,7 @@ from core.constants import (
     EmploymentApplicationState,
     OrganizationType,
 )
+from core.constants import RandomUUID
 
 # # Dashboard API — START
 
@@ -133,12 +134,45 @@ class OrganizationTransaction(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
+class NodeRegisterTransaction(BaseModel):
+    new_address: AddressUUID
+    acceptor_address: AddressUUID
+    role: NodeType
+    timestamp: datetime
+
+
+class NodeGenesisTransaction(BaseModel):
+    block_genesis_no: int
+    generator_address: AddressUUID
+    time_delivery: datetime
+
+
+class NodeCertificateTransaction(BaseModel):
+    requestor_address: AddressUUID
+    timestamp: datetime
+
+
+class NodeSyncTransaction(BaseModel):
+    requestor_address: AddressUUID
+    timestamp: datetime
+
+
+class NodeNegotiationTransaction(BaseModel):
+    candidate_no: int
+    negotiation_id: RandomUUID
+    miner_address: AddressUUID
+    master_address: AddressUUID
+
+
+class NodeMinerProofTransaction(BaseModel):
+    negotiation_id: RandomUUID
+    block_hash: HashUUID
+    time_delivery: datetime
+
+
 class NodeTransaction(BaseModel):
     action: NodeTransactionInternalActions
-
-    # ! I cannot do pydantic models here anymore, please refer to the schemas.jsonc for more information about these comments.
-    # * Note that some actions prohibits `None` at serialization.
-    context: dict | str
+    context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeNegotiationTransaction | NodeMinerProofTransaction | HashUUID
 
 
 class ApplicantProcessTransaction(BaseModel):
