@@ -375,7 +375,6 @@ class TransactionActions(Enum):
     # - For Students as Applicants.
     # * Note that their data cannot be modified since it was the administrator of the institution who does that.
 
-    # @o For the blockchain, just display this, literally.
     APPLICANT_APPLY = "Applicant: Apply Process"
     APPLICANT_APPLY_CONFIRMED = (
         "Applicant: Apply Confirmed"  # * Association should be assigned here.

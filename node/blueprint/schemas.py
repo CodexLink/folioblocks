@@ -126,6 +126,14 @@ class ApplicantLogTransaction(BaseModel):
     timestamp: datetime
 
 
+class ApplicantProcessTransaction(BaseModel):
+    process_id: RandomUUID
+    state: EmploymentApplicationState
+    requestor: AddressUUID
+    receiver: AddressUUID
+    timestamp: datetime
+
+
 class ApplicantUserTransaction(BaseModel):
     identity: AddressUUID
     institution_ref: AddressUUID
@@ -199,12 +207,6 @@ class NodeMinerProofTransaction(BaseModel):
 class NodeTransaction(BaseModel):
     action: NodeTransactionInternalActions
     context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeNegotiationTransaction | NodeMinerProofTransaction | HashUUID
-
-
-class ApplicantProcessTransaction(BaseModel):
-    state: EmploymentApplicationState
-    requestor: AddressUUID
-    receiver: AddressUUID
 
 
 class TransactionSignatures(BaseModel):

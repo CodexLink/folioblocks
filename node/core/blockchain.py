@@ -1,8 +1,10 @@
 from asyncio import create_task, get_event_loop, sleep
 from copy import deepcopy
 from datetime import datetime, timedelta
+from email.mime import application
 from hashlib import sha256
 from logging import Logger, getLogger
+from secrets import token_urlsafe
 from sqlite3 import IntegrityError
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
@@ -11,7 +13,13 @@ from uuid import uuid4
 
 from aiofiles import open as aopen
 from fastapi import UploadFile
-from blueprint.models import associations, associated_nodes, file_signatures, users
+from blueprint.models import (
+    applications,
+    associations,
+    associated_nodes,
+    file_signatures,
+    users,
+)
 from blueprint.schemas import (
     ApplicantLogTransaction,
     ApplicantProcessTransaction,
@@ -29,7 +37,6 @@ from databases import Database
 from frozendict import frozendict
 from blueprint.schemas import (
     AdditionalContextTransaction,
-    ApplicantUserTransactionInternal,
     TransactionSignatures,
 )
 from orjson import dumps as export_to_json
@@ -43,6 +50,7 @@ from blueprint.schemas import (
     ApplicantUserTransaction,
     OrganizationTransaction,
 )
+from node.core.constants import EmploymentApplicationState, RandomUUID
 from utils.processors import validate_user_address
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
@@ -80,6 +88,7 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
+from sqlalchemy.sql.expression import Insert, Update
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -305,7 +314,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 for fetched_address in [existing_to_address, existing_from_address]
             ):
 
-                resolved_context: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantUserTransaction | OrganizationTransaction
+                # @o Declared for type-hint. Initialized on some conditions.
+                resolved_context: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction
 
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
                 # # [4]
@@ -316,7 +326,39 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.APPLICANT_APPLY_CONFIRMED,
                     TransactionActions.APPLICANT_APPLY_REJECTED,
                 ] and isinstance(data, ApplicantProcessTransaction):
-                    pass
+
+                    # * Since this was a new entry, we need to do some handling for the database entry.
+                    try:
+                        # * It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
+                        if action is TransactionActions.APPLICANT_APPLY:
+                            application_process_stmt: Insert | Update = (
+                                applications.insert().values(
+                                    process_id=RandomUUID(token_urlsafe(16)),
+                                    requestor=data.requestor,
+                                    to=data.receiver,
+                                    state=EmploymentApplicationState.REQUESTED,
+                                )
+                            )
+                        else:
+                            application_process_stmt = (
+                                applications.update()
+                                .where(applications.c.process_uuid == data.process_id)
+                                .values(
+                                    state=EmploymentApplicationState.ACCEPTED
+                                    if action
+                                    is TransactionActions.APPLICANT_APPLY_CONFIRMED
+                                    else EmploymentApplicationState.REJECTED
+                                )
+                            )
+
+                        await self.db_instance.execute(application_process_stmt)
+
+                    except IntegrityError as e:
+                        logger.error(
+                            f"There was an error regarding application process entry to database. | Info: {e}"
+                        )
+
+                    resolved_context = data
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
                 elif action in [
@@ -499,6 +541,9 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - Do the following for all condition.
                         data.entity_address_ref = None
                         resolved_context = data
+
+                    else:
+                        return False
 
                 # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
                 # # [2]
