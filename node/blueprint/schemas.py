@@ -94,6 +94,7 @@ class GenerateAuthInput(BaseModel):
 
 
 class AdditionalContextTransaction(BaseModel):
+    entity_address_ref: AddressUUID | None  # * This is resolved internally.
     title: str
     description: str
     inserted_by: AddressUUID
@@ -125,7 +126,7 @@ class ApplicantLogTransaction(BaseModel):
     validated_by: AddressUUID
 
 
-class ApplicantUserTransactionExternal(BaseModel):
+class ApplicantUserTransaction(BaseModel):
     identity: AddressUUID
     institution_ref: AddressUUID
     course: str
@@ -135,13 +136,13 @@ class ApplicantUserTransactionExternal(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
-class ApplicantUserTransactionInternal(
-    AgnosticTransactionUserCredentials, ApplicantUserTransactionExternal
+class ApplicantUserTransactionInitializer(
+    AgnosticTransactionUserCredentials, ApplicantUserTransaction
 ):
     pass
 
 
-class OrganizationTransactionExternal(BaseModel):
+class OrganizationTransaction(BaseModel):
     institution_ref: str
     org_type: OrganizationType
     founded: int
@@ -150,8 +151,8 @@ class OrganizationTransactionExternal(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
-class OrganizationTransactionInternal(
-    AgnosticTransactionUserCredentials, OrganizationTransactionExternal
+class OrganizationTransactionInitializer(
+    AgnosticTransactionUserCredentials, OrganizationTransaction
 ):
     pass
 
@@ -215,7 +216,7 @@ class Transaction(BaseModel):
     tx_hash: HashUUID | None
     action: TransactionActions
     status: TransactionStatus
-    payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInternal | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction
+    payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInitializer | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction
     signatures: TransactionSignatures
     from_address: AddressUUID
     to_address: AddressUUID | None

@@ -14,7 +14,7 @@ from blueprint.models import associations, associated_nodes, file_signatures, us
 from blueprint.schemas import (
     ApplicantLogTransaction,
     ApplicantProcessTransaction,
-    ApplicantUserTransactionInternal,
+    ApplicantUserTransactionInitializer,
     Block,
     BlockOverview,
     HashableBlock,
@@ -36,11 +36,11 @@ from orjson import loads as import_raw_json_to_dict
 from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import select
-from blueprint.schemas import OrganizationTransactionInternal
+from blueprint.schemas import OrganizationTransactionInitializer
 from core.constants import ADDRESS_UUID_KEY_PREFIX, RawData
 from node.blueprint.schemas import (
-    ApplicantUserTransactionExternal,
-    OrganizationTransactionExternal,
+    ApplicantUserTransaction,
+    OrganizationTransaction,
 )
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
@@ -238,7 +238,7 @@ class BlockchainMechanism(ConsensusMechanism):
         to_address: AddressUUID,
         data: ApplicantLogTransaction
         | ApplicantProcessTransaction
-        | ApplicantUserTransactionInternal
+        | ApplicantUserTransactionInitializer
         | OrganizationTransaction
         | AdditionalContextTransaction,
     ) -> bool:
@@ -261,7 +261,7 @@ class BlockchainMechanism(ConsensusMechanism):
         supported_models: Final[list[Any]] = [
             ApplicantLogTransaction,
             ApplicantProcessTransaction,
-            ApplicantUserTransactionInternal,
+            ApplicantUserTransactionInitializer,
             OrganizationTransaction,
             AdditionalContextTransaction,
         ]
@@ -303,6 +303,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 for fetched_address in [existing_to_address, existing_from_address]
             ):
 
+                resolved_context: AdditionalContextTransaction | ApplicantUserTransaction | OrganizationTransaction
+
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
                 # # [4]
 
@@ -315,13 +317,12 @@ class BlockchainMechanism(ConsensusMechanism):
                     pass
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
-                # # [1]
                 elif action in [
                     TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
                     TransactionActions.ORGANIZATION_USER_REGISTER,
                 ] and (
-                    isinstance(data, ApplicantUserTransactionInternal)
-                    or isinstance(data, OrganizationTransactionInternal)
+                    isinstance(data, ApplicantUserTransactionInitializer)
+                    or isinstance(data, OrganizationTransactionInitializer)
                 ):
                     # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
                     # @d With that, we need to seperate this transaction with Internal and External.
@@ -332,7 +333,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     # - Validate conditions before user generation.
                     if (
-                        isinstance(data, ApplicantUserTransactionInternal)
+                        isinstance(data, ApplicantUserTransactionInitializer)
                         and data.association_address is None
                         and data.association_name is None
                         and data.association_group_type is None
@@ -342,7 +343,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                         return False
 
-                    elif isinstance(data, OrganizationTransactionInternal):
+                    elif isinstance(data, OrganizationTransactionInitializer):
 
                         # - Validate if there's an association under the following condition.
                         if (
@@ -432,12 +433,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     # TODO: Declare this variable on the top.
-                    resolved_context: ApplicantUserTransactionExternal | OrganizationTransactionExternal = (
-                        ApplicantUserTransactionExternal(**removed_credentials_context)
-                        if isinstance(data, ApplicantUserTransactionInternal)
-                        else OrganizationTransactionExternal(
-                            **removed_credentials_context
-                        )
+                    resolved_context = (
+                        ApplicantUserTransaction(**removed_credentials_context)
+                        if isinstance(data, ApplicantUserTransactionInitializer)
+                        else OrganizationTransaction(**removed_credentials_context)
                     )
 
                 # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
@@ -456,28 +455,31 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
                     TransactionActions.INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO,
                 ] and isinstance(data, AdditionalContextTransaction):
-                    pass
+                    # * Just validate if the specified entity address does exists.
+
+                    if data.entity_address_ref is None:
+                        logger.error(
+                            "Entity address reference does not exist! Please add an address reference for this extra information to be attached."
+                        )
+                        return False
+
+                    address_existence_checker_stmt = select(
+                        [users.c.unique_address]
+                    ).where(users.c.unique_address == data.entity_address_ref)
+
+                    address = await self.db_instance.fetch_one(
+                        address_existence_checker_stmt
+                    )
+
+                    if address is not None:
+                        data.entity_address_ref = None
+                        resolved_context = data
 
                 else:
                     logger.error(
                         "There was an error during conditional check. Are you sure this combination is right? Please check the declaration and try again."
                     )
                     return False
-
-                # - [3] For each pydantic model, validate if such entries is possible. Note that we have restrictions for ApplicationTransaction and OrganizationTransaction being inserted once.
-
-                # @o This ensures that the resolved `else` clause will be an `OrganizationTransaction`.
-                if any(
-                    isinstance(data, restricted_models)
-                    for restricted_models in [
-                        ApplicantUserTransactionInternal,
-                        OrganizationTransaction,
-                    ]
-                ):
-                    if isinstance(data, ApplicantUserTransactionInternal):
-                        pass
-                    else:
-                        pass
 
                 # - [File]
                 try:
