@@ -18,7 +18,7 @@ from core.constants import (
     UserActivityState,
     UserEntity,
 )
-from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Boolean, Column, DateTime, false
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
 from sqlalchemy.orm import relationship
@@ -160,7 +160,7 @@ auth_codes = Table(
     ),  # @o 64 characters because token_hex-based restriction is not enforced, meaning its resultant length is unpredictable for some reason.
     Column("account_type", SQLEnum(UserEntity), nullable=False),
     Column("to_email", String(128), nullable=False, unique=True),
-    Column("is_used", Boolean, server_default="False"),
+    Column("is_used", Boolean, server_default=false()),
     Column("expiration", DateTime, server_default=func.now()),
 )
 

@@ -17,6 +17,7 @@ from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
 import jwt
+from sqlalchemy import false
 from blueprint.models import auth_codes, associated_nodes, tokens, users
 from blueprint.schemas import (
     EntityLoginCredentials,
@@ -86,7 +87,7 @@ async def register_entity(
         (auth_codes.c.code == credentials.auth_code)
         & (auth_codes.c.to_email == credentials.email)
         & (
-            auth_codes.c.is_used == "False"
+            auth_codes.c.is_used == false()
         )  # ! Not sure why, but I have to arbitrary convert this bool to str, I guess there's no resolve.
         & (auth_codes.c.expiration >= datetime.now())
     )

@@ -36,11 +36,11 @@ from databases import Database
 from fastapi import Depends, Header, HTTPException, Request
 from pydantic import EmailStr
 from pyotp import TOTP
-from sqlalchemy import select
+from sqlalchemy import and_, false, select, true
 from core.constants import IdentityTokens
 from core.constants import ArgsPlusDatabaseInstances, UserCredentials
 from utils.http import get_http_client_instance
-
+from sqlalchemy.sql.expression import Select
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_CODE_MAX_CONTEXT,
@@ -57,7 +57,7 @@ from core.constants import (
     UserEntity,
     random_generator,
 )
-from core.email import get_email_instance
+from sqlalchemy.sql.expression import Insert, Select, Update
 
 args_value: Namespace
 identity_tokens: IdentityTokens
@@ -160,29 +160,115 @@ async def authenticate_node_client(
                 )
 
                 if role == NodeType.MASTER_NODE:
-                    email_address: EmailStr = await ensure_input_prompt(
-                        input_context="Master Email Address",
-                        hide_input_from_field=False,
-                        generalized_context="master email address",
-                        additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
+
+                    # - Check for an existing email in the database.
+                    # @o This was intended, especially when the administrator accidentally hits `CTRL+C` or `CTRL+BREAK` after master node email registration.
+                    # @o This was useful to avoid re-entering email.
+
+                    logger.info(
+                        "Checking previous email if there's any, even on new-instance."
                     )
+                    check_previous_registered_email_stmt: Select = select(
+                        [auth_codes.c.to_email]
+                    ).where(
+                        (auth_codes.c.is_used == true())
+                        & (auth_codes.c.account_type == UserEntity.MASTER_NODE_USER)
+                    )
+
+                    previous_registered_email = await instances[1].fetch_one(
+                        check_previous_registered_email_stmt
+                    )
+
+                    if previous_registered_email is None:
+                        logger.info(
+                            "Checking for emails that haven't used their auth code .."
+                        )
+
+                        unused_code_email_stmt = select(
+                            [auth_codes.c.to_email, auth_codes.c.expiration]
+                        ).where(
+                            and_(
+                                auth_codes.c.is_used == false(),
+                                auth_codes.c.account_type
+                                == UserEntity.MASTER_NODE_USER,
+                            )
+                        )
+
+                        unused_code_email = await instances[1].fetch_one(
+                            unused_code_email_stmt
+                        )
+
+                        email_address: EmailStr = EmailStr()
+                        generated_token: str = ""
+
+                        if unused_code_email is None:
+                            logger.info(
+                                f"There are no existing previous email registered for {UserEntity.MASTER_NODE_USER}."
+                            )
+                            email_address = await ensure_input_prompt(
+                                input_context="Master Email Address",
+                                hide_input_from_field=False,
+                                generalized_context="master email address",
+                                additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
+                            )
+                            generated_token = generate_auth_token()
+
+                        else:
+                            if datetime.now() > unused_code_email.expiration:
+                                logger.warning(
+                                    f"An email address associated to {unused_code_email.to_email} haven't used its `auth_code` and is already expired. Sending new email for the new code. If you want to cancel this one, please reset the node files and start a new instance instead."
+                                )
+
+                                generated_token = generate_auth_token()
+                                new_code_from_previous_email_stmt: Update = (
+                                    auth_codes.update()
+                                    .where(
+                                        auth_code.c.to_email
+                                        == unused_code_email.to_email
+                                    )
+                                    .values(code=generated_token)
+                                )
+
+                                await instances[1].execute(
+                                    new_code_from_previous_email_stmt
+                                )
+                                email_address = unused_code_email.to_email
+
+                            else:
+                                logger.warning(
+                                    f"An email address associated to {unused_code_email.to_email} has its `auth_code` not yet expired. Please use it as possible!"
+                                )
+
+                        if unused_code_email is None or (
+                            unused_code_email is not None
+                            and datetime.now() > unused_code_email.expiration
+                        ):
+                            generated_token = generate_auth_token()
+
+                            insert_generated_token_stmt: Insert = (
+                                auth_codes.insert().values(
+                                    code=generated_token,
+                                    account_type=UserEntity.MASTER_NODE_USER,
+                                    to_email=email_address,
+                                    expiration=datetime.now() + timedelta(days=2),
+                                )
+                            )
+
+                            await instances[1].execute(insert_generated_token_stmt)
+
+                            from core.email import get_email_instance
+
+                            await get_email_instance().send(
+                                content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                subject="Register Auth Code for Master Node Registration @ Folioblocks",
+                                to=email_address,
+                            )
+                    else:
+                        logger.info(
+                            "Previous entry to registration of master email has been retrieved and is identified as registered. Skipping registration."
+                        )
 
                     # * This functionality is only available on `MASTER` in local / self instance.
-                    generated_token: str = generate_auth_token()
-                    insert_generated_token_stmt = auth_codes.insert().values(
-                        code=generated_token,
-                        account_type=UserEntity.MASTER_NODE_USER,
-                        to_email=email_address,
-                        expiration=datetime.now() + timedelta(days=2),
-                    )
-
-                    await instances[1].execute(insert_generated_token_stmt)
-
-                    await get_email_instance().send(
-                        content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                        subject="Register Auth Code for Master Node Registration @ Folioblocks",
-                        to=email_address,
-                    )
                 else:  # @o Resolves to NodeType.ARCHIVAL_MINER_NODE.
                     inputted_credentials: list[Any] = await ensure_input_prompt(
                         input_context=[
@@ -241,7 +327,7 @@ async def authenticate_node_client(
                 )
 
             logger.info(
-                f"A generated code has been sent. Please register from the '{instances[0].node_host}:{instances[0].node_port}/entity/register' endpoint and login with your credentials on the next prompt."
+                f"A generated code has been sent or has been skipped. Please register from the '{instances[0].node_host}:{instances[0].node_port}/entity/register' endpoint and login with your credentials on the next prompt."
             )
             break
 
