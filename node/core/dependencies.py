@@ -27,6 +27,7 @@ from aiohttp import (
     ClientConnectorError,
     ClientConnectorSSLError,
     ClientError,
+    ClientResponse,
     ClientSession,
 )
 from blueprint.models import auth_codes, tokens, users
@@ -266,67 +267,77 @@ async def authenticate_node_client(
                     instances[0].target_port,
                 )
 
-            login_request = await get_http_client_instance().enqueue_request(
-                url=URLAddress(f"http://{resolved_host}:{resolved_port}/entity/login"),
-                method=HTTPQueueMethods.POST,
-                await_result_immediate=True,
-                do_not_retry=True,
-                data={
-                    "username": env.get("NODE_USERNAME", None)
-                    if user_credentials is None
-                    else user_credentials[0],
-                    "password": env.get("NODE_PWD", None)
-                    if user_credentials is None
-                    else user_credentials[1],
-                },
+            login_request: ClientResponse | None = (
+                await get_http_client_instance().enqueue_request(
+                    url=URLAddress(
+                        f"http://{resolved_host}:{resolved_port}/entity/login"
+                    ),
+                    method=HTTPQueueMethods.POST,
+                    await_result_immediate=True,
+                    do_not_retry=True,
+                    data={
+                        "username": env.get("NODE_USERNAME", None)
+                        if user_credentials is None
+                        else user_credentials[0],
+                        "password": env.get("NODE_PWD", None)
+                        if user_credentials is None
+                        else user_credentials[1],
+                    },
+                )
             )
 
-            if login_request.ok:
-                resolved_model = EntityLoginResult.parse_obj(
-                    await login_request.json()
-                )  # * Resolve via pydantic.
-                resolve_entity_to_role = (
-                    NodeType.MASTER_NODE
-                    if resolved_model.user_role == UserEntity.MASTER_NODE_USER
-                    else NodeType.ARCHIVAL_MINER_NODE
-                )
-
-                # TODO: Please test this one.
-                if resolve_entity_to_role.value != get_args_value().assigned_role:
-                    from utils.processors import unconventional_terminate
-
-                    unconventional_terminate(
-                        message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().assigned_role} instead.",
-                        early=True,
+            if isinstance(login_request, ClientResponse):
+                if login_request.ok:
+                    resolved_model = EntityLoginResult.parse_obj(
+                        await login_request.json()
+                    )  # * Resolve via pydantic.
+                    resolve_entity_to_role = (
+                        NodeType.MASTER_NODE
+                        if resolved_model.user_role == UserEntity.MASTER_NODE_USER
+                        else NodeType.ARCHIVAL_MINER_NODE
                     )
 
-                # With this, we should also save the context by using store_auth_token().
-                store_identity_tokens(
-                    (
-                        AddressUUID(resolved_model.user_address),
-                        JWTToken(resolved_model.jwt_token),
-                    )
-                )
+                    # TODO: Please test this one.
+                    if resolve_entity_to_role.value != get_args_value().assigned_role:
+                        from utils.processors import unconventional_terminate
 
-                if (  # Ensure fields are None from the environment file and process the credentials.
-                    env.get("NODE_USERNAME", None) is None
-                    and env.get("NODE_PWD", None) is None
-                    and user_credentials
-                ):
-                    with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
-                        env_writer.write(
-                            f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}"
+                        unconventional_terminate(
+                            message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().assigned_role} instead.",
+                            early=True,
                         )
 
-                    logger.info(f"Authenticated as {resolved_model.user_address}.")
-                break
+                    # With this, we should also save the context by using store_auth_token().
+                    store_identity_tokens(
+                        (
+                            AddressUUID(resolved_model.user_address),
+                            JWTToken(resolved_model.jwt_token),
+                        )
+                    )
 
+                    if (  # Ensure fields are None from the environment file and process the credentials.
+                        env.get("NODE_USERNAME", None) is None
+                        and env.get("NODE_PWD", None) is None
+                        and user_credentials
+                    ):
+                        with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
+                            env_writer.write(
+                                f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}"
+                            )
+
+                        logger.info(f"Authenticated as {resolved_model.user_address}.")
+                    break
+
+                else:
+                    logger.error(
+                        f"Credentials are incorrect! Please try again. | Object: {login_request} | Additional Info: {await login_request.json()}"
+                    )
             else:
                 logger.error(
-                    f"Credentials are incorrect! Please try again. | Object: {login_request} | Additional Info: {await login_request.json()}"
+                    f"Login request returned an invalid object! It returned {type(login_request)} instead of {ClientResponse}. This may be an issue with connectivitity. Please try again."
                 )
-                await sleep(1.5)
-                continue
+
+            await sleep(1.5)
+            continue
 
         # * This should cover the following exceptions: (ClientConnectorError, ClientConnectorSSLError, ClientConnectorCertificateError, and ClientConnectionError)
         except ClientError as e:
