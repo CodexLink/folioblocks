@@ -37,6 +37,7 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
+from core.decorators import restrict_call
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -47,35 +48,7 @@ class ConsensusMechanism:
         self.http_instance = get_http_client_instance()
         self.master_target = get_master_node_properties
 
-    def __restrict_call(*, on: NodeType) -> Callable:  # type: ignore
-        """Restricts the method to be called depending on their `self.role`.
-        Since most of the methods is designed respectively based on their role.
-        Ever process requires this certain role to only call this method and nothing else.
-
-        Args:
-                on (NodeType): The `role` of the node.
-
-        Returns:
-                Callable: Calls the decorator method.
-        """
-
-        def deco(fn: Callable) -> Callable:
-            def instance(
-                self: Any, *args: list[Any], **kwargs: dict[Any, Any]
-            ) -> Callable | None:
-                if self.role == on:
-                    return fn(self, *args, **kwargs)
-
-                self.warning(
-                    f"Your role {self.role} cannot call this method `{fn.__name__}` due to the role is restricted to {on}."
-                )
-                return None
-
-            return instance
-
-        return deco
-
-    @__restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
+    @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
     async def establish(self) -> None:
         """Make `ARCHIVAL_MINER_NODE` to call master's `acknowledge` endpoint providing certains credentials as a proof of registration."""
         master_origin_address, master_origin_port = self.master_target(
@@ -155,7 +128,7 @@ class ConsensusMechanism:
 
         return None
 
-    @__restrict_call(on=NodeType.MASTER_NODE)
+    @restrict_call(on=NodeType.MASTER_NODE)
     async def negotiate(self) -> None:
         return
 

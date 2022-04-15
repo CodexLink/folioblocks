@@ -89,6 +89,7 @@ from core.dependencies import (
     get_master_node_properties,
 )
 from sqlalchemy.sql.expression import Insert, Update, Select
+from core.decorators import ensure_blockchain_ready, restrict_call
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -131,58 +132,6 @@ class BlockchainMechanism(ConsensusMechanism):
         self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
 
         super().__init__(role=node_role)
-
-    # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
-    def __ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
-        def deco(fn: Callable) -> Callable:
-            def instance(
-                self: Any, *args: list[Any], **kwargs: dict[Any, Any]
-            ) -> Callable | None:
-                if self.is_blockchain_ready:
-                    return fn(self, *args, **kwargs)
-
-                # TODO: Why do we have this?
-                if terminate_on_call:
-                    unconventional_terminate(message=message)
-
-                return None
-
-            return instance
-
-        return deco
-
-    def __restrict_call(*, on: NodeType) -> Callable:  # type: ignore
-        """
-        Restricts the method to be called depending on their `self.role`.
-        Since most of the methods is designed respectively based on their role.
-        Ever process requires this certain role to only call this method and nothing else.
-
-        Args:
-                on (NodeType): The `role` of the node.
-
-        Returns:
-                Callable: Calls the decorator method.
-
-        Notes:
-        # This was duplicated, it was originated from the consensus.py.
-        # I cannot get it because its inside of the class and it doesn't get shared because it has not `self` attribute.
-        """
-
-        def deco(fn: Callable) -> Callable:
-            def instance(
-                self: Any, *args: list[Any], **kwargs: dict[Any, Any]
-            ) -> Callable | None:
-                if self.role == on:
-                    return fn(self, *args, **kwargs)
-
-                self.warning(
-                    f"Your role {self.role} cannot call the following method `{fn.__name__}` due to role restriction, which prohibits '{on}' from accessing this method."
-                )
-                return None
-
-            return instance
-
-        return deco
 
     async def initialize(self) -> None:
         """
@@ -241,7 +190,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             await self._update_chain()
 
-    @__restrict_call(on=NodeType.MASTER_NODE)
+    @restrict_call(on=NodeType.MASTER_NODE)
     async def insert_external_transaction(
         self,
         action: TransactionActions,
@@ -591,7 +540,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Attempt to recognize the action by referring to the instance of the data.
 
-    @__ensure_blockchain_ready()
+    @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
         if self.node_role == NodeType.MASTER_NODE:
 
@@ -611,7 +560,7 @@ class BlockchainMechanism(ConsensusMechanism):
         )
         return None
 
-    @__ensure_blockchain_ready()
+    @ensure_blockchain_ready()
     def get_blockchain_private_state(self) -> NodeConsensusInformation:
         last_block: Block | None = self._get_last_block()
 
@@ -648,7 +597,7 @@ class BlockchainMechanism(ConsensusMechanism):
     def is_node_ready(self) -> bool:
         return self.node_ready and self.is_blockchain_ready
 
-    @__ensure_blockchain_ready()
+    @ensure_blockchain_ready()
     async def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
         if self._chain is not None:
             candidate_blocks: list[BlockOverview] = deepcopy(
@@ -715,7 +664,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
             )
 
-    @__restrict_call(on=NodeType.MASTER_NODE)
+    @restrict_call(on=NodeType.MASTER_NODE)
     async def _block_timer_executor(self) -> None:
         logger.info(
             f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
@@ -1015,7 +964,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return
 
-    @__restrict_call(on=NodeType.MASTER_NODE)
+    @restrict_call(on=NodeType.MASTER_NODE)
     async def _insert_internal_transaction(
         self, action: TransactionActions, data: NodeTransaction
     ) -> None:
@@ -1299,7 +1248,7 @@ class BlockchainMechanism(ConsensusMechanism):
             else False
         )
 
-    @__restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
+    @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
     async def _update_chain(self) -> None:
         """
         A private method to call to validate the node's blockchain file from the master's blockchain file.
