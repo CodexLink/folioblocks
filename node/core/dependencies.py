@@ -146,6 +146,7 @@ async def authenticate_node_client(
             "Environment file doesn't contain the values for `NODE_USERNAME` and/or `NODE_PWD` or is entirely missing. Assuming first-time instance ..."
         )
 
+        master_email_address: EmailStr = EmailStr()
         while True:
             try:
                 logger.info(
@@ -189,14 +190,14 @@ async def authenticate_node_client(
                             unused_code_email_stmt
                         )
 
-                        email_address: EmailStr = EmailStr()
+                        master_email_address = EmailStr()
                         generated_token: str = ""
 
                         if unused_code_email is None:
                             logger.debug(
                                 f"There are no existing previous email registered for {UserEntity.MASTER_NODE_USER}."
                             )
-                            email_address = await ensure_input_prompt(
+                            master_email_address = await ensure_input_prompt(
                                 input_context="Master Email Address",
                                 hide_input_from_field=False,
                                 generalized_context="master email address",
@@ -223,11 +224,16 @@ async def authenticate_node_client(
                                 await instances[1].execute(
                                     new_code_from_previous_email_stmt
                                 )
-                                email_address = unused_code_email.to_email
+                                master_email_address = EmailStr(
+                                    unused_code_email.to_email
+                                )
 
                             else:
                                 logger.warning(
                                     f"An email address associated to {unused_code_email.to_email} has its `auth_code` not yet expired. Please use it as possible!"
+                                )
+                                master_email_address = EmailStr(
+                                    unused_code_email.to_email
                                 )
 
                         if unused_code_email is None or (
@@ -241,14 +247,14 @@ async def authenticate_node_client(
                             await get_email_instance().send(
                                 content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                                 subject="Register Auth Code for Master Node Registration @ Folioblocks",
-                                to=email_address,
+                                to=master_email_address,
                             )
 
                             insert_generated_token_stmt: Insert = (
                                 auth_codes.insert().values(
                                     code=generated_token,
                                     account_type=UserEntity.MASTER_NODE_USER,
-                                    to_email=email_address,
+                                    to_email=master_email_address,
                                     expiration=datetime.now() + timedelta(days=2),
                                 )
                             )
@@ -259,55 +265,98 @@ async def authenticate_node_client(
                         logger.info(
                             "Previous entry to registration of master email has been retrieved and is identified as registered. Skipping registration."
                         )
-
-                    # * This functionality is only available on `MASTER` in local / self instance.
-                else:  # @o Resolves to NodeType.ARCHIVAL_MINER_NODE.
-                    inputted_credentials: list[Any] = await ensure_input_prompt(
-                        input_context=[
-                            "Personal e-mail representing this node",
-                            "Node username",
-                            "Node password",  # * I cannot implement password-checking because I have no time to do it.
-                            "Auth code",
-                        ],
-                        hide_input_from_field=[False, False, True, False],
-                        generalized_context="credentials",
-                        additional_context="You will have to ensure it this time to avoid potential conflicts from the startup!",
-                        enable_async=True,
-                    )
-
-                    register_node: Any = await get_http_client_instance().enqueue_request(
-                        url=URLAddress(
-                            f"http://{instances[0].target_host}:{instances[0].target_port}/entity/register"
-                        ),
-                        method=HTTPQueueMethods.POST,
-                        do_not_retry=True,
-                        await_result_immediate=True,
-                        data={
-                            "email": inputted_credentials[0],
-                            "username": inputted_credentials[1],
-                            "password": inputted_credentials[2],
-                            "auth_code": inputted_credentials[3],
-                        },
-                    )
-
-                    if not register_node.ok:
-                        logger.error(
-                            f"There seems to be an error during request. Please try again | Additional Info: {await register_node.json()}"
-                        )
-                        continue
-
-                    logger.warning(
-                        "Auth code will be used as auth acceptance for blockchain operation."
-                    )
-                    with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
-                        env_writer.write(
-                            f"NODE_USERNAME={inputted_credentials[1]}\nNODE_PWD={inputted_credentials[2]}\nAUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
+                        master_email_address = EmailStr(
+                            previous_registered_email.to_email
                         )
 
-                    from utils.processors import load_env
-                    load_env()
+                # - After extra handling some functions for validating email address, we can now do register.
+                resolved_context_fields: list[str]
+                resolved_hidden_fields: list[bool]
 
-                    logger.info(f"{role} registration successful!")
+                if role is NodeType.MASTER_NODE:
+                    resolved_context_fields, resolved_hidden_fields = [
+                        "MASTER Node Username",
+                        "MASTER Node Password",
+                        "Auth Code",
+                    ], [False, True, False]
+
+                else:
+                    resolved_context_fields, resolved_hidden_fields = [
+                        "Personal E-Mail representing this ARCHIVAL Node",
+                        "ARCHIVAL Node Username",
+                        "ARCHIVAL Node Password",
+                        "Auth Code",
+                    ], [False, False, True, False]
+
+                # NOTE I cannot implement password-checking because I have no time to do it.
+                inputted_credentials: list[Any] = await ensure_input_prompt(
+                    input_context=resolved_context_fields,
+                    hide_input_from_field=resolved_hidden_fields,
+                    generalized_context="credentials",
+                    additional_context="You will have to ensure it this time to avoid potential conflicts from the startup!",
+                    enable_async=True,
+                )
+
+                # @o What is being resolved here is basically the index declaration. Since there's no other way to DRY this (in smartest and cleanest way) by dynamically decrementing the offset by one. We should go for re-declaration method instead.
+                resolved_data: dict[str, str] = (
+                    {
+                        "username": inputted_credentials[0],
+                        "password": inputted_credentials[1],
+                        "auth_code": inputted_credentials[2],
+                    }
+                    if role is NodeType.MASTER_NODE
+                    else {
+                        "username": inputted_credentials[1],
+                        "password": inputted_credentials[2],
+                        "auth_code": inputted_credentials[3],
+                    }
+                )
+
+                resolved_origin: tuple[str, int] = (
+                    (get_args_value().node_host, get_args_value().node_port)
+                    if role is NodeType.MASTER_NODE
+                    else (instances[0].target_host, instances[0].target_port)
+                )
+
+                print(master_email_address)
+
+                register_node: Any = await get_http_client_instance().enqueue_request(
+                    url=URLAddress(
+                        f"http://{resolved_origin[0]}:{resolved_origin[1]}/entity/register"
+                    ),
+                    method=HTTPQueueMethods.POST,
+                    do_not_retry=True,
+                    await_result_immediate=True,
+                    data={
+                        "email": inputted_credentials[0]
+                        if role is NodeType.ARCHIVAL_MINER_NODE
+                        else master_email_address,
+                        **resolved_data,
+                    },
+                )
+
+                if not register_node.ok:
+                    logger.error(
+                        f"There seems to be an error during request. Please check recent log regarding HTTP requests and try again."
+                    )
+                    continue
+
+                resolved_env_contents: str = (  # ! Nope, I don't want to complicate this further. I have idea though, but no, just don't.
+                    f"NODE_USERNAME={inputted_credentials[1]}\nNODE_PWD={inputted_credentials[2]}\nAUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
+                    if role is NodeType.ARCHIVAL_MINER_NODE
+                    else f"NODE_USERNAME={inputted_credentials[0]}\nNODE_PWD={inputted_credentials[1]}\n"
+                )
+
+                with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
+                    env_writer.write(resolved_env_contents)
+
+                logger.info("Credentials invoked in the environment file.")
+
+                from utils.processors import load_env
+
+                load_env()
+
+                logger.info(f"{role} registration successful!")
 
             # ! Assumeing that the email service is running, I have to step away from this since complexity rises if I continue on improving it.
             except IntegrityError as e:
