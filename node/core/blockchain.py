@@ -50,7 +50,7 @@ from blueprint.schemas import (
     ApplicantUserTransaction,
     OrganizationTransaction,
 )
-from node.core.constants import EmploymentApplicationState, RandomUUID
+from core.constants import EmploymentApplicationState, RandomUUID
 from utils.processors import validate_user_address
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance

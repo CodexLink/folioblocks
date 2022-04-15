@@ -73,7 +73,6 @@ from sqlalchemy import create_engine, select
 
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 from utils.http import get_http_client_instance
-from blueprint.schemas import users
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])

@@ -14,7 +14,6 @@ from blueprint.schemas import (
     DashboardContext,
     NewStudentOut,
     Student,
-    Students,
 )
 from core.constants import (
     QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
@@ -174,7 +173,7 @@ async def mint_document(*, doc_context: Any) -> None:
 @dashboard_router.get(
     "/students",
     tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=Students,
+    response_model=Student,
     summary="Obtain a list of classified students in the blockchain.",
     description="An API endpoint that returns a list of addresses that is classified as student.",
 )
