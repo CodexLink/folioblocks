@@ -203,6 +203,7 @@ async def authenticate_node_client(
                         ),
                         method=HTTPQueueMethods.POST,
                         do_not_retry=True,
+                        await_result_immediate=True,
                         data={
                             "email": inputted_credentials[0],
                             "username": inputted_credentials[1],
