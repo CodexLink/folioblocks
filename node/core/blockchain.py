@@ -51,6 +51,14 @@ from blueprint.schemas import (
     OrganizationTransaction,
 )
 from core.constants import EmploymentApplicationState, RandomUUID
+from blueprint.schemas import NodeGenesisTransaction, NodeSyncTransaction
+from core.constants import NodeTransactionInternalActions
+from blueprint.schemas import (
+    NodeCertificateTransaction,
+    NodeMinerProofTransaction,
+    NodeNegotiationTransaction,
+    NodeRegisterTransaction,
+)
 from utils.processors import validate_user_address
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
@@ -709,9 +717,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 last_state_transaction_container = deepcopy(self.transaction_container)
 
                 # - Create a block from all of the transactions.
-                generated_block: Block | None = self._create_block(
-                    transactions=last_state_transaction_container
-                )
+                generated_block: Block | None = self._create_block()
 
             elif len(self.unsent_block_container):
                 logger.info(
@@ -793,11 +799,7 @@ class BlockchainMechanism(ConsensusMechanism):
             f"Consensus timer ignored due to condition. | Is new instance: {self.new_master_instance}, Blockchain ready: {self.blockchain_ready}"
         )
 
-    def _create_block(
-        self,
-        *,
-        transactions: list[Transaction] | None,
-    ) -> Block | None:
+    def _create_block(self) -> Block | None:
 
         # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size, and hash_block.
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
@@ -816,6 +818,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"This new block will be the first block from this blockchain."
             )
 
+        shadow_transaction_container = deepcopy(self.transaction_container)
+        self.transaction_container.clear()
+
         _block: Block = Block(
             id=self.cached_block_id,
             block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
@@ -824,7 +829,7 @@ class BlockchainMechanism(ConsensusMechanism):
             contents=HashableBlock(
                 nonce=None,  # ! Unsolvable, these are determined during the process of mining.
                 validator=self.identity[0],
-                transactions=transactions,
+                transactions=shadow_transaction_container,
                 timestamp=datetime.now(),
             ),
         )
@@ -842,14 +847,24 @@ class BlockchainMechanism(ConsensusMechanism):
         Generates a block, hash it and append it within the context of the blockchain, for both the file and the in-memory.
         """
 
-        # Check for the genesis_block before inserting it.
-        # TODO: We may need to use create_block since we have an unallocated_block.
+        # * Create a transaction for the generation of the genesis block.
+        await self._insert_internal_transaction(
+            action=TransactionActions.NODE_GENERAL_GENESIS_INITIALIZATION,
+            data=NodeTransaction(
+                action=NodeTransactionInternalActions.INIT,
+                context=NodeGenesisTransaction(
+                    block_genesis_no=self.cached_block_id,
+                    generator_address=self.identity[0],
+                    time_initiated=datetime.now(),
+                ),
+            ),
+        ),
 
         mined_genesis_block = await (
             get_event_loop().run_in_executor(
                 None,
                 self._mine_block,
-                self._create_block(transactions=None),
+                self._create_block(),
             )
         )
 
@@ -987,14 +1002,22 @@ class BlockchainMechanism(ConsensusMechanism):
 
         encrypter_payload: Fernet = Fernet(key_payload)
         logger.debug(
-            f"Keys has been generated for the action {action}. | Info: {key_payload.decode('utf-8')}"
+            f"A key has been generated for the following action `{action}`. | Info: {key_payload.decode('utf-8')}"
         )
 
         # - Deepcopy the `data` (NodeTransaction) and encrypt its context.
         data_encrypted: NodeTransaction = deepcopy(data)
-        data_encrypted.context = HashUUID(
-            (encrypter_payload.encrypt(export_to_json(data.context))).decode("utf-8")
-        )
+
+        if not isinstance(data.context, str):
+            data_encrypted.context = HashUUID(
+                (
+                    encrypter_payload.encrypt(
+                        export_to_json(
+                            data.context.dict(),
+                        )
+                    )
+                ).decode("utf-8")
+            )
 
         # - Build the transaction
         built_transaction: Transaction = Transaction(
@@ -1010,7 +1033,6 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
             from_address=AddressUUID(self.identity[0]),
             to_address=None,
-            timestamp=datetime.now(),
         )
 
         # @o Since we now have a copy of the 'premature' transaction, we calculate its hash for the `tx_hash`.
@@ -1030,7 +1052,7 @@ class BlockchainMechanism(ConsensusMechanism):
         # @o Append this and we are good to go!
         self.transaction_container.append(built_transaction)
         logger.info(
-            f"Transaction {built_transaction.tx_hash} has been created and is on-queue for block generation!"
+            f"Transaction `{built_transaction.tx_hash}` has been created and is on-queue for block generation!"
         )
 
         return None
@@ -1045,7 +1067,7 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.info(f"Attempting to mine a Block #{block.id} ...")
 
         while True:
-            # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
+            # https://st``ackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
 
             block.contents.nonce = random_generator.randint(0, MAX_INT_PYTHON)
             computed_hash: HashUUID = HashUUID(
@@ -1237,6 +1259,31 @@ class BlockchainMechanism(ConsensusMechanism):
 
         raise TypeError
 
+    async def _process_serialize_internal_transaction(
+        self,
+        transaction: NodeRegisterTransaction
+        | NodeGenesisTransaction
+        | NodeCertificateTransaction
+        | NodeSyncTransaction
+        | NodeNegotiationTransaction
+        | NodeMinerProofTransaction
+        | HashUUID,
+    ):
+
+        if isinstance(transaction, str):
+            return transaction
+
+        for each_model_candidate in [
+            NodeRegisterTransaction
+            | NodeGenesisTransaction
+            | NodeCertificateTransaction
+            | NodeSyncTransaction
+            | NodeNegotiationTransaction
+            | NodeMinerProofTransaction
+        ]:
+            if isinstance(transaction, each_model_candidate):
+                return transaction.dict()
+
     # TODO: Ensure to follow the rule that we made last time.
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         pass
@@ -1316,6 +1363,18 @@ class BlockchainMechanism(ConsensusMechanism):
                             BlockchainFileContext(dict_blockchain_content["content"]),
                         ),
                         bypass_from_update=True,
+                    )
+
+                    # - Record this to the blockchain.
+                    await self._insert_internal_transaction(
+                        action=TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC,
+                        data=NodeTransaction(
+                            action=NodeTransactionInternalActions.SYNC,
+                            context=NodeSyncTransaction(
+                                requestor_address=AddressUUID(self.identity[0]),
+                                timestamp=datetime.now(),
+                            ),
+                        ),
                     )
 
                     logger.info(

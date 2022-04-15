@@ -17,7 +17,7 @@ from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
 import jwt
-from sqlalchemy import false
+from sqlalchemy import false, select
 from blueprint.models import auth_codes, associated_nodes, tokens, users
 from blueprint.schemas import (
     EntityLoginCredentials,
@@ -46,7 +46,16 @@ from core.dependencies import get_args_value, get_database_instance
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from core.constants import AssociatedNodeStatus
+from blueprint.schemas import NodeRegisterTransaction, NodeTransaction
+from core.blockchain import get_blockchain_instance
+from core.constants import (
+    IdentityTokens,
+    NodeTransactionInternalActions,
+    TransactionActions,
+)
+from core.dependencies import get_identity_tokens
 from utils.processors import hash_context, verify_hash_context
+from sqlalchemy.sql.expression import Select
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -71,6 +80,25 @@ async def register_entity(
     db: Any = Depends(get_database_instance),
 ) -> EntityRegisterResult:
 
+    tokens: IdentityTokens | None = get_identity_tokens()
+
+    # - Since we are going to record this in blockchain, which requires the `acceptor_address`, validate if it contains something.
+    # * New instances doesn't have new credentials, check if there's an auth code for the NodeType.MASTER_NODE and it's not yet used.
+    check_auth_from_new_master_stmt: Select = select([auth_codes.c.to_email]).where(
+        (auth_codes.c.account_type == UserEntity.MASTER_NODE_USER)
+        & (auth_codes.c.is_used == false())
+    )
+
+    check_auth_from_new_master_email = await db.fetch_one(
+        check_auth_from_new_master_stmt
+    )
+
+    if tokens is None and check_auth_from_new_master_email is None:
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Identity tokens seem to be missing. This should not be possible! Please report this to the developer!",
+        )
+
     # TODO: Check for the association only when the entry has been labelled as non-node.
     # If there are no association then push that first.
     # db.execute(Association(name="Test"))
@@ -94,7 +122,7 @@ async def register_entity(
 
     auth_token = await db.fetch_one(get_auth_token_stmt)
 
-    if auth_token:
+    if auth_token is not None:
         if not credentials.first_name or not credentials.last_name:
             # Asserted that this entity must be NODE_USER.
             del dict_credentials["first_name"], dict_credentials["last_name"]
@@ -126,13 +154,34 @@ async def register_entity(
 
         try:
             await gather(db.execute(dispose_auth_code), db.execute(data))
+
             create_task(
-                get_email_instance().send(
+                get_email_instance().send(  # TODO: Update of this content.
                     content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                     subject="Welcome to Folioblocks!",
                     to=credentials.email,
                 )
             )
+
+            # - After that, record this transaction from the blockchain.
+            # TODO, This role for now.
+            if auth_token.account_type == UserEntity.ARCHIVAL_MINER_NODE_USER:
+                await get_blockchain_instance()._insert_internal_transaction(
+                    action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
+                    data=NodeTransaction(
+                        action=NodeTransactionInternalActions.INIT,
+                        context=NodeRegisterTransaction(
+                            acceptor_address=AddressUUID(
+                                tokens[1]
+                                if tokens is not None
+                                else check_auth_from_new_master_email
+                            ),
+                            new_address=AddressUUID(unique_address_ref),
+                            role=auth_token.account_type,
+                            timestamp=datetime.now(),
+                        ),
+                    ),
+                )
 
         except IntegrityError:
             raise HTTPException(
@@ -198,25 +247,25 @@ async def login_entity(
 
             other_tokens = await db.fetch_all(other_tokens_stmt)
 
-            # Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
+            # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
                 raise HTTPException(
                     detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username}` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}.",
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
 
-            # If all other conditions are clear, then create the JWT token.
+            # - If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
             if fetched_credential_data.type == NodeType.ARCHIVAL_MINER_NODE:
                 jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
                 payload[
                     "expire_at"
-                ] = jwt_expire_at.isoformat()  # Make it different per request.
+                ] = jwt_expire_at.isoformat()  # # Make it different per request.
 
             token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
 
-            # Put a new token to the database then update the user as it receives the token.
+            # - Put a new token to the database then update the user as it receives the token.
             new_token = tokens.insert().values(
                 from_user=fetched_credential_data.unique_address,
                 token=token,

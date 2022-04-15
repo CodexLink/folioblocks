@@ -99,7 +99,9 @@ AUTH_CODE_MIN_CONTEXT: Final[int] = 4
 AUTH_CODE_MAX_CONTEXT: Final[int] = 32
 
 # # Constants, Blockchain
-BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[int] = 4
+BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
+    int
+] = 3  # NOTE: #  ! I'm not quite sure if this would be okay. As per checked, 2 to 3 more transactions takes more time. We might need to adjust block timer from this.
 BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 5
@@ -317,9 +319,10 @@ class HTTPQueueStatus(IntEnum):
 
 
 # # Enums, Transaction-Related Attributes
-class NodeTransactionInternalActions(IntEnum):
-    CONSENSUS = auto()
-    INIT = auto()
+class NodeTransactionInternalActions(Enum):
+    CONSENSUS = "INTERNAL_CONSENSUS"
+    INIT = "INTERNAL_INIT"
+    SYNC = "INTERNAL_SYNC"
 
 
 # # SORT THIS.
@@ -358,16 +361,14 @@ class TransactionStatus(IntEnum):
 
 class TransactionActions(Enum):
     # - Node-based Transactions: General
-    NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"  #
-    NODE_GENERAL_REGISTER_INIT = "Node: Register"  #
-    NODE_GENERAL_GENESIS_INITIALIZATION = "Node: Genesis Block Init"  #
+    NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"  # # Done.
+    NODE_GENERAL_REGISTER_INIT = "Node: Register"  # # Done.
+    NODE_GENERAL_GENESIS_INITIALIZATION = "Node: Genesis Block Init"  # # Done.
 
     # - Node-based Transaction: Negotiation (Consensus)
-    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = "Consensus: Blockchain Sync"  #
+    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = "Consensus: Blockchain Sync"  # # Done.
     NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = "Consensus: Mine Negotiation"
-    NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = (
-        "Consensus: Receive Miner Proof"  #
-    )
+    NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Miner Proof"  # ! TBD after implementing node. Method signature may change since it only contains blueprint.
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
 

@@ -171,14 +171,14 @@ class OrganizationTransactionInitializer(
 class NodeRegisterTransaction(BaseModel):
     new_address: AddressUUID
     acceptor_address: AddressUUID
-    role: NodeType
+    role: UserEntity
     timestamp: datetime
 
 
 class NodeGenesisTransaction(BaseModel):
     block_genesis_no: int
     generator_address: AddressUUID
-    time_delivery: datetime
+    time_initiated: datetime
 
 
 class NodeCertificateTransaction(BaseModel):
@@ -222,7 +222,6 @@ class Transaction(BaseModel):
     signatures: TransactionSignatures
     from_address: AddressUUID
     to_address: AddressUUID | None
-    timestamp: datetime
 
 
 class HashableBlock(BaseModel):

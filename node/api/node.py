@@ -39,6 +39,8 @@ from core.constants import NodeType
 from core.blockchain import BlockchainMechanism
 from blueprint.schemas import SourcePayload
 from blueprint.schemas import NodeInformation, NodeMasterInformation
+from blueprint.schemas import NodeCertificateTransaction, NodeTransaction
+from core.constants import NodeTransactionInternalActions, TransactionActions
 
 node_router = APIRouter(
     prefix="/node",
@@ -172,11 +174,10 @@ async def recieve_action_from_dashboard() -> None:
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
     dependencies=[
         Depends(EnsureAuthorized(_as=[UserEntity.ARCHIVAL_MINER_NODE_USER])),
-    ],
+    ],  # - This is blockchain-related but not internally related, it was under consensus category. Therefore seperate the contents of the method below from the handler of the <class 'EnsureAuthorized'>.
 )
 async def acknowledge_as_response(
     origin: SourcePayload,
-    request: Request,
     x_source: AddressUUID = Header(..., description="The address of the requestor."),
     x_session: JWTToken = Header(
         ..., description="The current session token that the requestor uses."
@@ -250,6 +251,18 @@ async def acknowledge_as_response(
                         source_port=origin.source_port,
                     )
                     await db.execute(store_authored_token_stmt)
+
+                    # - Record this action from the blockchain.
+                    await get_blockchain_instance()._insert_internal_transaction(
+                        action=TransactionActions.NODE_GENERAL_CONSENSUS_INITIATE,
+                        data=NodeTransaction(
+                            action=NodeTransactionInternalActions.INIT,
+                            context=NodeCertificateTransaction(
+                                requestor_address=AddressUUID(x_source),
+                                timestamp=datetime.now(),
+                            ),
+                        ),
+                    )
 
                     # # Then return it.
                     return JSONResponse(
