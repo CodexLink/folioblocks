@@ -71,7 +71,7 @@ class HTTPClient:
                                         - request (URLAddress): The `str` that represents the whole structure of the URL including the protocol, host and port.
                                         - method (HTTPQueueMethods): An enum that contains HTTP methods to classify the request.
                                         - await_result_immediate (bool, optional): Should this request run under asyncio.create_task() or await them? By doing `await_result_immediate`, it blocks other requests at the LIFO list container as it was prioritized to run first. But you get to have a data to return. Defaults to False.
-                                        - name (str, optional): The name of the request. This is required whenever the request is not `await_result_immediate`. Use get_finished_task` to fetch the request.
+                                        - name (str, optional): The name of the request. This is required whenever the request is not `await_result_immediate`. Use get_finished_request` to fetch the request.
 
         Note:
                                         * Despite complexity, I wanted to implement this so that we can query something while needing it later. Aside from stacking request, it is best to have a managing queue to ensure that we get back to them as is.
@@ -145,34 +145,56 @@ class HTTPClient:
 
         if await_result_immediate and self._is_ready:
             logger.debug(
-                f"Await-immediate enabled on the following task name '{name}' ..."
+                f"Await-immediate enabled on the following request '{name}' ..."
             )
-            for _ in range(0, retry_attempt):
+
+            request_iterator: int = retry_attempt  # @o Declare here so that, we can break from the inner-while loop (request re-attempt) after executing the outer-while loop (request fetching).
+            while True:
+
+                # - Wait for a millisecond to process the request.
+                await sleep(
+                    0.2
+                )  # @o Note that this is not a precise since CPU performance differs from every device.
+
                 res_req_equiv = self.get_remaining_responses.get(name, None)
 
+                logger.debug(f"Fetching response named as {name} ...")
+
                 if res_req_equiv is not None:
-                    returned_response = await self.get_finished_task(task_name=name)
-
-                    if (
-                        isinstance(returned_response, ClientResponse)
-                        and returned_response.ok
-                    ):
-                        return returned_response
-
-                    if not do_not_retry and _ <= retry_attempt - 1:
-                        logger.warning(
-                            f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
+                    while request_iterator:
+                        returned_response: ClientResponse | None = (
+                            await self.get_finished_request(request_name=name)
                         )
 
-                        self._queue.append(wrapped_request)
-                        await sleep(2)
+                        if (
+                            isinstance(returned_response, ClientResponse)
+                            and returned_response.ok
+                        ):
+                            return returned_response
 
-                    else:
-                        logger.error(
-                            "The request attempt has been exceeded. There's something wrong with the request. Please try again later."
-                        )
+                        if not do_not_retry:
+                            logger.warning(
+                                f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
+                            )
 
-                        return None
+                            self._queue.append(wrapped_request)
+                            request_iterator -= 1
+                            await sleep(1.5)
+
+                        break
+
+                if request_iterator and not do_not_retry:
+                    logger.error(f"Response {name} doesn't exist, for now. Retrying...")
+                    continue
+
+                elif not request_iterator and not do_not_retry:
+                    logger.error(
+                        "The request attempt has been exceeded. There's something wrong with the request. Please try again later."
+                    )
+                else:
+                    logger.warning("Do not retry has been enabled.")
+
+                break
 
         elif await_result_immediate and not self._is_ready:
             logger.critical(
@@ -208,7 +230,7 @@ class HTTPClient:
                 json=loaded_request.data,
             )
             logger.debug(
-                f"Unwrapped Request (to Task) '{loaded_request.name}' (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
+                f"Unwrapped Request '{loaded_request.name}' (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
             )
 
             self._response[loaded_request.name] = create_task(
@@ -218,36 +240,39 @@ class HTTPClient:
             ## Dequeue that item from self._queue as its response form has been enqueued from the self._response.
             self._queue.pop(self._queue.index(loaded_request))
             logger.debug(
-                f"Task-Wrapped Request '{loaded_request.name}' has been enqueued. | Wrapped Object Info: {requested_item}"
+                f"Async-Task-Wrapped Request '{loaded_request.name}' has been enqueued. | Wrapped Object Info: {requested_item}"
             )
 
-    async def get_finished_task(self, *, task_name: str) -> Any:
-        fetched_task = self._response.get(task_name, None)
+    async def get_finished_request(self, *, request_name: str) -> ClientResponse | None:
+        fetched_request = self._response.get(request_name, None)
 
         if not self._is_ready:
             logger.warning(
                 "There is no finished task since no task has been executed. Please execute `initialize()` method for this instance to work as intended."
             )
-            return
+            return None
 
-        if fetched_task is not None:
+        if fetched_request is not None:
+            logger.info(f"Request {request_name} has been fetched.")
             try:
-                if not fetched_task.done():
+                if not fetched_request.done():
                     logger.warning(
-                        f"The following task '{task_name}' is not yet finished! Awaiting ..."
+                        f"The following request '{request_name}' is not yet finished! Awaiting ..."
                     )
-                    await fetched_task
+                    await fetched_request
 
-                if not fetched_task.result().ok:
+                if not fetched_request.result().ok:
                     try:
                         logger.error(
-                            f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: {await fetched_task.result().json()}' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                            f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: {await fetched_request.result().json()}' if isinstance(fetched_request.result(), ClientResponse) else ''}"
                         )
 
                     except ContentTypeError:
                         logger.error(
-                            f"The following request '{task_name}' returned an error response. | Context: {fetched_task.result()}{f' | Response: Not Available' if isinstance(fetched_task.result(), ClientResponse) else ''}"
+                            f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: Not Available' if isinstance(fetched_request.result(), ClientResponse) else ''}"
                         )
+
+                    return None
 
             except (
                 ConnectionRefusedError,
@@ -257,19 +282,21 @@ class HTTPClient:
                 ClientConnectorError,
             ) as e:
                 logger.critical(
-                    f"There was error during processing of request. | Info: {e}"
+                    f"There was error during the process of request. | Info: {e}"
                 )
                 return None
 
             finally:
-                self._response.pop(task_name)
-                logger.debug(f"Request '{task_name}' has been popped.")
+                self._response.pop(request_name)
+                logger.debug(
+                    f"Request '{request_name}' has been popped from the response queue."
+                )
 
-            return fetched_task.result()
+            return fetched_request.result()
 
         else:
             logger.error(
-                f"The mentioned task '{task_name}' does not exist from the queue. Please try again."
+                f"The following response '{request_name}' does not exist from the queue. Please try again."
             )
             logger.debug(
                 f"Currently at Queue (Request), Length: {len(self.get_remaining_enqueued_items)} | {self.get_remaining_enqueued_items}"
@@ -277,6 +304,7 @@ class HTTPClient:
             logger.debug(
                 f"Currently at Response (Request), Length: {len(self.get_remaining_responses)} | {self.get_remaining_responses}"
             )
+            return None
 
     async def close(self, *, should_destroy: bool = False) -> None:
         while True:
@@ -291,10 +319,10 @@ class HTTPClient:
                         self._response.copy()
                     )  # ! We need to copy the last state to avoid mutation change during iteration.
 
-                    for each_left_task in _cached.values():
-                        if self._response.get(each_left_task, None) is not None:
+                    for each_leftout_request in _cached.values():
+                        if self._response.get(each_leftout_request, None) is not None:
                             # Compare the last state with the currently async-mutated dictionary and remove the element if they are still existing, otherwise ignore it.
-                            each_left_task.cancel()
+                            each_leftout_request.cancel()
                             self._response.popitem()
                     break
 
