@@ -160,28 +160,23 @@ class HTTPClient:
 
                 logger.debug(f"Fetching response named as {name} ...")
 
-                if res_req_equiv is not None:
-                    while request_iterator:
-                        returned_response: ClientResponse | None = (
-                            await self.get_finished_request(request_name=name)
+                if res_req_equiv is not None and request_iterator:
+                    returned_response: ClientResponse | None = (
+                        await self.get_finished_request(request_name=name)
+                    )
+
+                    if isinstance(returned_response, ClientResponse):
+                        return returned_response
+
+                    if not do_not_retry:
+                        logger.warning(
+                            f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
                         )
 
-                        if (
-                            isinstance(returned_response, ClientResponse)
-                            and returned_response.ok
-                        ):
-                            return returned_response
-
-                        if not do_not_retry:
-                            logger.warning(
-                                f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
-                            )
-
-                            self._queue.append(wrapped_request)
-                            request_iterator -= 1
-                            await sleep(1.5)
-
-                        break
+                        self._queue.append(wrapped_request)
+                        request_iterator -= 1
+                        await sleep(1.5)
+                        continue
 
                 if request_iterator and not do_not_retry:
                     logger.error(f"Response {name} doesn't exist, for now. Retrying...")
@@ -262,8 +257,13 @@ class HTTPClient:
                     await fetched_request
 
                 if not fetched_request.result().ok:
+                    try:
+                        response = await fetched_request.result().json()
+                    except ContentTypeError:
+                        response = "Not Available."
+
                     logger.error(
-                        f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: {await fetched_request.result().json()}' if isinstance(fetched_request.result(), ClientResponse) else await fetched_request.result().text()}"
+                        f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: {response}'}"
                     )
 
                 logger.debug(
