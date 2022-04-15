@@ -57,13 +57,6 @@ for each_enum in [LoggerLevelCoverage, NodeType]:
 
 
 args_handler.add_argument(
-    "-ar",
-    "--assigned-role",
-    choices=locals()["_injected_nt_choices"],
-    help=FOLIOBLOCKS_HELP[ArgumentParameter("ASSIGNED_ROLE")],
-    required=True,
-)
-args_handler.add_argument(
     "-kf",
     "--key-file",
     action="store",
@@ -90,6 +83,13 @@ args_handler.add_argument(
     action="store",
     help=FOLIOBLOCKS_HELP[ArgumentParameter("NODE_PORT")],
     type=int,
+    required=True,
+)
+args_handler.add_argument(
+    "-nr",
+    "--node-role",
+    choices=locals()["_injected_nt_choices"],
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("NODE_ROLE")],
     required=True,
 )
 args_handler.add_argument(
