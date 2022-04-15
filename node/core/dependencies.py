@@ -347,14 +347,28 @@ async def authenticate_node_client(
                     else f"NODE_USERNAME={inputted_credentials[0]}\nNODE_PWD={inputted_credentials[1]}\n"
                 )
 
-                with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
-                    env_writer.write(resolved_env_contents)
+                # ! This only checks the whole variables as-is, NOT per variable. I don't want to complicate this further.
+                if (
+                    env.get("NODE_USERNAME", None) is None
+                    and env.get("NODE_PWD", None) is None
+                    and (
+                        role is NodeType.MASTER_NODE
+                        or role is NodeType.ARCHIVAL_MINER_NODE
+                        and env.get("AUTH_ACCEPTANCE_CODE", None) is None
+                    )
+                ):
 
-                logger.info("Credentials invoked in the environment file.")
+                    with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
+                        env_writer.write(resolved_env_contents)
 
-                from utils.processors import load_env
+                    logger.info("Credentials invoked in the environment file.")
 
-                load_env()
+                    from utils.processors import load_env
+
+                    load_env()
+                    logger.debug(
+                        "Environment file has been loaded due to new credentials invoked."
+                    )
 
                 logger.info(f"{role} registration successful!")
 
@@ -432,28 +446,21 @@ async def authenticate_node_client(
                     )
 
                     # TODO: Please test this one.
-                    if resolve_entity_to_role.value != get_args_value().assigned_role:
+                    if resolve_entity_to_role.value != get_args_value().node_role:
                         from utils.processors import unconventional_terminate
 
                         unconventional_terminate(
-                            message=f"Node was able to login successfully but the acccount type is not suitable for the type of instance. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().assigned_role} instead.",
+                            message=f"Node was able to login successfully but the acccount type is not suitable for the type of instance. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().node_role} instead.",
                             early=True,
                         )
 
-                    # With this, we should also save the context by using store_auth_token().
+                    # * With this, we should also save the context by using store_auth_token().
                     store_identity_tokens(
                         (
                             AddressUUID(resolved_model.user_address),
                             JWTToken(resolved_model.jwt_token),
                         )
                     )
-
-                    # * Since we have a different way of registering `MASTER_NODE` (self-registration), we have to handle its output here.
-                    if role == NodeType.MASTER_NODE:
-                        with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
-                            env_writer.write(
-                                f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}\n"
-                            )
 
                     logger.info(f"Authenticated as {resolved_model.user_address}.")
                     break
