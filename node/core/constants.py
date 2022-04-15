@@ -32,7 +32,6 @@ AuthAcceptanceCode = _N("AuthAcceptanceCode", str)
 BlockID = _N("BlockID", str)
 BlockchainFileContext = _N("BlockchainFileContext", str)
 CredentialContext = _N("CredentialContext", str)
-DocRequestType = _N("DocRequestType", DocToRequestTypes)
 DocumentMeta = _N("DocumentMeta", str)
 GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
@@ -359,15 +358,15 @@ class TransactionStatus(IntEnum):
 
 class TransactionActions(Enum):
     # - Node-based Transactions: General
-    NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"
-    NODE_GENERAL_REGISTER_INIT = "Node: Register"
-    NODE_GENERAL_GENESIS_INITIALIZATION = "Node: Genesis Block Init"
+    NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"  #
+    NODE_GENERAL_REGISTER_INIT = "Node: Register"  #
+    NODE_GENERAL_GENESIS_INITIALIZATION = "Node: Genesis Block Init"  #
 
     # - Node-based Transaction: Negotiation (Consensus)
-    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = "Consensus: Blockchain Sync"
+    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = "Consensus: Blockchain Sync"  #
     NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = "Consensus: Mine Negotiation"
     NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = (
-        "Consensus: Receive Miner Proof"
+        "Consensus: Receive Miner Proof"  #
     )
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.

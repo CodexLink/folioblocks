@@ -32,7 +32,7 @@ from aiohttp import (
 from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import EntityLoginResult, Tokens
 from databases import Database
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import select
@@ -346,6 +346,7 @@ class EnsureAuthorized:
 
     async def __call__(
         self,
+        request: Request,
         x_token: JWTToken = Header(
             ..., description="The token that is inferred for validation."
         ),
@@ -357,6 +358,8 @@ class EnsureAuthorized:
         db: Database = Depends(get_database_instance),
     ) -> None:  # TODO.
 
+        print("Debug from the call function, ", request, dir(request))
+
         if x_token:
             req_ref_token = tokens.select().where(
                 (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
@@ -367,7 +370,7 @@ class EnsureAuthorized:
             if req_token:
                 ref_token = Tokens.parse_obj(req_token)
 
-                # ! I didn't use the Metadata().select() because its parameter whereclause blocks selective column to return.
+                # ! I didn't use the Metadata().select() because its parameter `whereclause` prohibits selective column to return.
                 # * Therefore use the general purpose sqlalchemy.select instead.
                 user_role_ref = select([users.c.type]).where(
                     users.c.unique_address == ref_token.from_user

@@ -88,7 +88,7 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
-from sqlalchemy.sql.expression import Insert, Update
+from sqlalchemy.sql.expression import Insert, Update, Select
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -395,7 +395,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             and data.association_group_type is not None
                             and data.association_name is None
                         ):
-                            validate_existence_association_stmt = select(
+                            validate_existence_association_stmt: Select = select(
                                 [associations.c.address]
                             ).where(associations.c.address == data.association_address)
 
@@ -1022,11 +1022,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if not isinstance(data, NodeTransaction) or action not in TransactionActions:
             logger.error(
-                f"Passed parameters is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
+                f"Parameters for the `action` and `data` is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
             )
             return None
 
-        # @o Since we can see some patterns for the Node-based Transactions, instead of explicitly declaring them, we are going to use its name with a prefix finder.
+        # @o Since we can see some patterns for the Node-based Transaction's Enum Members (TransactionActions), instead of explicitly declaring them, we are going to use classify them by matching their prefixes.
         if not action.name.startswith("NODE_GENERAL_"):
             logger.error(
                 "The parameter `action` is invalid. Please invoke `TransactionActions` with enum members prefixes starts with `NODE_GENERAL_`."
@@ -1049,7 +1049,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Build the transaction
         built_transaction: Transaction = Transaction(
-            tx_hash=None,
+            tx_hash=None,  # @o Evaluated as `None` for now.
             action=action,
             status=TransactionStatus.SUCCESS,
             payload=NodeTransaction(**data_encrypted.dict()),
@@ -1064,18 +1064,18 @@ class BlockchainMechanism(ConsensusMechanism):
             timestamp=datetime.now(),
         )
 
-        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash.
+        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash for the `tx_hash`.
         premature_transaction_copy: dict = built_transaction.dict()
 
         # @o We don't want to influence `tx_hash` from this even though its a `NoneType`.
         del premature_transaction_copy["tx_hash"]
 
-        # - Calculate
+        # - Calculate the hash based on the content of the deepcopied `built_transaction`.
         premature_calc_sha256: str = sha256(
             export_to_json(premature_transaction_copy)
         ).hexdigest()
 
-        # @o After calculation, invoke this new hash from the `tx_hash` of the built_transaction.
+        # @o After calculation, invoke this new hash from the `tx_hash` of the `built_transaction`.
         built_transaction.tx_hash = HashUUID(premature_calc_sha256)
 
         # @o Append this and we are good to go!
