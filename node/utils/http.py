@@ -1,4 +1,4 @@
-from asyncio import Task, create_task, sleep, wait
+from asyncio import Task, create_task, sleep
 from logging import Logger, getLogger
 from secrets import token_urlsafe
 from typing import Any
@@ -244,7 +244,8 @@ class HTTPClient:
             )
 
     async def get_finished_request(self, *, request_name: str) -> ClientResponse | None:
-        fetched_request = self._response.get(request_name, None)
+        fetched_request: Any = self._response.get(request_name, None)
+        returned_response: ClientResponse | None = None
 
         if not self._is_ready:
             logger.warning(
@@ -261,7 +262,14 @@ class HTTPClient:
                     )
                     await fetched_request
 
+                returned_response = (
+                    fetched_request.result()
+                    if isinstance(fetched_request.result(), ClientResponse)
+                    else None
+                )
+
                 if not fetched_request.result().ok:
+
                     try:
                         logger.error(
                             f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: {await fetched_request.result().json()}' if isinstance(fetched_request.result(), ClientResponse) else ''}"
@@ -269,10 +277,8 @@ class HTTPClient:
 
                     except ContentTypeError:
                         logger.error(
-                            f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: Not Available' if isinstance(fetched_request.result(), ClientResponse) else ''}"
+                            f"The following request '{request_name}' returned an error response. | Response Context: {returned_response if returned_response is not None else None}"
                         )
-
-                    return None
 
             except (
                 ConnectionRefusedError,
@@ -292,7 +298,7 @@ class HTTPClient:
                     f"Request '{request_name}' has been popped from the response queue."
                 )
 
-            return fetched_request.result()
+            return returned_response
 
         else:
             logger.error(

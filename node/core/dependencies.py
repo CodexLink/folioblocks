@@ -19,16 +19,9 @@ from secrets import token_hex
 from sqlite3 import IntegrityError
 from typing import Any, Final
 
-from aioconsole import ainput
 from aiohttp import (
-    BasicAuth,
-    ClientConnectionError,
-    ClientConnectorCertificateError,
-    ClientConnectorError,
-    ClientConnectorSSLError,
     ClientError,
     ClientResponse,
-    ClientSession,
 )
 from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import EntityLoginResult, Tokens
@@ -134,7 +127,6 @@ def generate_auth_token() -> str:
     return generated
 
 
-# TODO Implement blacklisted users!
 async def authenticate_node_client(
     *,
     role: NodeType,
@@ -312,6 +304,9 @@ async def authenticate_node_client(
                             f"NODE_USERNAME={inputted_credentials[1]}\nNODE_PWD={inputted_credentials[2]}\nAUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
                         )
 
+                    from utils.processors import load_env
+                    load_env()
+
                     logger.info(f"{role} registration successful!")
 
             # ! Assumeing that the email service is running, I have to step away from this since complexity rises if I continue on improving it.
@@ -343,8 +338,8 @@ async def authenticate_node_client(
             )
         else:  # - Assumed as NodeType.ARCHIVAL_MINER_NODE.
             user_credentials = (
-                CredentialContext(env.get("NODE_USERNAME", "")),
-                CredentialContext(env.get("NODE_PWD", "")),
+                CredentialContext(env.get("NODE_USERNAME", None)),
+                CredentialContext(env.get("NODE_PWD", None)),
             )
 
         # Ensure that ENV will be covered here.
