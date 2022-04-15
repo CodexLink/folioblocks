@@ -38,6 +38,7 @@ from core.constants import (
     IPPort,
     URLAddress,
 )
+from utils.processors import unconventional_terminate
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -163,7 +164,7 @@ class EmailService:
 email_service: EmailService | None = None
 
 
-def get_email_instance() -> EmailService | None:
+def get_email_instance() -> EmailService:
     global email_service
 
     if email_service is None:
@@ -183,10 +184,8 @@ def get_email_instance() -> EmailService | None:
             return email_service
 
         else:
-            logger.critical(
-                "Email instance can't be instantiated due to possibly non-existent credentials. The following are required: [address (EMAIL_ADDRESS), pwd (EMAIL_PWD)]."
+            unconventional_terminate(
+                message="Email instance can't be instantiated due to possibly non-existent credentials. The following are required: [address (EMAIL_ADDRESS), pwd (EMAIL_PWD)]."
             )
-            return None
-
     else:
         return email_service
