@@ -245,7 +245,6 @@ class HTTPClient:
 
     async def get_finished_request(self, *, request_name: str) -> ClientResponse | None:
         fetched_request: Any = self._response.get(request_name, None)
-        returned_response: ClientResponse | None = None
 
         if not self._is_ready:
             logger.warning(
@@ -262,23 +261,14 @@ class HTTPClient:
                     )
                     await fetched_request
 
-                returned_response = (
-                    fetched_request.result()
-                    if isinstance(fetched_request.result(), ClientResponse)
-                    else None
-                )
-
                 if not fetched_request.result().ok:
+                    logger.error(
+                        f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: {await fetched_request.result().json()}' if isinstance(fetched_request.result(), ClientResponse) else await fetched_request.result().text()}"
+                    )
 
-                    try:
-                        logger.error(
-                            f"The following request '{request_name}' returned an error response. | Context: {fetched_request.result()}{f' | Response: {await fetched_request.result().json()}' if isinstance(fetched_request.result(), ClientResponse) else ''}"
-                        )
-
-                    except ContentTypeError:
-                        logger.error(
-                            f"The following request '{request_name}' returned an error response. | Response Context: {returned_response if returned_response is not None else None}"
-                        )
+                logger.debug(
+                    f"On request, the type of the response is {type(fetched_request.result())}."
+                )
 
             except (
                 ConnectionRefusedError,
@@ -298,7 +288,7 @@ class HTTPClient:
                     f"Request '{request_name}' has been popped from the response queue."
                 )
 
-            return returned_response
+            return fetched_request.result()
 
         else:
             logger.error(
