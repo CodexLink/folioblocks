@@ -39,6 +39,7 @@ from pyotp import TOTP
 from sqlalchemy import and_, false, select, true
 from core.constants import IdentityTokens
 from core.constants import ArgsPlusDatabaseInstances, UserCredentials
+from core.constants import CredentialContext
 from utils.http import get_http_client_instance
 from sqlalchemy.sql.expression import Select
 from core.constants import (
@@ -142,11 +143,11 @@ async def authenticate_node_client(
 
     from utils.processors import (
         ensure_input_prompt,
-    )  # ! Imported on function due to circular dependency.
+    )  # @o Imported inside method due to circular dependency.
 
-    user_credentials: UserCredentials | None = None
+    user_credentials: UserCredentials
 
-    logger.debug(f"Attempting to authenticate as '{role.name}'...")
+    logger.debug(f"Attempting to authenticate node client as '{role.name}'...")
 
     if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
         logger.warning(
@@ -158,9 +159,7 @@ async def authenticate_node_client(
                 logger.info(
                     f"As a {role.name}, {f'The system will perform to create keys such as an `auth_token` for you to register and authenticate yourself.' if role == NodeType.MASTER_NODE else f'you need to enter credentials for you to enter in blockchain.'} | Please enter your email address first."
                 )
-
-                if role == NodeType.MASTER_NODE:
-
+                if role is NodeType.MASTER_NODE:
                     # - Check for an existing email in the database.
                     # @o This was intended, especially when the administrator accidentally hits `CTRL+C` or `CTRL+BREAK` after master node email registration.
                     # @o This was useful to avoid re-entering email.
@@ -180,8 +179,8 @@ async def authenticate_node_client(
                     )
 
                     if previous_registered_email is None:
-                        logger.info(
-                            "Checking for emails that haven't used their auth code .."
+                        logger.debug(
+                            "Checking for emails that haven't used their auth code ..."
                         )
 
                         unused_code_email_stmt = select(
@@ -202,7 +201,7 @@ async def authenticate_node_client(
                         generated_token: str = ""
 
                         if unused_code_email is None:
-                            logger.info(
+                            logger.debug(
                                 f"There are no existing previous email registered for {UserEntity.MASTER_NODE_USER}."
                             )
                             email_address = await ensure_input_prompt(
@@ -223,7 +222,7 @@ async def authenticate_node_client(
                                 new_code_from_previous_email_stmt: Update = (
                                     auth_codes.update()
                                     .where(
-                                        auth_code.c.to_email
+                                        auth_codes.c.to_email
                                         == unused_code_email.to_email
                                     )
                                     .values(code=generated_token)
@@ -245,6 +244,14 @@ async def authenticate_node_client(
                         ):
                             generated_token = generate_auth_token()
 
+                            from core.email import get_email_instance
+
+                            await get_email_instance().send(
+                                content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                subject="Register Auth Code for Master Node Registration @ Folioblocks",
+                                to=email_address,
+                            )
+
                             insert_generated_token_stmt: Insert = (
                                 auth_codes.insert().values(
                                     code=generated_token,
@@ -256,13 +263,6 @@ async def authenticate_node_client(
 
                             await instances[1].execute(insert_generated_token_stmt)
 
-                            from core.email import get_email_instance
-
-                            await get_email_instance().send(
-                                content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                                subject="Register Auth Code for Master Node Registration @ Folioblocks",
-                                to=email_address,
-                            )
                     else:
                         logger.info(
                             "Previous entry to registration of master email has been retrieved and is identified as registered. Skipping registration."
@@ -304,19 +304,15 @@ async def authenticate_node_client(
                         )
                         continue
 
-                    # - Store the auth code.
-                    if role == NodeType.ARCHIVAL_MINER_NODE:
-                        logger.warning(
-                            "Auth code will be used as auth acceptance for blockchain operation."
-                        )
-                        with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
-                            env_writer.write(
-                                f"AUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
-                            )
-
-                    logger.info(
-                        "Registration seems to be successful! Please re-enter your username and password to continue."
+                    logger.warning(
+                        "Auth code will be used as auth acceptance for blockchain operation."
                     )
+                    with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
+                        env_writer.write(
+                            f"NODE_USERNAME={inputted_credentials[1]}\nNODE_PWD={inputted_credentials[2]}\nAUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
+                        )
+
+                    logger.info(f"{role} registration successful!")
 
             # ! Assumeing that the email service is running, I have to step away from this since complexity rises if I continue on improving it.
             except IntegrityError as e:
@@ -329,16 +325,26 @@ async def authenticate_node_client(
             logger.info(
                 f"A generated code has been sent or has been skipped. Please register from the '{instances[0].node_host}:{instances[0].node_port}/entity/register' endpoint and login with your credentials on the next prompt."
             )
+
             break
 
     while True:
-        if env.get("NODE_USERNAME", None) is None and env.get("NODE_PWD", None) is None:
-            user_credentials = await ensure_input_prompt(
-                input_context=["Node Username", "Node Password"],
+        if (
+            env.get("NODE_USERNAME", None) is None
+            and env.get("NODE_PWD", None) is None
+            and role == NodeType.MASTER_NODE
+        ):
+            user_credentials = await ensure_input_prompt(  # # 'Any' type for now.
+                input_context=["MASTER Node Username", "MASTER Node Password"],
                 hide_input_from_field=[False, True],
                 generalized_context="username and password",
                 additional_context="You will have to ensure it this time to avoid potential conflicts!",
                 enable_async=True,
+            )
+        else:  # - Assumed as NodeType.ARCHIVAL_MINER_NODE.
+            user_credentials = (
+                CredentialContext(env.get("NODE_USERNAME", "")),
+                CredentialContext(env.get("NODE_PWD", "")),
             )
 
         # Ensure that ENV will be covered here.
@@ -363,12 +369,8 @@ async def authenticate_node_client(
                     await_result_immediate=True,
                     do_not_retry=True,
                     data={
-                        "username": env.get("NODE_USERNAME", None)
-                        if user_credentials is None
-                        else user_credentials[0],
-                        "password": env.get("NODE_PWD", None)
-                        if user_credentials is None
-                        else user_credentials[1],
+                        "username": user_credentials[0],
+                        "password": user_credentials[1],
                     },
                 )
             )
@@ -378,6 +380,7 @@ async def authenticate_node_client(
                     resolved_model = EntityLoginResult.parse_obj(
                         await login_request.json()
                     )  # * Resolve via pydantic.
+
                     resolve_entity_to_role = (
                         NodeType.MASTER_NODE
                         if resolved_model.user_role == UserEntity.MASTER_NODE_USER
@@ -389,7 +392,7 @@ async def authenticate_node_client(
                         from utils.processors import unconventional_terminate
 
                         unconventional_terminate(
-                            message=f"Node was able to login successfully but the acccount type is not suitable for instance type. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().assigned_role} instead.",
+                            message=f"Node was able to login successfully but the acccount type is not suitable for the type of instance. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().assigned_role} instead.",
                             early=True,
                         )
 
@@ -401,17 +404,14 @@ async def authenticate_node_client(
                         )
                     )
 
-                    if (  # Ensure fields are None from the environment file and process the credentials.
-                        env.get("NODE_USERNAME", None) is None
-                        and env.get("NODE_PWD", None) is None
-                        and user_credentials
-                    ):
+                    # * Since we have a different way of registering `MASTER_NODE` (self-registration), we have to handle its output here.
+                    if role == NodeType.MASTER_NODE:
                         with open(AUTH_ENV_FILE_NAME, "a") as env_writer:
                             env_writer.write(
-                                f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}"
+                                f"NODE_USERNAME={user_credentials[0]}\nNODE_PWD={user_credentials[1]}\n"
                             )
 
-                        logger.info(f"Authenticated as {resolved_model.user_address}.")
+                    logger.info(f"Authenticated as {resolved_model.user_address}.")
                     break
 
                 else:

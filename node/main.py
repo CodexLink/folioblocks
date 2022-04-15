@@ -28,6 +28,7 @@ from api.explorer import explorer_router
 from blueprint.models import tokens, users
 from blueprint.schemas import Tokens
 from core.args import args_handler as ArgsHandler
+from os import environ as env
 from core.blockchain import get_blockchain_instance
 from core.constants import (
     ASGI_APP_TARGET,
@@ -148,9 +149,15 @@ async def pre_initialize() -> None:
                 message=f"Your instance (as a {parsed_args.assigned_role}) requires a `TARGET_HOST` as well as `TARGET_PORT` to contact the master node blockchain. Please try again with those parameters supplied.",
             )
         else:
-            await contact_master_node(
-                master_host=parsed_args.target_host, master_port=parsed_args.target_port
-            )
+            # * I don't know, I don't like to complicate this with another complex conditional checking here. Try to visualize what will happen here on some certain extreme-isolated case condition.
+            if (
+                env.get("NODE_USERNAME", None) is not None
+                and env.get("NODE_PWD", None) is not None
+            ):
+                await contact_master_node(
+                    master_host=parsed_args.target_host,
+                    master_port=parsed_args.target_port,
+                )
 
     await get_database_instance().connect()  # * Initialize the database.
     create_task(
@@ -165,20 +172,18 @@ async def post_initialize() -> None:
     - Tasks moved from the initialize() function may adjust to concurrently run the instance while doing other several checks.
     """
 
+    await authenticate_node_client(
+        role=NodeType(parsed_args.assigned_role),
+        instances=(parsed_args, get_database_instance()),
+    )
+
     if parsed_args.assigned_role == NodeType.ARCHIVAL_MINER_NODE.name:
         # @o As an `ARCHIVAL_MINER_NODE`, store the target host address and port, which will be accessed later.
         parsed_args.target_host, parsed_args.target_port = get_master_node_properties(
             key=REF_MASTER_BLOCKCHAIN_ADDRESS
         ), get_master_node_properties(key=REF_MASTER_BLOCKCHAIN_PORT)
 
-    await authenticate_node_client(
-        role=NodeType(parsed_args.assigned_role),
-        instances=(parsed_args, get_database_instance()),
-    )
-
-    if (  ## Ensure that the email services were activated.
-        parsed_args.assigned_role == NodeType.MASTER_NODE.name
-    ):
+    else:  # * Resolved to NodeType.MASTER_NODE.
         await look_for_archival_nodes()
 
     # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER_NODE will initialize their local or universal (depending on the role) blockchain file.
