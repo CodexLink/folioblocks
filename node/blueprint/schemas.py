@@ -218,28 +218,28 @@ class Transaction(BaseModel):
     tx_hash: HashUUID | None
     action: TransactionActions
     status: TransactionStatus
-    payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInitializer | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction
-    signatures: TransactionSignatures
     from_address: AddressUUID
     to_address: AddressUUID | None
+    payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInitializer | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction
+    signatures: TransactionSignatures
 
 
 class HashableBlock(BaseModel):
     nonce: int | None
     validator: AddressUUID
-    transactions: list[Transaction] | None
     timestamp: datetime
+    transactions: list[Transaction] | None
 
 
 class BaseBlock(BaseModel):
     id: int
-    block_size: int | None
+    block_size_bytes: int | None
 
 
 class Block(BaseBlock):
-    contents: HashableBlock
     hash_block: HashUUID | None
     prev_hash_block: HashUUID
+    contents: HashableBlock
 
 
 class BlockOverview(BaseBlock):

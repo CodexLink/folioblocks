@@ -59,6 +59,7 @@ from blueprint.schemas import (
     NodeNegotiationTransaction,
     NodeRegisterTransaction,
 )
+from core.constants import INFINITE_TIMER
 from utils.processors import validate_user_address
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
@@ -177,6 +178,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info("Blockchain system is ready.")
 
             create_task(self._block_timer_executor())
+
+            print("final", self._chain)
 
         else:
             if self.identity is not None:
@@ -637,7 +640,7 @@ class BlockchainMechanism(ConsensusMechanism):
     async def _append_block(
         self,
         *,
-        context: Block | Transaction,
+        context: Block,
     ) -> None:
         """
         A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
@@ -650,7 +653,7 @@ class BlockchainMechanism(ConsensusMechanism):
         * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
         """
         if self._chain is not None:
-            block_context = context.dict()
+            block_context: dict = context.dict()
             block_context["contents"] = frozendict(block_context["contents"])
 
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
@@ -660,8 +663,37 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
                 return
 
+            # - Apply immutability on other `dict` objects from the block context.
+            # @o As per the approach indicated from the `self._process_serialize_to_blockchain_file`. We are going to do this in descending form.
+
+            if len(block_context["contents"]["transactions"]):
+                for transaction_idx, transaction_data in enumerate(
+                    block_context["contents"]["transactions"]
+                ):
+                    # - [1] Apply immutability on the transactions -> `payload`
+                    block_context["contents"]["transactions"][transaction_idx][
+                        "payload"
+                    ] = frozendict(transaction_data["payload"])
+
+                    # - [2] Apply immutability on the transactions -> `signatures`
+                    block_context["contents"]["transactions"][transaction_idx][
+                        "signatures"
+                    ] = frozendict(transaction_data["signatures"])
+
+                    # - [3] Apply immutability on the transaction/s set.
+                    block_context["contents"]["transactions"][
+                        transaction_idx
+                    ] = frozendict(transaction_data)
+
+                # - [4] Apply immutability on the contents, contaning a set of transaction/s.
+                block_context["contents"] = frozendict(block_context["contents"])
+
+            # - [5] Apply immutability from the whole block and then append it.
             self._chain["chain"].append(frozendict(block_context))
+
+            # ! Hit the next block for the allocation as we finished processing a block!
             self.cached_block_id += 1
+
             await self._process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
@@ -801,7 +833,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     def _create_block(self) -> Block | None:
 
-        # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size, and hash_block.
+        # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size_bytes, and hash_block.
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
 
@@ -823,7 +855,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         _block: Block = Block(
             id=self.cached_block_id,
-            block_size=None,  # * Unsolvable at instantiation but can be filled before returning it.
+            block_size_bytes=None,  # * Unsolvable at instantiation but can be filled before returning it.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
             prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if last_block is None else HashUUID(last_block.hash_block),  # type: ignore
             contents=HashableBlock(
@@ -834,10 +866,10 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
         )
 
-        _block.block_size = asizeof(_block.contents.json())
+        _block.block_size_bytes = asizeof(_block.contents.json())
 
         logger.info(
-            f"Block #{_block.id} with a size of ({_block.block_size} bytes) has been created."
+            f"Block #{_block.id} with a size of ({_block.block_size_bytes} bytes) has been created."
         )
 
         return _block
@@ -1067,7 +1099,7 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.info(f"Attempting to mine a Block #{block.id} ...")
 
         while True:
-            # https://st``ackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
+            # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
 
             block.contents.nonce = random_generator.randint(0, MAX_INT_PYTHON)
             computed_hash: HashUUID = HashUUID(
@@ -1101,62 +1133,71 @@ class BlockchainMechanism(ConsensusMechanism):
         operation: BlockchainIOAction,
         context_from_update: BlockchainPayload | tuple = tuple(),
         bypass_from_update: bool = False,
-    ) -> frozendict:
-        if operation in BlockchainIOAction:
-            async with aopen(
-                BLOCKCHAIN_RAW_PATH,
-                "w" if operation == BlockchainIOAction.TO_WRITE else "r",
-            ) as content_buffer:
+    ) -> frozendict:  # type: ignore # ! Both final conditions return `frozendict` already.
 
-                if operation == BlockchainIOAction.TO_WRITE:
+        if operation not in BlockchainIOAction:
+            unconventional_terminate(
+                message=f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead. This is an internal error.",
+            )
+            await sleep(INFINITE_TIMER)
 
-                    if not bypass_from_update and not len(context_from_update):
-                        byte_json_content: bytes = export_to_json(
-                            self._chain,
-                            default=self._process_serialize_to_file_blockchain,
-                        )
+        async with aopen(
+            BLOCKCHAIN_RAW_PATH,
+            "w" if operation is BlockchainIOAction.TO_WRITE else "r",
+        ) as content_buffer:
 
-                        logger.debug(
-                            f"Updating blockchain file's hash signature on database. | Targets: {BLOCKCHAIN_RAW_PATH}"
-                        )
-                        new_blockchain_hash: str = sha256(byte_json_content).hexdigest()
+            if operation is BlockchainIOAction.TO_WRITE:
+                if not bypass_from_update and not len(context_from_update):
+                    byte_json_content: bytes = export_to_json(
+                        self._chain,
+                        default=self._process_serialize_to_blockchain_file,
+                    )
 
-                        await self._update_chain_hash(new_hash=new_blockchain_hash)
-                        await content_buffer.write(byte_json_content.decode("utf-8"))
+                    logger.debug(
+                        f"Updating blockchain file's hash signature on database. | Targets: {BLOCKCHAIN_RAW_PATH}"
+                    )
+                    new_blockchain_hash: str = sha256(byte_json_content).hexdigest()
 
-                        logger.debug(
-                            f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
-                        )
-                    else:
-                        logger.warning(
-                            "Bypass from the update method has been imposed. Attempting to insert data "
-                        )
-                        await self._update_chain_hash(new_hash=context_from_update[0])
-                        await content_buffer.write(context_from_update[1])
+                    await self._update_chain_hash(new_hash=new_blockchain_hash)
+                    await content_buffer.write(byte_json_content.decode("utf-8"))
 
-                    return self._chain
-
+                    logger.debug(
+                        f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
+                    )
                 else:
-                    raw_data = await content_buffer.read()
-                    partial_deserialized_data = import_raw_json_to_dict(raw_data)
-                    deserialized_data = self._process_deserialize_to_load_blockchain(
+                    logger.warning(
+                        "Bypass from the update method has been imposed. Attempting to insert data "
+                    )
+                    await self._update_chain_hash(new_hash=context_from_update[0])
+                    await content_buffer.write(context_from_update[1])
+
+                return self._chain
+
+            else:
+                raw_data = await content_buffer.read()
+                partial_deserialized_data = import_raw_json_to_dict(raw_data)
+                deserialized_data = (
+                    self._process_deserialize_to_load_blockchain_in_memory(
                         partial_deserialized_data
                     )
+                )
+
+                if deserialized_data is None:
+                    unconventional_terminate(
+                        message="Houston, we have a problem! We cannot deserialize from the JSON file. This is most likely someone modified the blockchain file! Please report this to the administrators and ensure that the backup has been added."
+                    )  # * Resolves to condition 'deserialized_data is None'.
+                    await sleep(INFINITE_TIMER)
+
+                else:
                     logger.info(
                         f"Chain has been loaded from the file to the in-memory!"
                     )
-
                     return deserialized_data
 
-        unconventional_terminate(
-            message=f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead. This is an internal error.",
-        )
-        return None
-
-    def _process_deserialize_to_load_blockchain(
+    def _process_deserialize_to_load_blockchain_in_memory(
         self,
         context: dict[str, Any],
-    ) -> frozendict:
+    ) -> frozendict | None:
         """
         A method that deserializes the universally readable (JSON) format from the blockchain file into an immutable dictionary (frozendict) containing a series of pydantic objects.
 
@@ -1170,23 +1211,50 @@ class BlockchainMechanism(ConsensusMechanism):
         # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
         if isinstance(context, dict):
 
-            for dict_idx, dict_data in enumerate(context["chain"]):
-                # * For every block, we have to deserialize (1) timestamps to `datetime`, (2) `content` to immutable 'dict' (frozendict) and transactions.
+            for block_idx, block_data in enumerate(context["chain"]):
+                # @o For every block, we have to deserialize (1) the block itself, (2) contents of the block, which contains the transactions, (3) the payload as well as the (4) the signatures of the transactions.
+                # - We are going to do this in reverse. Since doing this in ascending would prohibit due to existing cast of `frozendict` to each field.
 
-                context["chain"][dict_idx]["contents"] = frozendict(
-                    dict_data["contents"]
+                # - Check if there's a transaction first.
+                if len(context["chain"][block_idx]["contents"]["transactions"]):
+
+                    for transaction_idx, each_transaction in enumerate(
+                        block_data["contents"]["transactions"]
+                    ):
+                        # - Inside transaction, it contains another `dict` objects, such as the paload and signature.
+                        # @o We need to cast that as well to ensure that there are no override ability for all types of objects.
+                        context["chain"][block_idx]["contents"]["transactions"][
+                            transaction_idx
+                        ]["payload"] = frozendict(each_transaction["payload"])
+
+                        context["chain"][block_idx]["contents"]["transactions"][
+                            transaction_idx
+                        ]["signatures"] = frozendict(each_transaction["signatures"])
+
+                        # - When done on the set of transactions, cast the immutability of the whole `transaction`.
+                        context["chain"][block_idx]["contents"]["transactions"][
+                            transaction_idx
+                        ] = frozendict(
+                            block_data["contents"]["transactions"][transaction_idx]
+                        )
+
+                # - Add immutability to the `contents`, which encapsulates the whole set of `transactions`.
+                context["chain"][block_idx]["contents"] = frozendict(
+                    block_data["contents"]
                 )
-                # * Then, make the whole block immutable and insert it as reference from the blockchain.
-                context["chain"][dict_idx] = frozendict(dict_data)
 
+                # - Then, make the whole block immutable and insert it as reference from the blockchain.
+                context["chain"][block_idx] = frozendict(block_data)
+
+                # - Additional Checking
                 # @o Check backward reference from the current block to recent block.
-                if dict_idx:  # ! Mind the zero-based list access.
+                if block_idx:  # ! Mind the zero-based list access.
                     if (
-                        dict_data["prev_hash_block"]
-                        != context["chain"][dict_idx - 1]["hash_block"]
+                        block_data["prev_hash_block"]
+                        != context["chain"][block_idx - 1]["hash_block"]
                     ):
                         logger.critical(
-                            f"Block #{dict_data['id']}'s backward reference to Block #{dict_data['id'] - 1} is invalid! | Expects (from Current Block): {dict_data['hash_block']}, got {context['chain'][dict_idx - 1]['prev_hash_block']} instead."
+                            f"Block #{block_data['id']}'s backward reference to Block #{block_data['id'] - 1} is invalid! | Expects (from Current Block): {block_data['hash_block']}, got {context['chain'][block_idx - 1]['prev_hash_block']} instead."
                         )
 
                         logger.critical(
@@ -1197,24 +1265,24 @@ class BlockchainMechanism(ConsensusMechanism):
                         # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
                     logger.info(
-                        f"Block #{dict_data['id']} backward reference to Block# {dict_data['id'] - 1} is valid!"
+                        f"Block #{block_data['id']} backward reference to Block# {block_data['id'] - 1} is valid!"
                     )
                 else:
                     logger.debug(
-                        f"Block #{dict_data['id']} doesn't have a prev or leading block to compare reference, probably the latest block."
+                        f"Block #{block_data['id']} doesn't have a prev or leading block to compare reference, probably the latest block."
                     )
 
-                # @o If cached_block_id is equal to dict_data["id"]. Then increment it easily.
-                if self.cached_block_id == dict_data["id"]:
+                # - If cached_block_id is equal to dict_data["id"]. Then increment it easily.
+                if self.cached_block_id == block_data["id"]:
                     self.cached_block_id += 1
                     logger.debug(
-                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.cached_block_id}, Recent Block ID (Decremented by 1): {dict_data['id']}"
+                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.cached_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
                     )
 
-                # @o However, when its not equal then then something is wrong.
+                # - However, when its not equal then then something is wrong.
                 else:
                     unconventional_terminate(
-                        message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {dict_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
+                        message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
                     )
                     return None
 
@@ -1228,7 +1296,7 @@ class BlockchainMechanism(ConsensusMechanism):
             message=f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)}). This is a logic error, please report to the developers as soon as possible.",
         )
 
-    def _process_serialize_to_file_blockchain(self, o: frozendict) -> dict[str, Any]:
+    def _process_serialize_to_blockchain_file(self, o: frozendict) -> dict[str, Any]:
         """
         A method that serializes the python objects to a much more universally-readable JSON format to the blockchain file.
 
@@ -1249,40 +1317,36 @@ class BlockchainMechanism(ConsensusMechanism):
         if isinstance(o, frozendict):  # * Cast mutability on the whole chain.
             _o = dict(deepcopy(o))
             for block_idx, each_block in enumerate(_o["chain"]):
+
                 # * Then cast mutability from the whole block of the chain.
                 _o["chain"][block_idx] = dict(each_block)
 
-                # * Lastly, cast mutability to the content of the whole block of the chain.
+                # * Cast mutability to the content of the whole block of the chain.
                 _o["chain"][block_idx]["contents"] = dict(each_block["contents"])
+
+                if len(_o["chain"][block_idx]["contents"]["transactions"]):
+                    for transaction_idx, each_transactions in enumerate(
+                        _o["chain"][block_idx]["contents"]["transactions"]
+                    ):
+
+                        # * Cast mutability on the whole transaction.
+                        _o["chain"][block_idx]["contents"]["transactions"][
+                            transaction_idx
+                        ] = dict(each_transactions)
+
+                        # * Cast mutability of the transaction's payload.
+                        _o["chain"][block_idx]["contents"]["transactions"][
+                            transaction_idx
+                        ]["payload"] = dict(each_transactions["payload"])
+
+                        # * Cast mutability of the transaction's signatures.
+                        _o["chain"][block_idx]["contents"]["transactions"][
+                            transaction_idx
+                        ]["signatures"] = dict(each_transactions["signatures"])
 
             return _o
 
         raise TypeError
-
-    async def _process_serialize_internal_transaction(
-        self,
-        transaction: NodeRegisterTransaction
-        | NodeGenesisTransaction
-        | NodeCertificateTransaction
-        | NodeSyncTransaction
-        | NodeNegotiationTransaction
-        | NodeMinerProofTransaction
-        | HashUUID,
-    ):
-
-        if isinstance(transaction, str):
-            return transaction
-
-        for each_model_candidate in [
-            NodeRegisterTransaction
-            | NodeGenesisTransaction
-            | NodeCertificateTransaction
-            | NodeSyncTransaction
-            | NodeNegotiationTransaction
-            | NodeMinerProofTransaction
-        ]:
-            if isinstance(transaction, each_model_candidate):
-                return transaction.dict()
 
     # TODO: Ensure to follow the rule that we made last time.
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
@@ -1350,8 +1414,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     # TODO: Documentation.
                     # - When we got a result, pop from the asyncio._Tasks to expose the `ClientResponse`.
                     # - With that, parse the `ClientResponse` to be converted to a pythonic dictionary data type.
-                    self._chain = self._process_deserialize_to_load_blockchain(
-                        import_raw_json_to_dict(dict_blockchain_content["content"])
+                    self._chain = (
+                        self._process_deserialize_to_load_blockchain_in_memory(
+                            import_raw_json_to_dict(dict_blockchain_content["content"])
+                        )
                     )
 
                     # ! Once we inject the new payload after fetch, then write it from the file.
