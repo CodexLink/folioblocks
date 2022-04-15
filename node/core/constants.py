@@ -229,9 +229,9 @@ class LoggerLevelCoverage(Enum):
     TRACE = "TRACE"
 
 
-class NodeType(Enum):
-    MASTER_NODE = "MASTER_NODE"
-    ARCHIVAL_MINER_NODE = "ARCHIVAL_MINER_NODE"
+class NodeType(IntEnum):
+    MASTER_NODE = auto()
+    ARCHIVAL_MINER_NODE = auto()
 
 
 # # Enums, Database
@@ -256,10 +256,10 @@ class EmploymentApplicationState(IntEnum):
     ACCEPTED = auto()
 
 
-class TokenStatus(Enum):
-    EXPIRED = "Token Expired"
-    CREATED_FOR_USE = "Token Recently Created"
-    LOGGED_OUT = "Token Disposed: Logged Out"
+class TokenStatus(IntEnum):
+    EXPIRED = auto()
+    CREATED_FOR_USE = auto()
+    LOGGED_OUT = auto()
 
 
 class TransactionContextMappingType(IntEnum):
@@ -277,9 +277,9 @@ class TransactionContextMappingType(IntEnum):
     SCHOOL_EXTRA_INFO = auto()
 
 
-class UserActivityState(Enum):
-    OFFLINE = "Offline"
-    ONLINE = "Online"
+class UserActivityState(IntEnum):
+    OFFLINE = auto()
+    ONLINE = auto()
 
 
 class UserEntity(Enum):
@@ -319,10 +319,10 @@ class HTTPQueueStatus(IntEnum):
 
 
 # # Enums, Transaction-Related Attributes
-class NodeTransactionInternalActions(Enum):
-    CONSENSUS = "INTERNAL_CONSENSUS"
-    INIT = "INTERNAL_INIT"
-    SYNC = "INTERNAL_SYNC"
+class NodeTransactionInternalActions(IntEnum):
+    CONSENSUS = auto()
+    INIT = auto()
+    SYNC = auto()
 
 
 # # SORT THIS.
@@ -355,47 +355,52 @@ class TransactionContentCategory(IntEnum):
 
 
 class TransactionStatus(IntEnum):
-    SUCCESS = auto()
     FAILED = auto()
+    SUCCESS = auto()
 
 
-class TransactionActions(Enum):
+class TransactionActions(IntEnum):
+    # # Note that this was the same as the <class `TransactionActionsReadable`>, but for this case, the declaration would be the same as the name.
+    # @o To conform with pydantic models using another pydantic models or specially, Enum classes. I would be referring to an Enum class where it should output a technical name.
+    # @o Since I cannot infer `TransactionActions` while providing `TransactionActions.name` which results to `str` it would be not elegant where all fields are relying in other objects for validation.
+    # @o With that, `TransactionActionsReadable` were born. That enum alone can be used for exporting data from Explorer and Dashboard API.
+
+    # * As I practice DRY principles, I know the disadvatange of magic numbers and then using them later on in the frontend without knowing what the heck are those numbers.
+    # * Rest assured I will be resolving that issue and will map those Enums the same as how I go here.
+
+    # - There was a debate inside my head whether I would go for string enum or integer enums, read more for recommendations:
+    # - https://softwareengineering.stackexchange.com/questions/266582/is-it-better-to-use-strings-or-int-to-reference-enums-outside-the-java-part-of-t
+
     # - Node-based Transactions: General
-    NODE_GENERAL_CONSENSUS_INITIATE = "Node: Certificate Init"  # # Done.
-    NODE_GENERAL_REGISTER_INIT = "Node: Register"  # # Done.
-    NODE_GENERAL_GENESIS_INITIALIZATION = "Node: Genesis Block Init"  # # Done.
-
-    # - Node-based Transaction: Negotiation (Consensus)
-    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = "Consensus: Blockchain Sync"  # # Done.
-    NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = "Consensus: Mine Negotiation"
-    NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = "Consensus: Receive Miner Proof"  # ! TBD after implementing node. Method signature may change since it only contains blueprint.
+    NODE_GENERAL_CONSENSUS_INITIATE = auto()
+    NODE_GENERAL_REGISTER_INIT = auto()
+    NODE_GENERAL_GENESIS_INITIALIZATION = auto()
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
+    # - Node-based Transaction: Negotiation (Consensus)
+    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = auto()
+    NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = auto()
+    NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = auto()
 
     # - For Students as Applicants.
-    # * Note that their data cannot be modified since it was the administrator of the institution who does that.
+    APPLICANT_APPLY = auto()
+    APPLICANT_APPLY_CONFIRMED = auto()
+    APPLICANT_APPLY_REJECTED = auto()
 
-    APPLICANT_APPLY = "Applicant: Apply Process"
-    APPLICANT_APPLY_CONFIRMED = (
-        "Applicant: Apply Confirmed"  # * Association should be assigned here.
-    )
-    APPLICANT_APPLY_REJECTED = "Applicant: Apply Rejected"
-
-    # ! About Classification / Organization
+    # # About Classification / Organization
     # # Groups with classification of organization should refer to the actual classification instead of just organization.
-
     # - For Company / Organization.
     # ! Note that this/these may not be used since our scenario is leaning towards to applicants wanting to get hired by them doing the process.
-    COMPANY_INVITE_APPLICANTS = "Company: Invite Applicants"  # * As a workaround, we can do some email send module.
+    COMPANY_INVITE_APPLICANTS = auto()
 
     # - For Institutions / Organization.
-    INSTITUTION_ORG_GENERATE_APPLICANT = "Generate Applicants"
-    INSTITUTION_ORG_REFER_NEW_DOCUMENT = "Applicant: Document Reference"  # * This is a seperate action. THIS REQUIRES FILE.
-    INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO = "Applicant: New Info"
+    INSTITUTION_ORG_GENERATE_APPLICANT = auto()
+    INSTITUTION_ORG_REFER_NEW_DOCUMENT = auto()
+    INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO = auto()
 
     # - For Organization, in general.
-    ORGANIZATION_USER_REGISTER = "Org: Authority Register"
-    ORGANIZATION_REFER_EXTRA_INFO = "Org: Extra Info"
+    ORGANIZATION_USER_REGISTER = auto()
+    ORGANIZATION_REFER_EXTRA_INFO = auto()
 
 
 # # Program Metadata
@@ -409,9 +414,6 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
     "The use of arguments are intended for debugging purposes and development only. Please be careful and be vigilant about the requirements to make certain arguments functioning."
 )
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
-    ArgumentParameter("ASSIGNED_ROLE"): ArgumentDescription(
-        f"Assigns and represents the role of this node. Each role in {NodeType} represents different functionality. Please use the assigned role to avoid potential errors."
-    ),
     ArgumentParameter("KEY_FILE"): ArgumentDescription(
         "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is a file name and is not required, unless the file has a different name."
     ),
@@ -423,6 +425,9 @@ FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
     ),
     ArgumentParameter("NODE_PORT"): ArgumentDescription(
         "The port associated from the host address where this instance will be established. Ensure that this instance is not conflicted with other instances as it will cause to fail before it can get to run its ASGI instance."
+    ),
+    ArgumentParameter("NODE_ROLE"): ArgumentDescription(
+        f"The role of this node. Each role in {NodeType} represents different functionality. Please use the assigned role to avoid potential errors."
     ),
     ArgumentParameter("NO_LOG_FILE"): ArgumentDescription(
         "Disables logging to a file. This does not however, disables logging through CLI."

@@ -74,12 +74,20 @@ from utils.processors import (
 
 """
 parsed_args: Namespace = ArgsHandler.parse_args()
+
+# *Resolve some literal parameters to Enum object.
+parsed_args.node_role = (
+    NodeType.MASTER_NODE
+    if parsed_args.node_role == NodeType.MASTER_NODE.name
+    else NodeType.ARCHIVAL_MINER_NODE
+)
+parsed_args.log_level = LoggerLevelCoverage(parsed_args.log_level)
 store_args_value(parsed_args)
 
 """
 # About these late import of routers.
 @o Since these API endpoints require evaluation from the `parsed_args`, import them after storing `parsed_args` for them to access later.
-@o They need to access these so that certain endpoints will be excluded based on the `parsed_args.assigned_role`.
+@o They need to access these so that certain endpoints will be excluded based on the `parsed_args.node_role`.
 ! Note that their contents will change, so better understand the condition and its output as it may contain a router or just a set of functions to call for request to the `MASTER` node.
 """
 
@@ -112,7 +120,7 @@ api_handler: FastAPI = FastAPI()
 
 api_handler.include_router(node_router)
 
-if parsed_args.assigned_role == NodeType.MASTER_NODE.name:
+if parsed_args.node_role is NodeType.MASTER_NODE:
     from api.entity import entity_router
 
     api_handler.include_router(admin_router)
@@ -131,22 +139,20 @@ api_handler.add_middleware(
 
 @api_handler.on_event("startup")
 async def pre_initialize() -> None:
-    logger.info(
-        f"Detected as {NodeType.MASTER_NODE.name if parsed_args.assigned_role == NodeType.MASTER_NODE.name else NodeType.ARCHIVAL_MINER_NODE.name} ..."
-    )
+    logger.info(f"Role Detected as {parsed_args.node_role} ...")
 
     await get_http_client_instance().initialize()  # * Initialize the HTTP client for such requests.
 
     await initialize_resources_and_return_db_context(
         runtime=RuntimeLoopContext(__name__),
-        role=NodeType(parsed_args.assigned_role),
+        role=NodeType(parsed_args.node_role),
         auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
     )
 
-    if parsed_args.assigned_role == NodeType.ARCHIVAL_MINER_NODE.name:
+    if parsed_args.node_role is NodeType.ARCHIVAL_MINER_NODE:
         if parsed_args.target_host is None or parsed_args.target_port is None:
             unconventional_terminate(
-                message=f"Your instance (as a {parsed_args.assigned_role}) requires a `TARGET_HOST` as well as `TARGET_PORT` to contact the master node blockchain. Please try again with those parameters supplied.",
+                message=f"Your instance (as a {parsed_args.node_role}) requires a `TARGET_HOST` as well as `TARGET_PORT` to contact the master node blockchain. Please try again with those parameters supplied.",
             )
         else:
             # * I don't know, I don't like to complicate this with another complex conditional checking here. Try to visualize what will happen here on some certain extreme-isolated case condition.
@@ -173,11 +179,11 @@ async def post_initialize() -> None:
     """
 
     await authenticate_node_client(
-        role=NodeType(parsed_args.assigned_role),
+        role=NodeType(parsed_args.node_role),
         instances=(parsed_args, get_database_instance()),
     )
 
-    if parsed_args.assigned_role == NodeType.ARCHIVAL_MINER_NODE.name:
+    if parsed_args.node_role is NodeType.ARCHIVAL_MINER_NODE:
         # @o As an `ARCHIVAL_MINER_NODE`, store the target host address and port, which will be accessed later.
         parsed_args.target_host, parsed_args.target_port = get_master_node_properties(
             key=REF_MASTER_BLOCKCHAIN_ADDRESS
@@ -187,9 +193,7 @@ async def post_initialize() -> None:
         await look_for_archival_nodes()
 
     # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER_NODE will initialize their local or universal (depending on the role) blockchain file.
-    create_task(
-        get_blockchain_instance(role=NodeType(parsed_args.assigned_role)).initialize()
-    )
+    create_task(get_blockchain_instance(role=parsed_args.node_role).initialize())
 
 
 @api_handler.on_event("shutdown")
@@ -204,7 +208,7 @@ async def terminate() -> None:
     http_instance: HTTPClient = get_http_client_instance()
     # blockchain_instance: BlockchainMechanism = get_blockchain_instance()
 
-    if parsed_args.assigned_role == NodeType.MASTER_NODE.name:
+    if parsed_args.node_role is NodeType.MASTER_NODE:
         email_instance: EmailService | None = get_email_instance()
 
         if email_instance is not None and email_instance.is_connected:
@@ -260,13 +264,12 @@ async def terminate() -> None:
 
 """
 
-if parsed_args.assigned_role == NodeType.MASTER_NODE.name:
+if parsed_args.node_role is NodeType.MASTER_NODE:
     logger.warning(
-        f"Several functions for the `{NodeType.MASTER_NODE} `were imported due to invocation of the role."
+        f"Several functions for the `{NodeType.MASTER_NODE.name} `were imported due to invocation of the role."
     )
 
     @api_handler.on_event("startup")
-    # T
     @repeat_every(seconds=120, wait_first=True)
     async def jwt_invalidation_on_users() -> None:
         ## Query available tokens.
@@ -335,5 +338,5 @@ if __name__ == "__main__":
         host=parsed_args.node_host,
         port=parsed_args.node_port,
         log_config=logger_config,
-        log_level=LoggerLevelCoverage(parsed_args.log_level).value.lower(),
+        log_level=parsed_args.log_level.value.lower(),
     )

@@ -390,9 +390,9 @@ async def initialize_resources_and_return_db_context(
             logger.info("Database file has been encrypted.")
 
             logger.warning(
-                f"To re-iterate, the system detects the invocation of role as a {role}. {'Please insert email address and password for the email services.'  if role == NodeType.MASTER_NODE else 'The system will attempt to generate `AUTH_KEY` and `SECRET_KEY`.'}"
+                f"To re-iterate, the system detects the invocation of role as a {role.name}. {'Please insert email address and password for the email services.'  if role is NodeType.MASTER_NODE else 'The system will attempt to generate `AUTH_KEY` and `SECRET_KEY`.'}"
             )
-            if role == NodeType.MASTER_NODE:
+            if role is NodeType.MASTER_NODE:
                 logger.warning(
                     "Please ENSURE that credentials are correct. Don't worry, it will be hashed along with the `auth_key` that is generated here."
                 )
@@ -410,7 +410,7 @@ async def initialize_resources_and_return_db_context(
                     f"SECRET_KEY={token_hex(32)}",
                 ]
 
-                if role == NodeType.MASTER_NODE:
+                if role is NodeType.MASTER_NODE:
                     env_context.append(f"EMAIL_SERVER_ADDRESS={credentials[0]}")
                     env_context.append(f"EMAIL_SERVER_PWD={credentials[1]}")
 

@@ -59,7 +59,7 @@ from sqlalchemy.sql.expression import Select
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
-evaluated_role: NodeType = NodeType(get_args_value().assigned_role)
+evaluated_role: NodeType = NodeType(get_args_value().node_role)
 
 entity_router = APIRouter(
     prefix="/entity",

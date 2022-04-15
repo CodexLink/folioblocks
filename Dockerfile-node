@@ -52,7 +52,7 @@ RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
 RUN chmod +x main.py
 
 # # Run the file.
-ENTRYPOINT python3 main.py --assigned-role $THIS_NODE_ROLE --log-level INFO --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT
+ENTRYPOINT python3 main.py --log-level INFO --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT
 
 # TODO: Not sure if this is working when the stop button is stopped.
 STOPSIGNAL SIGINT
