@@ -725,6 +725,7 @@ async def contact_master_node(*, master_host: str, master_port: int) -> None:
         method=HTTPQueueMethods.GET,
         await_result_immediate=True,
         name="contact_master_node",
+        retry_attempt=99,
     )
 
     if master_node_response.ok:

@@ -158,7 +158,9 @@ class HTTPClient:
 
                 res_req_equiv = self.get_remaining_responses.get(name, None)
 
-                logger.debug(f"Fetching response named as {name} ...")
+                logger.debug(
+                    f"Attempt #{request_iterator} | Fetching response named as `{name}` ..."
+                )
 
                 if res_req_equiv is not None and request_iterator:
                     returned_response: ClientResponse | None = (
@@ -170,7 +172,7 @@ class HTTPClient:
 
                     if not do_not_retry:
                         logger.warning(
-                            f"Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
+                            f"Attempt #{request_iterator} | Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
                         )
 
                         self._queue.append(wrapped_request)
@@ -179,7 +181,9 @@ class HTTPClient:
                         continue
 
                 if request_iterator and not do_not_retry:
-                    logger.error(f"Response {name} doesn't exist, for now. Retrying...")
+                    logger.error(
+                        f"Attempt #{request_iterator} | Response {name} doesn't exist, for now. Retrying..."
+                    )
                     continue
 
                 elif not request_iterator and not do_not_retry:
@@ -248,7 +252,7 @@ class HTTPClient:
             return None
 
         if fetched_request is not None:
-            logger.info(f"Request {request_name} has been fetched.")
+            logger.info(f"Request '{request_name}' has been fetched.")
             try:
                 if not fetched_request.done():
                     logger.warning(
@@ -317,7 +321,8 @@ class HTTPClient:
 
                     for each_leftout_request in _cached.values():
                         if self._response.get(each_leftout_request, None) is not None:
-                            # Compare the last state with the currently async-mutated dictionary and remove the element if they are still existing, otherwise ignore it.
+
+                            # * Compare the last state with the currently async-mutated dictionary and remove the element if they are still existing, otherwise ignore it.
                             each_leftout_request.cancel()
                             self._response.popitem()
                     break
@@ -326,7 +331,7 @@ class HTTPClient:
 
             break
 
-        logger.info("All requests done! HTTP client sessions will close.")
+        logger.info("All requests destroyed! HTTP client sessions will close.")
         return await self._session.close()
 
     async def _sync_state_to_database(
