@@ -48,7 +48,7 @@
       "console": "integratedTerminal",
       "justMyCode": false,
       "args": ["--local", "--prefer-role", "ARCHIVAL_MINER_NODE"]
-    }
+    },
     {
       "name": "Folioblocks Node Backend: Debug BLOCKCHAIN Special",
       "type": "python",
@@ -57,6 +57,24 @@
       "console": "integratedTerminal",
       "justMyCode": false,
       "args": ["--prefer-role", "MASTER_NODE", "--log-level", "DEBUG"]
+    },
+    {
+      "name": "Proto Launch w/ Reload",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["node.proto_response:app", "--reload"]
+    },
+    {
+      "name": "Proto Launch",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": ["node.proto_response:app"]
     }
   ]
 }
