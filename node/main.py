@@ -162,16 +162,6 @@ async def pre_initialize() -> None:
             unconventional_terminate(
                 message=f"Your instance (as a {parsed_args.node_role}) requires a `TARGET_HOST` as well as `TARGET_PORT` to contact the master node blockchain. Please try again with those parameters supplied.",
             )
-        else:
-            # * I don't know, I don't like to complicate this with another complex conditional checking here. Try to visualize what will happen here on some certain extreme-isolated case condition.
-            if (
-                env.get("NODE_USERNAME", None) is not None
-                and env.get("NODE_PWD", None) is not None
-            ):
-                await contact_master_node(
-                    master_host=parsed_args.target_host,
-                    master_port=parsed_args.target_port,
-                )
 
     await get_database_instance().connect()  # * Initialize the database.
     create_task(
@@ -191,6 +181,16 @@ async def post_initialize() -> None:
         role=NodeType(parsed_args.node_role),
         instances=(parsed_args, get_database_instance()),
     )
+
+    # * I don't know, I don't like to complicate this with another complex conditional checking here. Try to visualize what will happen here on some certain extreme-isolated case condition.
+    if (
+        env.get("NODE_USERNAME", None) is not None
+        and env.get("NODE_PWD", None) is not None
+    ):
+        await contact_master_node(
+            master_host=parsed_args.target_host,
+            master_port=parsed_args.target_port,
+        )
 
     if parsed_args.node_role is NodeType.ARCHIVAL_MINER_NODE:
         # @o As an `ARCHIVAL_MINER_NODE`, store the target host address and port, which will be accessed later.

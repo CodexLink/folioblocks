@@ -559,8 +559,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 else 0,
                 total_transactions=self.cached_total_transactions,
             )
-        logger.critical(
-            f"This client node requests for the `public_state` when their role is {self.node_role}! | Expects: {NodeType.MASTER_NODE}."
+        logger.warning(
+            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
         )
         return None
 

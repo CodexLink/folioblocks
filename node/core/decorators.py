@@ -1,9 +1,12 @@
+from logging import Logger, getLogger
 from typing import Any, Callable
 from core.constants import NodeType
+from core.constants import ASYNC_TARGET_LOOP
 from utils.processors import unconventional_terminate
 
 # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
 
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 def ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
     def deco(fn: Callable) -> Callable:
@@ -48,7 +51,7 @@ def restrict_call(*, on: NodeType) -> Callable:  # type: ignore
             if self.role == on:
                 return fn(self, *args, **kwargs)
 
-            self.warning(
+            logger.warning(
                 f"Your role {self.role} cannot call the following method `{fn.__name__}` due to role restriction, which prohibits '{on}' from accessing this method."
             )
             return None
