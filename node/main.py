@@ -167,7 +167,8 @@ async def pre_initialize() -> None:
 
     await get_database_instance().connect()  # * Initialize the database.
     create_task(
-        post_initialize()
+        post_initialize(),
+        name=f"{parsed_args.node_role.name.lower()}_run_{post_initialize.__name__}",
     )  # * Create this task instead of scoping out so that the server can instantiate.
 
 
@@ -193,7 +194,10 @@ async def post_initialize() -> None:
         await look_for_archival_nodes()
 
     # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER_NODE will initialize their local or universal (depending on the role) blockchain file.
-    create_task(get_blockchain_instance(role=parsed_args.node_role).initialize())
+    create_task(
+        get_blockchain_instance(role=parsed_args.node_role).initialize(),
+        name=f"initialize_blockchain_as_{parsed_args.node_role.name.lower()}",
+    )
 
 
 @api_handler.on_event("shutdown")
@@ -238,6 +242,7 @@ async def terminate() -> None:
                 ),
                 method=HTTPQueueMethods.POST,
                 headers={"X-Token": JWTToken(identity_tokens[1])},
+                name=f"request_logout_node_as_{parsed_args.node_role.name.lower()}",
             )
 
     if http_instance is not None:

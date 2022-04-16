@@ -46,7 +46,7 @@ class HTTPClient:
         logger.debug("HTTP client 'ClientSession' were initialized.")
 
         create_task(
-            name=f"{HTTPClient.__name__}_queue_iterator",
+            name=f"{HTTPClient.__name__.lower()}_queue_iterator",
             coro=self._queue_iterator_runtime(),
         )
         self._is_ready = True
@@ -233,7 +233,8 @@ class HTTPClient:
             )
 
             self._response[loaded_request.name] = create_task(
-                name=loaded_request.name, coro=requested_item
+                name=f"{HTTPClient.__name__.lower()}_{loaded_request.name}_processor",
+                coro=requested_item,
             )  ## Enqueue to self.request as dict.
 
             ## Dequeue that item from self._queue as its response form has been enqueued from the self._response.

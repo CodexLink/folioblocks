@@ -177,7 +177,10 @@ class BlockchainMechanism(ConsensusMechanism):
                 self.blockchain_ready = True
                 logger.info("Blockchain system is ready.")
 
-            create_task(self._block_timer_executor())
+            create_task(
+                self._block_timer_executor(),
+                name=f"{BlockchainMechanism.__name__}_{self.role.name}_instance_{self._block_timer_executor.__name__}",
+            )
 
             print("final", self._chain)
 
@@ -1390,6 +1393,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     "x-hash": await self.get_chain_hash(),
                 },
                 do_not_retry=True,
+                name="verify_local_hash_with_master_node",
             )
 
             if not master_hash_valid_response.ok:
@@ -1404,6 +1408,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         "x-token": self.identity[1],
                         "x-certificate-token": await self._get_own_certificate(),
                     },
+                    name="fetch_upstream_from_master_node",
                 )
 
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.

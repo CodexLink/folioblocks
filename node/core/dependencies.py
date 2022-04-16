@@ -244,10 +244,13 @@ async def authenticate_node_client(
 
                             from core.email import get_email_instance
 
-                            await get_email_instance().send(
-                                content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                                subject="Register Auth Code for Master Node Registration @ Folioblocks",
-                                to=master_email_address,
+                            create_task(
+                                get_email_instance().send(
+                                    content=f"<html><body><h1>Self-Service: MASTER Node's Auth Code from Folioblocks!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                    subject="Register Auth Code for Master Node Registration @ Folioblocks",
+                                    to=master_email_address,
+                                ),
+                                name=f"{get_email_instance.__name__}_send_auth_for_registration",
                             )
 
                             insert_generated_token_stmt: Insert = (
@@ -333,6 +336,7 @@ async def authenticate_node_client(
                         else master_email_address,
                         **resolved_data,
                     },
+                    name=f"register_node_{resolved_data['auth_code'][-4:]}",
                 )
 
                 if not register_node.ok:
@@ -430,6 +434,7 @@ async def authenticate_node_client(
                         "username": user_credentials[0],
                         "password": user_credentials[1],
                     },
+                    name=f"node_login_as_{role.name.lower()}"
                 )
             )
 

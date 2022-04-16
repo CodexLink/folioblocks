@@ -160,7 +160,8 @@ async def register_entity(
                     content="<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering with us! Expect accessibility within a day or so.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                     subject="Welcome to Folioblocks!",
                     to=credentials.email,
-                )
+                ),
+                name=f"{get_email_instance.__name__}_send_register_welcome_notification",
             )
 
             # - After that, record this transaction from the blockchain.
