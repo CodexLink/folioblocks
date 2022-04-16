@@ -564,10 +564,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 total_blocks=len(self._chain["chain"])
                 if self._chain is not None
                 else 0,
-                total_transactions=self.cached_total_transactions
-                # total_transactions=len(
-                #     self._get_content_data(data_type=BlockchainContentType.TRANSACTION),  # type: ignore
-                # ),
+                total_transactions=self.cached_total_transactions,
             )
         logger.critical(
             f"This client node requests for the `public_state` when their role is {self.node_role}! | Expects: {NodeType.MASTER_NODE}."
@@ -673,6 +670,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 for transaction_idx, transaction_data in enumerate(
                     block_context["contents"]["transactions"]
                 ):
+
                     # - [1] Apply immutability on the transactions -> `payload`
                     block_context["contents"]["transactions"][transaction_idx][
                         "payload"
@@ -687,6 +685,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     block_context["contents"]["transactions"][
                         transaction_idx
                     ] = frozendict(transaction_data)
+
+                    # @o Increment transaction by one as it was loaded in memory.
+                    self.cached_total_transactions += 1
 
                 # - [4] Apply immutability on the contents, contaning a set of transaction/s.
                 block_context["contents"] = frozendict(block_context["contents"])
@@ -1198,8 +1199,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     return deserialized_data
 
     def _process_deserialize_to_load_blockchain_in_memory(
-        self,
-        context: dict[str, Any],
+        self, context: dict[str, Any], update: bool = False
     ) -> frozendict | None:
         """
         A method that deserializes the universally readable (JSON) format from the blockchain file into an immutable dictionary (frozendict) containing a series of pydantic objects.
@@ -1214,6 +1214,9 @@ class BlockchainMechanism(ConsensusMechanism):
         # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
         if isinstance(context, dict):
 
+            if update:
+                self.cached_total_transactions = 0 # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
+
             for block_idx, block_data in enumerate(context["chain"]):
                 # @o For every block, we have to deserialize (1) the block itself, (2) contents of the block, which contains the transactions, (3) the payload as well as the (4) the signatures of the transactions.
                 # - We are going to do this in reverse. Since doing this in ascending would prohibit due to existing cast of `frozendict` to each field.
@@ -1224,6 +1227,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     for transaction_idx, each_transaction in enumerate(
                         block_data["contents"]["transactions"]
                     ):
+
                         # - Inside transaction, it contains another `dict` objects, such as the paload and signature.
                         # @o We need to cast that as well to ensure that there are no override ability for all types of objects.
                         context["chain"][block_idx]["contents"]["transactions"][
@@ -1240,6 +1244,8 @@ class BlockchainMechanism(ConsensusMechanism):
                         ] = frozendict(
                             block_data["contents"]["transactions"][transaction_idx]
                         )
+
+                        self.cached_total_transactions += 1
 
                 # - Add immutability to the `contents`, which encapsulates the whole set of `transactions`.
                 context["chain"][block_idx]["contents"] = frozendict(
