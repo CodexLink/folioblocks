@@ -257,7 +257,7 @@ async def login_entity(
 
             # - If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
-            if fetched_credential_data.type == NodeType.ARCHIVAL_MINER_NODE:
+            if fetched_credential_data.type is NodeType.ARCHIVAL_MINER_NODE:
                 jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
                 payload[

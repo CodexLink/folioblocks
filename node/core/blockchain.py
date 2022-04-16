@@ -60,6 +60,7 @@ from blueprint.schemas import (
     NodeRegisterTransaction,
 )
 from core.constants import INFINITE_TIMER
+from core.constants import RawBlockchainPayload
 from utils.processors import validate_user_address
 from utils.processors import hash_context
 from utils.http import HTTPClient, get_http_client_instance
@@ -152,16 +153,8 @@ class BlockchainMechanism(ConsensusMechanism):
             operation=BlockchainIOAction.TO_READ
         )
 
-        if self.node_role == NodeType.MASTER_NODE:
-            # - New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. Also note that this will be turned-around when there's a context.
-            self.new_master_instance = True if not len(self._chain["chain"]) else False
-
-            # * Check if there's a context inside of the JSON. If there's none then create 1 to 3 genesis blocks.
-            if (
-                self._chain is not None
-                and "chain" in self._chain
-                and not self._chain["chain"]
-            ):
+        if self.node_role is NodeType.MASTER_NODE:
+            if self.new_master_instance:
                 for _ in range(0, BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
                     await self._create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
 
@@ -556,7 +549,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
-        if self.node_role == NodeType.MASTER_NODE:
+        if self.node_role is NodeType.MASTER_NODE:
 
             # # This may not be okay.
             return NodeMasterInformation(
@@ -954,7 +947,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 if not resolved_candidate_state_info["is_mining"]:
                     if (
                         resolved_candidate_state_info["node_role"]
-                        == NodeType.ARCHIVAL_MINER_NODE.name
+                        is NodeType.ARCHIVAL_MINER_NODE.name
                     ):
                         return NodeConsensusInformation(**resolved_candidate_state_info)
 
@@ -987,7 +980,7 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.warning("There's no block inside blockchain.")
 
     async def _get_own_certificate(self) -> str | None:
-        if self.node_role == NodeType.ARCHIVAL_MINER_NODE:
+        if self.node_role is NodeType.ARCHIVAL_MINER_NODE:
             find_existing_certificate_stmt = select(
                 [associated_nodes.c.certificate]
             ).where(associated_nodes.c.user_address == self.identity[0])
@@ -1199,7 +1192,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     return deserialized_data
 
     def _process_deserialize_to_load_blockchain_in_memory(
-        self, context: dict[str, Any], update: bool = False
+        self, context: RawBlockchainPayload, update: bool = False
     ) -> frozendict | None:
         """
         A method that deserializes the universally readable (JSON) format from the blockchain file into an immutable dictionary (frozendict) containing a series of pydantic objects.
@@ -1211,8 +1204,19 @@ class BlockchainMechanism(ConsensusMechanism):
             frozendict: Returns the immutable version of the given `context`.
         """
 
-        # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
+        # - Check if there's a context inside of the JSON. If there's none then create a n of genesis blocks.
+        # @o New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. As well as not flagged itself as fraudalent when there is a missing amount of genesis blocks.
 
+        self.new_master_instance = (  # # Redundant condition checking but better.
+            context is not None  # - [1] Check if the variable contains something.
+            and "chain" in context  # - [2] And it contains a key named as 'chain'.
+            and isinstance(
+                context["chain"], list
+            )  # - [3] 'chain' key contains a 'list' object.
+            and not len(context["chain"])  # - [4] And it contains nothing.
+        )
+
+        # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
         if isinstance(context, dict):
 
             if update:
@@ -1314,11 +1318,24 @@ class BlockchainMechanism(ConsensusMechanism):
                 if genesis_transaction_identifier and required_genesis_blocks:
                     required_genesis_blocks -= 1
 
-            if required_genesis_blocks and self.role is NodeType.MASTER_NODE:
+            print(
+                "DEBUG SWITCH ON LOAD",
+                required_genesis_blocks,
+                self.node_role is NodeType.MASTER_NODE,
+                self.new_master_instance,
+                required_genesis_blocks
+                and self.node_role is NodeType.MASTER_NODE
+                and not self.new_master_instance,
+            )
+
+            if (
+                required_genesis_blocks
+                and self.node_role is NodeType.MASTER_NODE
+                and not self.new_master_instance
+            ):
                 unconventional_terminate(
                     message=f"This node's blockchain contains a potential fraudalent blocks! Though with the intention of using {NodeType.ARCHIVAL_MINER_NODE.name} for the possibility of finding the longest chain to recover, this may not be possible as of now. Please load any backup and replace the files then try again."
                 )
-                await sleep(INFINITE_TIMER)
 
             elif required_genesis_blocks and self.role is NodeType.ARCHIVAL_MINER_NODE:
                 logger.error(

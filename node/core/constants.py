@@ -51,16 +51,17 @@ UserRole = _N("UserRole", str)
 TxID = _N("TxID", str)
 
 # # Custom Variable Types
+ArgsPlusDatabaseInstances = tuple[Namespace, Database]
+BlockchainNodeStatePayload = dict[str, bool | timedelta | int]
 BlockchainPayload = tuple[HashUUID, BlockchainFileContext]
 DocumentSet = list[dict[str, Any]]
 IdentityTokens = tuple[AddressUUID, JWTToken]
+NodeCredentials = tuple[CredentialContext, CredentialContext]
 NotificationContext = list[dict[str, Any]]
-BlockchainNodeStatePayload = dict[str, bool | timedelta | int]
+RawBlockchainPayload = dict[str, Any]
 RequestPayloadContext = dict[str, Any]
 RoleContext = dict[str, Any]
-ArgsPlusDatabaseInstances = tuple[Namespace, Database]
 UserCredentials = tuple[CredentialContext, CredentialContext]
-NodeCredentials = tuple[CredentialContext, CredentialContext]
 
 
 # # Custom Typed Types

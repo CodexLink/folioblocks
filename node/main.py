@@ -141,6 +141,14 @@ api_handler.add_middleware(
 async def pre_initialize() -> None:
     logger.info(f"Role Detected as {parsed_args.node_role} ...")
 
+    # - Validate by checking if the email service would run.
+    if (
+        env.get("EMAIL_SERVER_ADDRESS", None) is not None
+        and env.get("EMAIL_SERVER_PWD", None) is not None
+        and parsed_args.node_role is NodeType.MASTER_NODE
+    ):
+        await get_email_instance().connect()
+
     await get_http_client_instance().initialize()  # * Initialize the HTTP client for such requests.
 
     await initialize_resources_and_return_db_context(

@@ -9,7 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from argparse import Namespace
-from asyncio import sleep
+from asyncio import create_task, sleep
 from base64 import b32encode
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -150,7 +150,7 @@ async def authenticate_node_client(
         while True:
             try:
                 logger.info(
-                    f"As a {role.name}, {f'The system will perform to create keys such as an `auth_token` for you to register and authenticate yourself.' if role == NodeType.MASTER_NODE else f'you need to enter credentials for you to enter in blockchain.'} | Please enter your email address first."
+                    f"As a {role.name}, {f'The system will perform to create keys such as an `auth_token` for you to register and authenticate yourself.' if role is NodeType.MASTER_NODE else f'you need to enter credentials for you to enter in blockchain.'} | Please enter your email address first."
                 )
                 if role is NodeType.MASTER_NODE:
                     # - Check for an existing email in the database.
@@ -198,7 +198,7 @@ async def authenticate_node_client(
                                 f"There are no existing previous email registered for {UserEntity.MASTER_NODE_USER}."
                             )
                             master_email_address = await ensure_input_prompt(
-                                input_context="Master Email Address",
+                                input_context="MASTER Email Address",
                                 hide_input_from_field=False,
                                 generalized_context="master email address",
                                 additional_context="You will have to restart the instance if you confirmed it late that it was a mistake!",
@@ -280,7 +280,7 @@ async def authenticate_node_client(
                     resolved_context_fields, resolved_hidden_fields = [
                         "MASTER Node Username",
                         "MASTER Node Password",
-                        "Auth Code",
+                        "Auth Acceptance Code",
                     ], [False, True, False]
 
                 else:
@@ -288,7 +288,7 @@ async def authenticate_node_client(
                         "Personal E-Mail representing this ARCHIVAL Node",
                         "ARCHIVAL Node Username",
                         "ARCHIVAL Node Password",
-                        "Auth Code",
+                        "Auth Acceptance Code",
                     ], [False, False, True, False]
 
                 # NOTE I cannot implement password-checking because I have no time to do it.
@@ -394,7 +394,7 @@ async def authenticate_node_client(
         if (
             env.get("NODE_USERNAME", None) is None
             and env.get("NODE_PWD", None) is None
-            and role == NodeType.MASTER_NODE
+            and role is NodeType.MASTER_NODE
         ):
             user_credentials = await ensure_input_prompt(  # # 'Any' type for now.
                 input_context=["MASTER Node Username", "MASTER Node Password"],
@@ -411,7 +411,7 @@ async def authenticate_node_client(
 
         # Ensure that ENV will be covered here.
         try:
-            if role == NodeType.MASTER_NODE:
+            if role is NodeType.MASTER_NODE:
                 resolved_host, resolved_port = (
                     instances[0].node_host,
                     instances[0].node_port,
@@ -434,7 +434,7 @@ async def authenticate_node_client(
                         "username": user_credentials[0],
                         "password": user_credentials[1],
                     },
-                    name=f"node_login_as_{role.name.lower()}"
+                    name=f"node_login_as_{role.name.lower()}",
                 )
             )
 

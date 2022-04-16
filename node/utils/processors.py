@@ -23,15 +23,17 @@ from os import getpid
 from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
+from smtplib import SMTPAuthenticationError
 
+from aiosmtplib import SMTPException
 from core.constants import (
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
+    AddressUUID,
     HTTPQueueMethods,
     URLAddress,
 )
 from core.dependencies import set_master_node_properties
-from core.constants import AddressUUID
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -398,7 +400,7 @@ async def initialize_resources_and_return_db_context(
                 )
 
                 credentials: list[CredentialContext] = await ensure_input_prompt(
-                    input_context=["Server Email Address", "Password"],
+                    input_context=["SERVER Email Address", "SERVER Email Password"],
                     hide_input_from_field=[False, True],
                     generalized_context="Server email credentials",
                     additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
@@ -572,9 +574,7 @@ async def ensure_input_prompt(
     ), f"The `input_context` (length of {assert_lvalue}) and the `hide_fields` (length of {assert_rvalue}) were unequal! This is a developer issue, please report as possible."
 
     while True:
-        input_s: list[str] | str = (
-            "" or []
-        )  # TODO: Not a prio but have to fix its typing later.
+        input_s: list[str] | str = "" if isinstance(input_context, str) else []
 
         # TODO
         # # Implementation-wise, I understand that the code below is too redundant, but I can't fix it as of now.
@@ -655,11 +655,16 @@ def verify_email_keyword_and_validate_input(
     *, display: str, inputted: str
 ) -> tuple[bool, bool]:
     email_input_indicators: Final[list[str]] = [
-        "Email",
-        "email",
-        "E-mail",
-        "e-mail",
-        "EMail",
+        "Email address",
+        "email address",
+        "E-mail address",
+        "e-mail address",
+        "EMail address",
+        "Email Address",
+        "email Address",
+        "E-mail Address",
+        "e-mail Address",
+        "EMail Address",
     ]
     if any(each_keyword in display for each_keyword in email_input_indicators):
         try:
@@ -750,7 +755,7 @@ async def look_for_archival_nodes() -> None:
 def supress_exceptions_and_warnings() -> None:
     from contextlib import suppress
 
-    with suppress(BaseException, RuntimeError):
+    with suppress(BaseException, RuntimeError, SMTPException, SystemExit):
         sys.tracebacklimit = 0
 
 
