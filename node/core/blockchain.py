@@ -1212,12 +1212,17 @@ class BlockchainMechanism(ConsensusMechanism):
         """
 
         # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
+
         if isinstance(context, dict):
 
             if update:
-                self.cached_total_transactions = 0 # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
+                self.cached_total_transactions = 0  # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
+
+            required_genesis_blocks: int = BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS  # ! We need to validate that there should be a set of required gensis blocks. If there are insufficient, then this blockchain as a whole is fraudalent.
 
             for block_idx, block_data in enumerate(context["chain"]):
+                genesis_transaction_identifier: bool = False  # ! Additional switch to identify at least one genesis transaction per block.
+
                 # @o For every block, we have to deserialize (1) the block itself, (2) contents of the block, which contains the transactions, (3) the payload as well as the (4) the signatures of the transactions.
                 # - We are going to do this in reverse. Since doing this in ascending would prohibit due to existing cast of `frozendict` to each field.
 
@@ -1227,6 +1232,17 @@ class BlockchainMechanism(ConsensusMechanism):
                     for transaction_idx, each_transaction in enumerate(
                         block_data["contents"]["transactions"]
                     ):
+
+                        # - We assume that this will turn into an Enum member.
+                        if (
+                            TransactionActions(
+                                context["chain"][block_idx]["contents"]["transactions"][
+                                    transaction_idx
+                                ]["action"]
+                            )
+                            == TransactionActions.NODE_GENERAL_GENESIS_INITIALIZATION
+                        ):
+                            genesis_transaction_identifier = True
 
                         # - Inside transaction, it contains another `dict` objects, such as the paload and signature.
                         # @o We need to cast that as well to ensure that there are no override ability for all types of objects.
@@ -1295,9 +1311,24 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     return None
 
-            logger.info(
-                f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
-            )
+                if genesis_transaction_identifier and required_genesis_blocks:
+                    required_genesis_blocks -= 1
+
+            if required_genesis_blocks and self.role is NodeType.MASTER_NODE:
+                unconventional_terminate(
+                    message=f"This node's blockchain contains a potential fraudalent blocks! Though with the intention of using {NodeType.ARCHIVAL_MINER_NODE.name} for the possibility of finding the longest chain to recover, this may not be possible as of now. Please load any backup and replace the files then try again."
+                )
+                await sleep(INFINITE_TIMER)
+
+            elif required_genesis_blocks and self.role is NodeType.ARCHIVAL_MINER_NODE:
+                logger.error(
+                    "This node's blockchain may be incomplete from the previous update, note that it will get updated after communicating with the master no`de."
+                )
+            else:
+                logger.info(
+                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
+                )
+
             self.blockchain_ready = True
             return frozendict(context)
 
