@@ -114,7 +114,6 @@ class AgnosticTransactionUserCredentials(BaseModel):
 
 
 class ApplicantLogTransaction(BaseModel):
-    entity_address_ref: AddressUUID | None
     type: ApplicantLogContentType
     name: str
     description: str
@@ -199,6 +198,8 @@ class NodeNegotiationTransaction(BaseModel):
 
 
 class NodeMinerProofTransaction(BaseModel):
+    miner_address: HashUUID
+    receiver_address: HashUUID
     negotiation_id: RandomUUID
     block_hash: HashUUID
     time_delivery: datetime
@@ -217,7 +218,6 @@ class TransactionSignatures(BaseModel):
 class Transaction(BaseModel):
     tx_hash: HashUUID | None
     action: TransactionActions
-    status: TransactionStatus
     from_address: AddressUUID
     to_address: AddressUUID | None
     payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInitializer | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction

@@ -355,11 +355,6 @@ class TransactionContentCategory(IntEnum):
     NODE_INTERNAL = auto()
 
 
-class TransactionStatus(IntEnum):
-    FAILED = auto()
-    SUCCESS = auto()
-
-
 class TransactionActions(IntEnum):
     # # Note that this was the same as the <class `TransactionActionsReadable`>, but for this case, the declaration would be the same as the name.
     # @o To conform with pydantic models using another pydantic models or specially, Enum classes. I would be referring to an Enum class where it should output a technical name.

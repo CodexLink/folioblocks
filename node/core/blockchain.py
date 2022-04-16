@@ -1,4 +1,5 @@
 from asyncio import create_task, get_event_loop, sleep
+from base64 import urlsafe_b64encode
 from copy import deepcopy
 from datetime import datetime, timedelta
 from email.mime import application
@@ -41,9 +42,9 @@ from blueprint.schemas import (
 )
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
-from pydantic import ValidationError as PydanticValidationError
+from pydantic import BaseModel, ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
-from sqlalchemy import select
+from sqlalchemy import func, select
 from blueprint.schemas import OrganizationTransactionInitializer
 from core.constants import ADDRESS_UUID_KEY_PREFIX, RawData
 from blueprint.schemas import (
@@ -242,36 +243,43 @@ class BlockchainMechanism(ConsensusMechanism):
             and isinstance(to_address, str)
         ):
 
-            # - [1] Ensure that the from_address is existing.
+            # - [1] Ensure that the `from_address` is existing.
             # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
-            # ! I will be dividing those two statements.
+            # ! I will be dividing those into two statements.
             get_existing_from_address_stmt, get_existing_to_address_stmt = select(
-                [users.c.unique_address]
+                [func.count()]
             ).where(users.c.unique_address == from_address), select(
-                [users.c.unique_address]
+                [func.count()]
             ).where(
                 users.c.unique_address == to_address
             )
 
+            # * Get it, by we will not be using it.
+            # * I don't know how to use count
             (
-                existing_from_address,
-                existing_to_address,
+                is_existing_from_address,
+                is_existing_to_address,
             ) = await self.db_instance.fetch_one(
                 get_existing_from_address_stmt
             ), await self.db_instance.fetch_one(
                 get_existing_to_address_stmt
             )
 
-            # @o If all fetched addresses has context (as `str`), proceed.
+            # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
             # ! These addresses will either contain a `str` or a `None` (`NoneType`).
             # ! If one of them contains `None` or `NoneType` this statement will result to false.
             if all(
-                fetched_address is not None
-                for fetched_address in [existing_to_address, existing_from_address]
+                fetched_address
+                for fetched_address in [
+                    is_existing_to_address,
+                    is_existing_from_address,
+                ]
             ):
 
                 # @o Declared for type-hint. Initialized on some conditions.
-                resolved_context: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction
+                resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction | None = (
+                    None
+                )
 
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
                 # # [4]
@@ -283,9 +291,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.APPLICANT_APPLY_REJECTED,
                 ] and isinstance(data, ApplicantProcessTransaction):
 
-                    # * Since this was a new entry, we need to do some handling for the database entry.
+                    # - Since this was a new entry, we need to do some handling for the database entry.
                     try:
-                        # * It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
+                        # @o It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
                         if action is TransactionActions.APPLICANT_APPLY:
                             application_process_stmt: Insert | Update = (
                                 applications.insert().values(
@@ -314,7 +322,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             f"There was an error regarding application process entry to database. | Info: {e}"
                         )
 
-                    resolved_context = data
+                    resolved_payload = data
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
                 elif action in [
@@ -325,11 +333,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     or isinstance(data, OrganizationTransactionInitializer)
                 ):
                     # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
-                    # @d With that, we need to seperate this transaction with Internal and External.
+                    # @d With that, we need to seperate this transaction with `Internal` and `External`.
+
+                    # ! Where,
                     # @o XXXInternal -> Contains fields that is classified as credentials.
                     # @o XXXExternal -> Contains fields that does not contain anything sensitive as it only describes something out of context.
 
-                    # @o Since XXXInternal subclasses XXXExternal, we only need `Internal` and break down until we get to the `XXXExternal`.
+                    # @o Since `XXXInternal` subclasses `XXXExternal`, we only need `Internal` and break down until we get to the `XXXExternal`.
 
                     # - Validate conditions before user generation.
                     if (
@@ -339,7 +349,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         and data.association_group_type is None
                     ):
                         logger.error(
-                            "Association context is empty. Please add references as it is required to identify where do you belong. This is a developer-issue, please contact as possible."
+                            "Association context is empty. Please add references as it is required to identify where do you belong. This is a developer-issue regarding API processing and object instantiation, please contact as possible."
                         )
                         return False
 
@@ -411,11 +421,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     except IntegrityError as e:
                         logger.error(
-                            f"There was an error during account generation. This may likely be a cause of duplication or uniqueness issue. Please check your credentials and try again. | Info: {e}"
+                            f"There was an error during account generation. This may likely be a cause of duplication or unique-ness issue. Please check your credentials and try again. | Info: {e}"
                         )
                         return False
 
-                    # @o After that, its time to resolve those context for the `External` (for the blockchain to record).
+                    # - After that, its time to resolve those context for the `External` (for the blockchain to record).
+
                     # ! Excluding fields via Model is not possible.
                     # ! https://github.com/samuelcolvin/pydantic/issues/1862.
                     # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
@@ -432,8 +443,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         }
                     )
 
-                    # TODO: Declare this variable on the top.
-                    resolved_context = (
+                    resolved_payload = (
                         ApplicantUserTransaction(**removed_credentials_context)
                         if isinstance(data, ApplicantUserTransactionInitializer)
                         else OrganizationTransaction(**removed_credentials_context)
@@ -441,34 +451,36 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
                 # @o This needs special handling due to the fact that it may contain an actual file.
-                # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: multipart/form-data. Therefore, this method expects to have an `ApplicantLogTransaction`.
+                # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `ApplicantLogTransaction`.
                 elif (
                     action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
                     and isinstance(data, ApplicantLogTransaction)
                 ):
                     if (
-                        data.entity_address_ref is not None
-                        and await validate_user_address(
-                            supplied_address=AddressUUID(data.entity_address_ref)
+                        await validate_user_address(
+                            supplied_address=AddressUUID(to_address)
                         )
+                        is True
                     ):
 
                         if isinstance(data.file, UploadFile):
                             # @o We combine the current time under isoformat string + given filename + referred user address in full length.
 
                             # ! We need to create our own key because we are going to access these files.
-
                             # * Since this project is under repository, we will keep it this way.
                             # * In actual real world, we ain't gonna be doing this.
 
-                            # @o Create the key based from the user address (target or `to`), truncated from the first 12 character + datetime in custom format, please see the variable `current_date` below.
+                            # @o Create the key based from the user address (`target` or `to`), truncated from the first 12 character + datetime in custom format, please see the variable `current_date` below.
+                            # # Documentation regarding custom format: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
 
                             timestamp: datetime = datetime.now()
-                            current_date: str = timestamp.strftime("%y%m%d%H%M%S")
+                            current_date: str = timestamp.strftime(
+                                "%y%m%d%H%M%S"
+                            )  # @o datetime.now() produces "datetime.datetime(2022, 4, 16, 19, 45, 36, 724779)" and when called with datetime.now().isoformat() produces "2022-04-16T19:45:36.724779'", when we used datetime.now().strftime() with parameters "%y%m%d%H%M%S", will produce "'220416194536'"
+
                             encrypter_key: bytes = f"{to_address}{current_date}".encode(
                                 "utf-8"
                             )
-
                             file_encrypter: Fernet = Fernet(encrypter_key)
 
                             async with aopen(
@@ -485,7 +497,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                 await file_writer.write(encrypted_context)
 
                             # - Since we got the file and encrypted it, get the SHA256 of the payload.
-                            # - And replace it on the field of the data.file so that nothing will be loss.
+                            # - And replace it on the field of the `data.file` so that we will get a reference when we refer from it.
                             data.file = HashUUID(
                                 sha256(
                                     raw_context.encode("utf-8")
@@ -495,10 +507,12 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
 
                         # - Do the following for all condition.
-                        data.entity_address_ref = None
-                        resolved_context = data
+                        resolved_payload = data
 
                     else:
+                        logger.info(
+                            "Cannot proceed further due to address is missing or is invalid. Please try again."
+                        )
                         return False
 
                 # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
@@ -507,16 +521,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
                     TransactionActions.INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO,
                 ] and isinstance(data, AdditionalContextTransaction):
-                    # * Just validate if the specified entity address does exists.
 
-                    if (
-                        data.entity_address_ref is not None
-                        and not validate_user_address(
-                            supplied_address=AddressUUID(data.entity_address_ref)
-                        )
+                    # * Just validate if the specified entity address does exists.
+                    # ! WHAT?
+                    if not validate_user_address(
+                        supplied_address=AddressUUID(to_address)
                     ):
-                        data.entity_address_ref = None
-                        resolved_context = data
+                        resolved_payload = data
 
                 else:
                     logger.error(
@@ -524,24 +535,27 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     return False
 
-                # - [File]
-                try:
-                    # Transaction(action=)
-
-                    return True
-
-                except PydanticValidationError as e:
-                    logger.error(
-                        f"There was an error during payload transformation. Info: {e}"
+                # TODO: Returning necessary contents for the transaction mapping.
+                # ! NOTE We are only doing this at certain transactions.
+                if resolved_payload is not None:
+                    transaction_context = self._resolve_transaction_payload(
+                        action=action,
+                        from_address=from_address,
+                        to_address=to_address,
+                        payload=resolved_payload,
+                        is_internal_payload=False,
                     )
-                    return False
+
+                # * Append the transaction mapping
+
+                return True
 
             logger.error(
-                f"{'Sender' if existing_from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be inserted disregarded."
+                f"{'Sender' if from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be disregarded."
             )  # TODO: Send to email when this happened, only when `from_address` exists.
 
         logger.error(
-            f"There was a missing or invalid parameter of the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `TransactionActions`, `from_address` should contain a valid string and `data` may not be a pydantic model! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
+            f"There was a missing or invalid value inserted from  the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `{TransactionActions}`, `from_address` should contain a valid {str} and `data` should be wrapped in a pydantic model ({BaseModel})! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
         )
         return False
 
@@ -759,7 +773,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # @o When a block was created. Create a negotiation ID for the nodes to remember that this happened.
 
-                # - Create a negotiation ID based on the certificate token of the available miner node as well as this master under SHA256 form + datetime.
+                # - Create a negotiation ID out of urlsafe_b64encode.
 
                 # @o Even though we already have the certification token, we still need this one to prove that we are actually know what the heck are we doing and we should be remembering it since it contains transactions or tokens which shouldn't go loss.
 
@@ -1026,62 +1040,57 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
-        # - Prepare the context encrypter.
-        key_payload: bytes = Fernet.generate_key()
+        # - Resolve addresses.
+        resolved_from_address: str
+        resolved_to_address: str | None
 
-        encrypter_payload: Fernet = Fernet(key_payload)
-        logger.debug(
-            f"A key has been generated for the following action `{action}`. | Info: {key_payload.decode('utf-8')}"
-        )
-
-        # - Deepcopy the `data` (NodeTransaction) and encrypt its context.
-        data_encrypted: NodeTransaction = deepcopy(data)
-
-        if not isinstance(data.context, str):
-            data_encrypted.context = HashUUID(
-                (
-                    encrypter_payload.encrypt(
-                        export_to_json(
-                            data.context.dict(),
-                        )
-                    )
-                ).decode("utf-8")
+        # - Resolve `from_address` as well as the `to_address`.
+        if isinstance(data.context, NodeRegisterTransaction):
+            resolved_from_address, resolved_to_address = (
+                data.context.new_address,
+                data.context.acceptor_address,
             )
 
-        # - Build the transaction
-        built_transaction: Transaction = Transaction(
-            tx_hash=None,  # @o Evaluated as `None` for now.
+        elif isinstance(data.context, NodeGenesisTransaction):
+            # ! Even though we know that it would be the instance, respecfully respect the model variable xd.
+            resolved_from_address, resolved_to_address = (
+                data.context.generator_address,
+                None,
+            )
+
+        elif isinstance(data.context, NodeSyncTransaction) or isinstance(
+            data.context, NodeCertificateTransaction
+        ):
+            resolved_from_address, resolved_to_address = (
+                self.identity[0],
+                data.context.requestor_address,
+            )
+
+        elif isinstance(data.context, NodeNegotiationTransaction):
+            resolved_from_address, resolved_to_address = (
+                data.context.master_address,
+                data.context.miner_address,
+            )
+
+        elif isinstance(data.context, NodeMinerProofTransaction):
+            resolved_from_address, resolved_to_address = (
+                data.context.receiver_address,
+                data.context.miner_address,
+            )
+
+        else:
+            resolved_from_address, resolved_to_address = self.identity[0], None
+
+        await self._resolve_transaction_payload(
             action=action,
-            status=TransactionStatus.SUCCESS,
-            payload=NodeTransaction(**data_encrypted.dict()),
-            signatures=TransactionSignatures(
-                raw=HashUUID(sha256(export_to_json(data.dict())).hexdigest()),
-                encrypted=HashUUID(
-                    sha256(export_to_json(data_encrypted.dict())).hexdigest()
-                ),
+            from_address=AddressUUID(
+                resolved_to_address
+                if resolved_to_address is not None
+                else self.identity[0]
             ),
-            from_address=AddressUUID(self.identity[0]),
-            to_address=None,
-        )
-
-        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash for the `tx_hash`.
-        premature_transaction_copy: dict = built_transaction.dict()
-
-        # @o We don't want to influence `tx_hash` from this even though its a `NoneType`.
-        del premature_transaction_copy["tx_hash"]
-
-        # - Calculate the hash based on the content of the deepcopied `built_transaction`.
-        premature_calc_sha256: str = sha256(
-            export_to_json(premature_transaction_copy)
-        ).hexdigest()
-
-        # @o After calculation, invoke this new hash from the `tx_hash` of the `built_transaction`.
-        built_transaction.tx_hash = HashUUID(premature_calc_sha256)
-
-        # @o Append this and we are good to go!
-        self.transaction_container.append(built_transaction)
-        logger.info(
-            f"Transaction `{built_transaction.tx_hash}` has been created and is on-queue for block generation!"
+            to_address=AddressUUID(resolved_from_address),
+            is_internal_payload=True,
+            payload=data,
         )
 
         return None
@@ -1404,6 +1413,148 @@ class BlockchainMechanism(ConsensusMechanism):
             return _o
 
         raise TypeError
+
+    async def _resolve_transaction_payload(
+        self,
+        *,
+        action: TransactionActions,
+        payload: ApplicantLogTransaction
+        | ApplicantProcessTransaction
+        | ApplicantUserTransaction
+        | OrganizationTransaction
+        | AdditionalContextTransaction
+        | NodeTransaction,
+        from_address: AddressUUID,
+        to_address: AddressUUID | None,
+        is_internal_payload: bool,  # @o Even though I can logically assume its a `Node-based transaction` when `to_address` is None, it is not possible since some `Node-based transactions` actually has a point to `address`.
+    ) -> dict | None:
+
+        if payload not in [
+            ApplicantLogTransaction
+            | ApplicantProcessTransaction
+            | ApplicantUserTransaction
+            | OrganizationTransaction
+            | AdditionalContextTransaction
+            | NodeTransaction
+        ]:
+            logger.error(
+                "The payload is not a valid pydantic object. Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
+            )
+            return None
+
+        # @o Declare type-hint from here
+        encrypter_key: bytes
+
+        # - Prepare the context encrypter.
+        # @d Cases for both internal transactions and user transaction contains different key.
+        # @o For the case of user transaction, create our own key wherein we can remember that later.
+        # @d For the case of internal transaction (Required Models of `NodeTransactions` under `context` or models with prefixes `Node`), there's no need of fetching these transactions back, therefore we can create a random key and push it.
+
+        timestamp: str = datetime.now().strftime("%m%y%d%H%M%S")
+        if is_internal_payload:
+            encrypter_key = Fernet.generate_key()
+
+        else:  # * Resolves to `NOT` an internal payload.
+
+            # - Create a custom key.
+            # @d Constraints: Should be comprised of 32-character of an urlsafe_base64 encoded.
+            # @d Some models
+            # @d With that, our key should consist of the following:
+
+            # - TransactionActions value enum + 7 starting characters of `from_address` + 12 last characters of `to_address` + datetime.now() under custom format of the following: "%m%y%d%H%M%S". It consists of 12 characters.
+
+            # ! Example
+            # - a = datetime.fromisoformat("2022-04-16T20:53:11.012440") -> datetime.datetime(2022, 4, 16, 20, 53, 11, 12440)
+            # - a.strftime("%m%y%d%H%M%S") -> '042216205311'
+            # - len(a) -> 12
+
+            if to_address is not None:
+                constructed_context_to_key: bytes = (
+                    str(action.value) + from_address[:7] + to_address[-12:] + timestamp
+                ).encode("utf-8")
+                encrypter_key = urlsafe_b64encode(constructed_context_to_key)
+
+            else:
+                logger.error(
+                    "Payload is not internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
+                )
+                return None
+
+        encrypter_payload: Fernet = Fernet(encrypter_key)
+        logger.debug(
+            f"A key has been generated for the following action `{action}`. | Info: {encrypter_key.decode('utf-8')}"
+        )
+
+        payload_to_encrypt: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction | AdditionalContextTransaction | NodeTransaction = deepcopy(
+            payload
+        )
+
+        if isinstance(payload_to_encrypt, NodeTransaction):
+            if not isinstance(payload_to_encrypt.context, str):
+                payload_to_encrypt.context = HashUUID(
+                    (
+                        encrypter_payload.encrypt(
+                            export_to_json(
+                                payload_to_encrypt.context.dict(),
+                            )
+                        )
+                    ).decode("utf-8")
+                )
+
+        # - Build the transaction
+        try:
+            built_internal_transaction: Transaction = Transaction(
+                tx_hash=None,  # @o Evaluated as `None` for now.
+                action=action,
+                payload=locals()[
+                    payload_to_encrypt.__class__.__name__
+                ](  # - Dynamically instantiate the pydantic model via string.
+                    **payload_to_encrypt.dict()
+                ),
+                signatures=TransactionSignatures(
+                    raw=HashUUID(sha256(export_to_json(payload.dict())).hexdigest()),
+                    encrypted=HashUUID(
+                        sha256(export_to_json(payload_to_encrypt.dict())).hexdigest()
+                    ),
+                ),
+                from_address=AddressUUID(self.identity[0])
+                if isinstance(payload_to_encrypt, NodeTransaction)
+                else AddressUUID(from_address),
+                to_address=AddressUUID(to_address) if to_address is not None else None,
+            )
+        except PydanticValidationError as e:
+            logger.error(f"There was an error during payload transformation. Info: {e}")
+            return None
+
+        # @o Since we now have a copy of the 'premature' transaction, we calculate its hash for the `tx_hash`.
+        premature_transaction_copy: dict = built_internal_transaction.dict()
+
+        # @o We don't want to influence `tx_hash` from this even though its a `NoneType`.
+        del premature_transaction_copy["tx_hash"]
+
+        # - Calculate the hash based on the content of the deepcopied `built_transaction`.
+        premature_calc_sha256: str = sha256(
+            export_to_json(premature_transaction_copy)
+        ).hexdigest()
+
+        # @o After calculation, invoke this new hash from the `tx_hash` of the `built_transaction`.
+        built_internal_transaction.tx_hash = HashUUID(premature_calc_sha256)
+
+        # @o Append this and we are good to go!
+        self.transaction_container.append(built_internal_transaction)
+        logger.info(
+            f"Transaction `{built_internal_transaction.tx_hash}` has been created and is on-queue for block generation!"
+        )
+
+        # - For user-based transactions, the method 'self.insert_external_transaction' waits for this method to finish for its transaction to get mapped from the blockchain. With that, let's return necessary contents.
+        if not isinstance(payload_to_encrypt, NodeTransaction):
+            return {
+                "tx_hash": built_internal_transaction.tx_hash,
+                "address_ref": to_address,
+                "timestamp": timestamp,
+            }
+
+        return None
 
     # TODO: Ensure to follow the rule that we made last time.
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
