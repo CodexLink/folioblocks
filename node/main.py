@@ -183,17 +183,18 @@ async def post_initialize() -> None:
     )
 
     # * I don't know, I don't like to complicate this with another complex conditional checking here. Try to visualize what will happen here on some certain extreme-isolated case condition.
-    if (
-        env.get("NODE_USERNAME", None) is not None
-        and env.get("NODE_PWD", None) is not None
-    ):
-        await contact_master_node(
-            master_host=parsed_args.target_host,
-            master_port=parsed_args.target_port,
-        )
 
     if parsed_args.node_role is NodeType.ARCHIVAL_MINER_NODE:
         # @o As an `ARCHIVAL_MINER_NODE`, store the target host address and port, which will be accessed later.
+        if (
+            env.get("NODE_USERNAME", None) is not None
+            and env.get("NODE_PWD", None) is not None
+        ):
+            await contact_master_node(
+                master_host=parsed_args.target_host,
+                master_port=parsed_args.target_port,
+            )
+
         parsed_args.target_host, parsed_args.target_port = get_master_node_properties(
             key=REF_MASTER_BLOCKCHAIN_ADDRESS
         ), get_master_node_properties(key=REF_MASTER_BLOCKCHAIN_PORT)

@@ -2,7 +2,6 @@ from asyncio import create_task, get_event_loop, sleep
 from base64 import urlsafe_b64encode
 from copy import deepcopy
 from datetime import datetime, timedelta
-from email.mime import application
 from hashlib import sha256
 from logging import Logger, getLogger
 from secrets import token_urlsafe
@@ -90,7 +89,6 @@ from core.constants import (
     IdentityTokens,
     NodeType,
     TransactionActions,
-    TransactionStatus,
     URLAddress,
     random_generator,
 )
@@ -1081,7 +1079,7 @@ class BlockchainMechanism(ConsensusMechanism):
         else:
             resolved_from_address, resolved_to_address = self.identity[0], None
 
-        await self._resolve_transaction_payload(
+        if await self._resolve_transaction_payload(
             action=action,
             from_address=AddressUUID(
                 resolved_to_address
@@ -1091,9 +1089,10 @@ class BlockchainMechanism(ConsensusMechanism):
             to_address=AddressUUID(resolved_from_address),
             is_internal_payload=True,
             payload=data,
-        )
+        ):
+            return
 
-        return None
+        unconventional_terminate(message="Cannot resolve transaction.")
 
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
     def _mine_block(self, block: Block) -> Block:
@@ -1427,20 +1426,25 @@ class BlockchainMechanism(ConsensusMechanism):
         from_address: AddressUUID,
         to_address: AddressUUID | None,
         is_internal_payload: bool,  # @o Even though I can logically assume its a `Node-based transaction` when `to_address` is None, it is not possible since some `Node-based transactions` actually has a point to `address`.
-    ) -> dict | None:
+    ) -> dict | bool:
 
-        if payload not in [
-            ApplicantLogTransaction
-            | ApplicantProcessTransaction
-            | ApplicantUserTransaction
-            | OrganizationTransaction
-            | AdditionalContextTransaction
-            | NodeTransaction
-        ]:
+        print(payload, type(payload))
+
+        if not any(
+            isinstance(payload, context_model_candidates)
+            for context_model_candidates in [
+                ApplicantLogTransaction,
+                ApplicantProcessTransaction,
+                ApplicantUserTransaction,
+                OrganizationTransaction,
+                AdditionalContextTransaction,
+                NodeTransaction,
+            ]
+        ):
             logger.error(
-                "The payload is not a valid pydantic object. Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
+                f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
             )
-            return None
+            return False
 
         # @o Declare type-hint from here
         encrypter_key: bytes
@@ -1478,7 +1482,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.error(
                     "Payload is not internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
                 )
-                return None
+                return False
 
         encrypter_payload: Fernet = Fernet(encrypter_key)
         logger.debug(
@@ -1506,7 +1510,7 @@ class BlockchainMechanism(ConsensusMechanism):
             built_internal_transaction: Transaction = Transaction(
                 tx_hash=None,  # @o Evaluated as `None` for now.
                 action=action,
-                payload=locals()[
+                payload=globals()[
                     payload_to_encrypt.__class__.__name__
                 ](  # - Dynamically instantiate the pydantic model via string.
                     **payload_to_encrypt.dict()
@@ -1522,9 +1526,10 @@ class BlockchainMechanism(ConsensusMechanism):
                 else AddressUUID(from_address),
                 to_address=AddressUUID(to_address) if to_address is not None else None,
             )
+            print("DEBUG", built_internal_transaction)
         except PydanticValidationError as e:
             logger.error(f"There was an error during payload transformation. Info: {e}")
-            return None
+            return False
 
         # @o Since we now have a copy of the 'premature' transaction, we calculate its hash for the `tx_hash`.
         premature_transaction_copy: dict = built_internal_transaction.dict()
@@ -1554,7 +1559,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 "timestamp": timestamp,
             }
 
-        return None
+        return True
 
     # TODO: Ensure to follow the rule that we made last time.
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:

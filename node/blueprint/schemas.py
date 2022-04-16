@@ -27,7 +27,6 @@ from core.constants import (
     RoleContext,
     TokenStatus,
     TransactionActions,
-    TransactionStatus,
     UserActivityState,
     UserEntity,
     UserRole,
