@@ -54,11 +54,12 @@ class EmailService:
         max_retries: int = DEFAULT_SMTP_CONNECT_MAX_RETRIES,
     ) -> None:
 
+        self.connection_validated: bool = False  # ! A switch that we can use to tick whether the first connection from the email service would fail or not. When email fails on initialization fail with `unconventional_terminate` method.
+        self.max_retries = max_retries
         self.url = URLAddress(url)
         self.port = IPPort(port)
         self.username: CredentialContext = CredentialContext(username)
         self.password: CredentialContext = CredentialContext(password)
-        self.max_retries = max_retries
 
         self._email_service: SMTP = SMTP(
             hostname=self.url,
@@ -69,7 +70,16 @@ class EmailService:
         )
 
     async def connect(self) -> None:
+        from utils.processors import (
+            unconventional_terminate,
+        )  # @o Circulate imports occur when implemented on the top of the file.
+
         retries_count: int = 1  # - Protect the constant for iteration purposes.
+
+        if not self.connection_validated:
+            logger.warning(
+                "Email service establishing first-time connection from this instance. It may fail or otherwise."
+            )
 
         while retries_count <= self.max_retries:
             try:
@@ -86,6 +96,8 @@ class EmailService:
                 logger.debug(
                     f"SMTP send EHLO packets to {self.url} to initiate service ..."
                 )
+
+                self.connection_validated = True
                 logger.info(f"SMTP email service acknowledged and ready.")
                 return
 
@@ -100,6 +112,13 @@ class EmailService:
                     f"Failed to connect at email services. | Additional Info: {e}."
                 )
 
+                if not self.connection_validated:
+                    unconventional_terminate(
+                        message=f"Failed on email instance, refer to the previous log and please check the credentials in  `{AUTH_ENV_FILE_NAME}` file or your internet connection, then try again.",
+                        early=True,
+                    )
+                    await sleep(INFINITE_TIMER)
+
                 if retries_count + 1 <= self.max_retries:
                     logger.warning(
                         f"Attempting to reconnect email services ... | Attempt #{retries_count + 1} out of {self.max_retries}"
@@ -108,13 +127,8 @@ class EmailService:
                 retries_count += 1
                 continue
 
-        from utils.processors import (
-            unconventional_terminate,
-        )  # @o Circulate imports occur when implemented on the top.
-
         unconventional_terminate(
-            message=f"Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Please check your `{AUTH_ENV_FILE_NAME}` file or your internet connection and try again. Do CTRL+BREAK to encrypt the file back and check your environment.",
-            early=True,
+            message=f"Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Do CTRL+BREAK to encrypt the file back and check your environment.",
         )
         await sleep(INFINITE_TIMER)
 
@@ -163,7 +177,7 @@ class EmailService:
 """
 email_service: EmailService | None = None
 
-
+# TODO: Enforce, contains a context not `None`.
 def get_email_instance() -> EmailService:
     global email_service
 
