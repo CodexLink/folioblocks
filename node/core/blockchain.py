@@ -2037,7 +2037,7 @@ blockchain_service: BlockchainMechanism | None = None
 def get_blockchain_instance(
     *,
     role: NodeType | None = None,
-) -> BlockchainMechanism:
+) -> BlockchainMechanism | None:
 
     global blockchain_service
     token_ref: IdentityTokens | None = get_identity_tokens()
@@ -2053,7 +2053,8 @@ def get_blockchain_instance(
 
     # If there are no resulting objective, then we can log this as an error, otherwise return the object.
     if blockchain_service is None:
-        logger.critical("There are no blockchain instance.")
+        logger.critical("There is no blockchain instance.")
+        return None
 
     if token_ref is None:
         logger.critical(

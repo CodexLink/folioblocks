@@ -83,16 +83,24 @@ node_router = APIRouter(
     # # Notes: I left this one in open-air since there are no credentials to steal (maybe maybe maybe).
 )
 async def get_node_info() -> NodeInformation:
-    node_state: NodeConsensusInformation = (
-        get_blockchain_instance().get_blockchain_private_state()
-    )
-    node_statistics: NodeMasterInformation | None = (
-        get_blockchain_instance().get_blockchain_public_state()
-    )
+    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
-    return NodeInformation(
-        properties=node_state,
-        statistics=node_statistics,
+    if blockchain_instance is not None:
+        node_state: NodeConsensusInformation = (
+            blockchain_instance.get_blockchain_private_state()
+        )
+        node_statistics: NodeMasterInformation | None = (
+            blockchain_instance.get_blockchain_public_state()
+        )
+
+        return NodeInformation(
+            properties=node_state,
+            statistics=node_statistics,
+        )
+
+    raise HTTPException(
+        detail="Blockchain instance is not yet initialized to return blockchain's public and private states. Please try again later.",
+        status_code=HTTPStatus.NO_CONTENT,
     )
 
 
@@ -132,7 +140,7 @@ async def process_hashed_block(
 
     # # Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
 
-    blockchain_current_instance: BlockchainMechanism = get_blockchain_instance()
+    blockchain_current_instance: BlockchainMechanism | None = get_blockchain_instance()
 
     # - Update the Consensus Negotiation ID.
     update_consensus_negotiation_query: Update = (
@@ -149,31 +157,37 @@ async def process_hashed_block(
 
     await get_database_instance().execute(update_consensus_negotiation_query)
 
-    # - Insert the block.
-    await get_blockchain_instance().insert_mined_block(
-        block=context_from_archival_miner.block,
-        from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
-    )
+    if blockchain_current_instance is not None:
+        # - Insert the block.
+        await blockchain_current_instance.insert_mined_block(
+            block=context_from_archival_miner.block,
+            from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+        )
 
-    # - Insert an internal transaction.
-    # @o This was seperated from the consolidated internal transaction handler due to the need of handling extra variables as `ARCHIVAL_MINER_NODE` sent a payload.
-    await blockchain_current_instance._insert_internal_transaction(
-        action=TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING,
-        data=NodeTransaction(
-            action=NodeTransactionInternalActions.CONSENSUS,
-            context=NodeConfirmMineConsensusTransaction(
-                miner_address=context_from_archival_miner.miner_address,
-                master_address=blockchain_current_instance.identity[0],
-                consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
+        # - Insert an internal transaction.
+        # @o This was seperated from the consolidated internal transaction handler due to the need of handling extra variables as `ARCHIVAL_MINER_NODE` sent a payload.
+        await blockchain_current_instance._insert_internal_transaction(
+            action=TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING,
+            data=NodeTransaction(
+                action=NodeTransactionInternalActions.CONSENSUS,
+                context=NodeConfirmMineConsensusTransaction(
+                    miner_address=context_from_archival_miner.miner_address,
+                    master_address=blockchain_current_instance.identity[0],
+                    consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
+                ),
             ),
-        ),
-    )
+        )
 
-    # - Insert transaction from the blockchain for the successful thing.
-    return ConsensusSuccessPayload(
-        addon_consensus_sleep_seconds=random_generator.uniform(0, 2)
-        * blockchain_current_instance.block_timer_seconds,
-        reiterate_master_address=blockchain_current_instance.identity[0],
+        # - Insert transaction from the blockchain for the successful thing.
+        return ConsensusSuccessPayload(
+            addon_consensus_sleep_seconds=random_generator.uniform(0, 2)
+            * blockchain_current_instance.block_timer_seconds,
+            reiterate_master_address=blockchain_current_instance.identity[0],
+        )
+
+    raise HTTPException(
+        detail="Blockchain instance is not yet initialized. Please try again later.",
+        status_code=HTTPStatus.NO_CONTENT,
     )
 
 
@@ -342,25 +356,32 @@ async def acknowledge_as_response(
                     )
                     await db.execute(store_authored_token_query)
 
-                    await get_blockchain_instance()._insert_internal_transaction(
-                        action=TransactionActions.NODE_GENERAL_CONSENSUS_INIT,
-                        data=NodeTransaction(
-                            action=NodeTransactionInternalActions.INIT,
-                            context=NodeCertificateTransaction(
-                                requestor_address=AddressUUID(x_source),
-                                timestamp=datetime.now(),
-                            ),
-                        ),
+                    blockchain_instance: BlockchainMechanism | None = (
+                        get_blockchain_instance()
                     )
 
-                    # # Then return it.
-                    return JSONResponse(
-                        content={"certificate_token": authored_token.decode("utf-8")},
-                        status_code=HTTPStatus.OK,
-                    )
+                    if blockchain_instance is not None:
+                        await blockchain_instance._insert_internal_transaction(
+                            action=TransactionActions.NODE_GENERAL_CONSENSUS_INIT,
+                            data=NodeTransaction(
+                                action=NodeTransactionInternalActions.INIT,
+                                context=NodeCertificateTransaction(
+                                    requestor_address=AddressUUID(x_source),
+                                    timestamp=datetime.now(),
+                                ),
+                            ),
+                        )
+
+                        # # Then return it.
+                        return JSONResponse(
+                            content={
+                                "certificate_token": authored_token.decode("utf-8")
+                            },
+                            status_code=HTTPStatus.OK,
+                        )
 
                 raise HTTPException(
-                    detail="Authority to sign the certificate is not possible due to missing parameters.",
+                    detail="Authority to sign the certificate is not possible due to missing parameters or the blockchain instance is currently uninitialized.",
                     status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
                 )
 
@@ -422,8 +443,12 @@ async def verify_given_hash(
     )
 ) -> Response:
 
+    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
+    is_hash_equal: bool = False
+
+    if blockchain_instance is not None:
+        is_hash_equal = await blockchain_instance.get_chain_hash() == x_hash
+
     return Response(
-        status_code=HTTPStatus.OK
-        if await get_blockchain_instance().get_chain_hash() == x_hash
-        else HTTPStatus.NOT_ACCEPTABLE
+        status_code=HTTPStatus.OK if is_hash_equal else HTTPStatus.NOT_ACCEPTABLE
     )

@@ -167,33 +167,34 @@ async def register_entity(
                 name=f"{get_email_instance.__name__}_send_register_welcome_notification",
             )
 
-            blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+            blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
             # - After that, record this transaction from the blockchain.
             # @o This callback in particular is not part of the consolidated internal transactions declared from the `dependencies.py` under < class 'EnsureAuthorized'>
             # ! That is due to its several previous variables were used.
-            if (
-                UserEntity(auth_token.account_type) is UserEntity.MASTER_NODE_USER
-                or UserEntity(auth_token.account_type)
-                is UserEntity.ARCHIVAL_MINER_NODE_USER
-                and blockchain_instance.node_role is NodeType.MASTER_NODE
-            ):
-                await blockchain_instance._insert_internal_transaction(
-                    action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
-                    data=NodeTransaction(
-                        action=NodeTransactionInternalActions.INIT,
-                        context=NodeRegisterTransaction(
-                            acceptor_address=AddressUUID(
-                                tokens[1]
-                                if tokens is not None
-                                else check_auth_from_new_master_email
+            if blockchain_instance is not None:
+                if (
+                    UserEntity(auth_token.account_type) is UserEntity.MASTER_NODE_USER
+                    or UserEntity(auth_token.account_type)
+                    is UserEntity.ARCHIVAL_MINER_NODE_USER
+                    and blockchain_instance.node_role is NodeType.MASTER_NODE
+                ):
+                    await blockchain_instance._insert_internal_transaction(
+                        action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
+                        data=NodeTransaction(
+                            action=NodeTransactionInternalActions.INIT,
+                            context=NodeRegisterTransaction(
+                                acceptor_address=AddressUUID(
+                                    tokens[1]
+                                    if tokens is not None
+                                    else check_auth_from_new_master_email
+                                ),
+                                new_address=AddressUUID(unique_address_ref),
+                                role=auth_token.account_type,
+                                timestamp=datetime.now(),
                             ),
-                            new_address=AddressUUID(unique_address_ref),
-                            role=auth_token.account_type,
-                            timestamp=datetime.now(),
                         ),
-                    ),
-                )
+                    )
 
         except IntegrityError:
             raise HTTPException(
