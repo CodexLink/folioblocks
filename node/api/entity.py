@@ -14,7 +14,7 @@ from http import HTTPStatus
 from logging import Logger, getLogger
 from os import environ as env
 from sqlite3 import IntegrityError
-from typing import Any
+from typing import Any, Mapping
 from uuid import uuid4
 
 import jwt
@@ -56,8 +56,8 @@ from core.dependencies import (
 )
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import false, select
-from sqlalchemy.sql.expression import Select
+from sqlalchemy import MetaData, false, select
+from sqlalchemy.sql.expression import Insert, Select
 from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -87,13 +87,13 @@ async def register_entity(
 
     # - Since we are going to record this in blockchain, which requires the `acceptor_address`, validate if it contains something.
     # * New instances doesn't have new credentials, check if there's an auth code for the NodeType.MASTER_NODE and it's not yet used.
-    check_auth_from_new_master_stmt: Select = select([auth_codes.c.to_email]).where(
+    check_auth_from_new_master_query: Select = select([auth_codes.c.to_email]).where(
         (auth_codes.c.account_type == UserEntity.MASTER_NODE_USER)
         & (auth_codes.c.is_used == false())
     )
 
     check_auth_from_new_master_email = await db.fetch_one(
-        check_auth_from_new_master_stmt
+        check_auth_from_new_master_query
     )
 
     if tokens is None and check_auth_from_new_master_email is None:
@@ -114,7 +114,7 @@ async def register_entity(
     # - Our auth code should contain the information if that is applicable at certain role.
     # - Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
 
-    get_auth_token_stmt = auth_codes.select().where(
+    get_auth_token_query: Select = auth_codes.select().where(
         (auth_codes.c.code == credentials.auth_code)
         & (auth_codes.c.to_email == credentials.email)
         & (
@@ -123,7 +123,7 @@ async def register_entity(
         & (auth_codes.c.expiration >= datetime.now())
     )
 
-    auth_token = await db.fetch_one(get_auth_token_stmt)
+    auth_token = await db.fetch_one(get_auth_token_query)
 
     if auth_token is not None:
         if not credentials.first_name or not credentials.last_name:
@@ -143,7 +143,7 @@ async def register_entity(
             dict_credentials["auth_code"],
         )  # Remove other fields so that we can do the double starred expression for unpacking.
 
-        data = users.insert().values(
+        data: Insert = users.insert().values(
             **dict_credentials,
             unique_address=unique_address_ref,
             password=hash_context(pwd=RawData(credentials.password))
@@ -216,7 +216,9 @@ async def login_entity(
     *, credentials: EntityLoginCredentials, db: Any = Depends(get_database_instance)
 ) -> EntityLoginResult:  # * We didn't use aiohttp.BasicAuth because frontend has a form, and we don't need a prompt.
 
-    credential_to_look = users.select().where(users.c.username == credentials.username)
+    credential_to_look: Select = users.select().where(
+        users.c.username == credentials.username
+    )
     fetched_credential_data = await db.fetch_one(credential_to_look)
 
     if fetched_credential_data is not None:
@@ -240,12 +242,12 @@ async def login_entity(
             real_pwd=RawData(credentials.password),
             hashed_pwd=HashedData(fetched_credential_data.password),
         ):
-            other_tokens_stmt = tokens.select().where(
+            other_tokens_query: Select = tokens.select().where(
                 (tokens.c.from_user == fetched_credential_data.unique_address)
                 & (tokens.c.state == TokenStatus.CREATED_FOR_USE.name)
             )
 
-            other_tokens = await db.fetch_all(other_tokens_stmt)
+            other_tokens: list[Mapping] = await db.fetch_all(other_tokens_query)
 
             # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
@@ -266,19 +268,19 @@ async def login_entity(
             token = jwt.encode(payload, env.get("SECRET_KEY", JWT_ALGORITHM))
 
             # - Put a new token to the database then update the user as it receives the token.
-            new_token = tokens.insert().values(
+            new_token: Insert = tokens.insert().values(
                 from_user=fetched_credential_data.unique_address,
                 token=token,
                 expiration=jwt_expire_at,
             )
-            logged_user_stmt = (
+            logged_user_query = (
                 users.update()
                 .where(users.c.unique_address == fetched_credential_data.unique_address)
                 .values(activity=UserActivityState.ONLINE)
             )
 
             try:
-                await gather(db.execute(logged_user_stmt), db.execute(new_token))
+                await gather(db.execute(logged_user_query), db.execute(new_token))
 
                 # - Check if this node does have a association certificate token.
 
@@ -287,15 +289,15 @@ async def login_entity(
                         "Checking if this node has its own associate node certificate token."
                     )
 
-                    logged_user_has_association_token_stmt = (
+                    logged_user_has_association_token_query: Select = (
                         associated_nodes.select().where(
                             associated_nodes.c.user_address
                             == fetched_credential_data.unique_address
                         )
                     )
 
-                    associated_token_from_logged_user = await db.fetch_one(
-                        logged_user_has_association_token_stmt
+                    associated_token_from_logged_user: Mapping | None = (
+                        await db.fetch_one(logged_user_has_association_token_query)
                     )
 
                     print(
@@ -305,7 +307,7 @@ async def login_entity(
                     )
 
                     if associated_token_from_logged_user is not None:
-                        update_associate_node_state_stmt = (
+                        update_associate_node_state_query = (
                             associated_nodes.update()
                             .where(
                                 associated_nodes.c.user_address
@@ -314,7 +316,7 @@ async def login_entity(
                             .values(status=AssociatedNodeStatus.CURRENTLY_AVAILABLE)
                         )
 
-                        await db.execute(update_associate_node_state_stmt)
+                        await db.execute(update_associate_node_state_query)
 
                         logger.info(
                             f"Associate Reference ({fetched_credential_data.unique_address}) has been updated to {AssociatedNodeStatus.CURRENTLY_AVAILABLE.name}."
@@ -357,11 +359,11 @@ async def logout_entity(
     db: Any = Depends(get_database_instance),
 ) -> None:
 
-    fetched_token_stmt = tokens.select().where(
+    fetched_token_query: Select = tokens.select().where(
         (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
     )
 
-    fetched_token = await db.fetch_one(fetched_token_stmt)
+    fetched_token = await db.fetch_one(fetched_token_query)
 
     if fetched_token is not None:
         token_ref = (
@@ -371,11 +373,11 @@ async def logout_entity(
         )
 
         # - Fetch the user from this token for the extra step.
-        user_ref_stmt = users.select().where(
+        user_ref_query: Select = users.select().where(
             users.c.unique_address == fetched_token.from_user
         )
 
-        user_ref = await db.fetch_one(user_ref_stmt)
+        user_ref = await db.fetch_one(user_ref_query)
 
         if user_ref is not None:
 
@@ -383,16 +385,16 @@ async def logout_entity(
             if user_ref.type == UserEntity.ARCHIVAL_MINER_NODE_USER:
 
                 # - Fetch first before updating.
-                associate_from_user_ref_stmt = associated_nodes.select().where(
+                associate_from_user_ref_query: Select = associated_nodes.select().where(
                     associated_nodes.c.user_address == user_ref.unique_address
                 )
 
                 associate_from_user_ref = await db.fetch_one(
-                    associate_from_user_ref_stmt
+                    associate_from_user_ref_query
                 )
 
                 if associate_from_user_ref is not None:
-                    update_associate_state_from_user_stmt = (
+                    update_associate_state_from_user_query = (
                         associated_nodes.update()
                         .where(
                             associated_nodes.c.user_address == user_ref.unique_address
@@ -400,7 +402,7 @@ async def logout_entity(
                         .values(status=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE)
                     )
 
-                    await db.execute(update_associate_state_from_user_stmt)
+                    await db.execute(update_associate_state_from_user_query)
 
                     logger.info(
                         f"An associate ({associate_from_user_ref.user_address}) reference status has been updated to {AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE.name}."

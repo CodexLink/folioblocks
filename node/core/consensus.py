@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from blueprint.models import associated_nodes
 from databases import Database
-from core.dependencies import get_args_values
+from sqlalchemy.sql.expression import Insert
 from utils.http import get_http_client_instance
 from utils.processors import load_env
 
@@ -32,12 +32,13 @@ from core.constants import (
     RequestPayloadContext,
     URLAddress,
 )
+from core.decorators import restrict_call
 from core.dependencies import (
+    get_args_values,
     get_database_instance,
     get_identity_tokens,
     get_master_node_properties,
 )
-from core.decorators import restrict_call
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -108,7 +109,7 @@ class ConsensusMechanism:
                 await master_response.json()
             )
 
-            insert_fetched_certificate_stmt = associated_nodes.insert().values(
+            insert_fetched_certificate_query: Insert = associated_nodes.insert().values(
                 user_address=auth_source,
                 certificate=association_certificate["certificate_token"],
                 # * The following fields are not needed throughout the runtime, but is required due to constraint.
@@ -117,7 +118,7 @@ class ConsensusMechanism:
                 source_port=master_origin_port,
             )
 
-            await db.execute(insert_fetched_certificate_stmt)
+            await db.execute(insert_fetched_certificate_query)
 
             logger.info("Generation of Association certificate token were successful!")
 

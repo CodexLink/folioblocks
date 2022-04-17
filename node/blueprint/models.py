@@ -50,7 +50,7 @@ associations = Table(
     Column(
         "group",
         SQLEnum(AssociationGroupType),
-        server_default=AssociationGroupType.ORGANIZATION.name,
+        server_default=AssociationGroupType.ORGANIZATION,
         nullable=False,
     ),
     Column("date_added", DateTime, default=func.now()),

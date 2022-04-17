@@ -101,7 +101,7 @@
     },
     // - SCHOOL | ORGANIZATION | PAYLOAD SCHEMA.
     {
-      "school | organization | company": {
+      "school | associate/organization | company": {
         "org_type": "", // ^^
         "founded": "", // int
         "description": "", // text

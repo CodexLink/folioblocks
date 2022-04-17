@@ -212,9 +212,11 @@ class BlockchainContentType(IntEnum):
     ADDRESS = auto()
     TRANSACTION = auto()
 
+
 class SourceNodeOrigin(IntEnum):
     FROM_MASTER = auto()
     FROM_ARCHIVAL_MINER = auto()
+
 
 # # Enums, Constraints
 class ExplorerBlockItemReturnCount(IntEnum):
@@ -279,10 +281,10 @@ class TransactionContextMappingType(IntEnum):
         IntEnum: Uses integer `auto()` to classify choices per declaration.
     """
 
-    APPLICANT_INFO = auto()
+    APPLICANT_BASE = auto()
     APPLICANT_LOG = auto()
     APPLICANT_ADDITIONAL = auto()
-    SCHOOL_INFO = auto()
+    SCHOOL_BASE = auto()
     SCHOOL_ASSOCIATIONS = auto()
     SCHOOL_EXTRA_INFO = auto()
 
@@ -393,7 +395,7 @@ class TransactionActions(IntEnum):
     APPLICANT_APPLY_REJECTED = auto()
 
     # # About Classification / Organization
-    # # Groups with classification of organization should refer to the actual classification instead of just organization.
+    # # Groups with classification of associate/organization should refer to the actual classification instead of just associate/organization.
     # - For Company / Organization.
     # ! Note that this/these may not be used since our scenario is leaning towards to applicants wanting to get hired by them doing the process.
     COMPANY_INVITE_APPLICANTS = auto()

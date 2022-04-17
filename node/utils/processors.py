@@ -34,6 +34,13 @@ from core.constants import (
     URLAddress,
 )
 from core.dependencies import set_master_node_properties
+from node.blueprint.schemas import (
+    AgnosticCredentialValidator,
+    ApplicantUserTransactionInitializer,
+    OrganizationIdentityValidator,
+)
+from node.core.constants import TransactionContextMappingType
+from sqlalchemy.sql.expression import Select
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -41,11 +48,17 @@ else:
     from signal import SIGTERM as CALL_TERMINATE_EVENT
 
 from sqlite3 import Connection, OperationalError, connect
-from typing import Any, Final
+from typing import Any, Final, Mapping
 
 from aioconsole import ainput
 from aiofiles import open as aopen
-from blueprint.models import file_signatures, model_metadata
+from blueprint.models import (
+    associations,
+    file_signatures,
+    model_metadata,
+    tx_content_mappings,
+    users,
+)
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_ENV_FILE_NAME,
@@ -71,11 +84,11 @@ from databases import Database
 from dotenv import find_dotenv, load_dotenv
 from email_validator import EmailNotValidError, EmailSyntaxError, validate_email
 from passlib.context import CryptContext
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.sql.expression import Insert, Select
 
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 from utils.http import get_http_client_instance
-from blueprint.models import users
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
@@ -275,11 +288,11 @@ async def initialize_resources_and_return_db_context(
             - Understood that this was duplicated from the <class `BlockchainMechanism`>
             - I cannot access that instance beyond this point due to the fact that we had multiple checks before instantiating important objects.
             """
-            blockchain_validate_hash_stmt = select(
+            blockchain_validate_hash_query: Select = select(
                 [file_signatures.c.hash_signature]
             ).where(file_signatures.c.filename == BLOCKCHAIN_NAME)
-            blockchain_retrieved_hash = await db_instance.fetch_val(
-                blockchain_validate_hash_stmt
+            blockchain_retrieved_hash: Mapping = await db_instance.fetch_val(
+                blockchain_validate_hash_query
             )
             logger.info("Fetched blockchain file content's signature.")
 
@@ -366,14 +379,14 @@ async def initialize_resources_and_return_db_context(
                 raw_blockchain_hash = sha256(chain_temp_reader.read()).hexdigest()
 
             # - Insert the resulting hash from the database.
-            blockchain_hash_stmt = file_signatures.insert().values(
+            blockchain_hash_query: Insert = file_signatures.insert().values(
                 filename=BLOCKCHAIN_NAME, hash_signature=raw_blockchain_hash
             )
             logger.info("Initial blockchain signature has been calculated.")
 
             # - Connect to the database, and then execute the SQL command.
             await gather(
-                db_instance.connect(), db_instance.execute(blockchain_hash_stmt)
+                db_instance.connect(), db_instance.execute(blockchain_hash_query)
             )
 
             logger.info("Database insertion of blockchain signature is done.")
@@ -787,31 +800,100 @@ def mask(data: bytes | int | str) -> str:
 # # Output Filters — END
 
 # # Blockchain DRY Handlers — START
+async def validate_organization_existence(
+    *, org_identity: OrganizationIdentityValidator, is_org_scope: bool
+) -> Mapping | None:
+
+    validate_association_existence_query: Select
+
+    if is_org_scope:
+        validate_association_existence_query = select([associations.c.address]).where(
+            (associations.c.name == org_identity.association_name)
+            & (associations.c.group == org_identity.association_group_type)
+        )
+    else:
+        validate_association_existence_query = select([associations.c.address]).where(
+            associations.c.address == org_identity.association_address
+        )
+
+    existing_association: Mapping | None = await get_database_instance().fetch_one(
+        validate_association_existence_query
+    )
+
+    return existing_association
 
 
 async def validate_user_address(
     *,
-    supplied_address: AddressUUID,
+    supplied_address: AddressUUID | str,
 ) -> bool:
-    if not isinstance(supplied_address, str):
-        logger.error(
-            f"Supplied address is invalid! Please ensure that the address is a type of {type(str)}."
-        )
-        return False
 
-    address_existence_checker_stmt = select([users.c.unique_address]).where(
-        users.c.unique_address == supplied_address
+    if isinstance(supplied_address, str):
+        address_existence_checker_query: Select = select(
+            [users.c.unique_address]
+        ).where(users.c.unique_address == supplied_address)
+
+        address: Mapping | None = await get_database_instance().fetch_one(
+            address_existence_checker_query
+        )
+
+        if address is None:
+            logger.error(
+                "Supplied address seems to not exist. Please check your input and try again."
+            )
+            return False
+
+        return True
+
+    logger.error(
+        f"Supplied address is invalid! Please ensure that the address is a type of {type(str)}."
+    )
+    return False
+
+
+async def validate_user_existence(
+    *, user_identity: AgnosticCredentialValidator
+) -> bool:
+    validate_existence_user_query: Select = select([func.now()]).where(
+        (users.c.first_name == user_identity.first_name)
+        & (users.c.last_name == user_identity.last_name)
+        & (users.c.username == user_identity.username)
+        & (users.c.email == user_identity.email)
     )
 
-    address = await get_database_instance().fetch_one(address_existence_checker_stmt)
+    existing_user: Mapping | None = await get_database_instance().fetch_one(
+        validate_existence_user_query
+    )
 
-    if address is None:
+    if existing_user:
         logger.error(
-            "Supplied address seems to not exist. Please check your input and try again."
+            "There was an existing user from the credentials given! Please try with another credentials. Or contact your administration regarding your credentails."
         )
         return False
 
     return True
+
+
+async def validate_transaction_mapping_exists(
+    *, reference_address: AddressUUID | str, content_type: TransactionContextMappingType
+) -> bool:
+    if validate_user_address(supplied_address=reference_address) is True:
+
+        find_tx_mapping_query_query: Select = select([func.count()]).where(
+            (tx_content_mappings.c.address_ref == reference_address)
+            & (tx_content_mappings.c.content_type == content_type)
+        )
+
+        found_tx_mapping: Mapping | None = await get_database_instance().fetch_one(
+            find_tx_mapping_query_query
+        )
+
+        return True if found_tx_mapping else False
+
+    logger.error(
+        f"Cannot find transaction map for the address {reference_address} with the content type {content_type}."
+    )
+    return False
 
 
 # # Blockchain DRY Handlers — END

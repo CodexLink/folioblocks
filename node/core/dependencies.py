@@ -17,7 +17,7 @@ from logging import Logger, getLogger
 from os import environ as env
 from secrets import token_hex
 from sqlite3 import IntegrityError
-from typing import Any, Final
+from typing import Any, Final, Mapping
 
 from aiohttp import (
     ClientError,
@@ -158,7 +158,7 @@ async def authenticate_node_client(
                     logger.info(
                         "Checking previous email if there's any, even on new-instance."
                     )
-                    check_previous_registered_email_stmt: Select = select(
+                    check_previous_registered_email_query: Select = select(
                         [auth_codes.c.to_email]
                     ).where(
                         (auth_codes.c.is_used == true())
@@ -166,7 +166,7 @@ async def authenticate_node_client(
                     )
 
                     previous_registered_email = await instances[1].fetch_one(
-                        check_previous_registered_email_stmt
+                        check_previous_registered_email_query
                     )
 
                     if previous_registered_email is None:
@@ -174,7 +174,7 @@ async def authenticate_node_client(
                             "Checking for emails that haven't used their auth code ..."
                         )
 
-                        unused_code_email_stmt = select(
+                        unused_code_email_query = select(
                             [auth_codes.c.to_email, auth_codes.c.expiration]
                         ).where(
                             and_(
@@ -185,7 +185,7 @@ async def authenticate_node_client(
                         )
 
                         unused_code_email = await instances[1].fetch_one(
-                            unused_code_email_stmt
+                            unused_code_email_query
                         )
 
                         master_email_address = EmailStr()
@@ -210,7 +210,7 @@ async def authenticate_node_client(
                                 )
 
                                 generated_token = generate_auth_token()
-                                new_code_from_previous_email_stmt: Update = (
+                                new_code_from_previous_email_query: Update = (
                                     auth_codes.update()
                                     .where(
                                         auth_codes.c.to_email
@@ -220,7 +220,7 @@ async def authenticate_node_client(
                                 )
 
                                 await instances[1].execute(
-                                    new_code_from_previous_email_stmt
+                                    new_code_from_previous_email_query
                                 )
                                 master_email_address = EmailStr(
                                     unused_code_email.to_email
@@ -251,7 +251,7 @@ async def authenticate_node_client(
                                 name=f"{get_email_instance.__name__}_send_auth_for_registration",
                             )
 
-                            insert_generated_token_stmt: Insert = (
+                            insert_generated_token_query: Insert = (
                                 auth_codes.insert().values(
                                     code=generated_token,
                                     account_type=UserEntity.MASTER_NODE_USER,
@@ -260,7 +260,7 @@ async def authenticate_node_client(
                                 )
                             )
 
-                            await instances[1].execute(insert_generated_token_stmt)
+                            await instances[1].execute(insert_generated_token_query)
 
                     else:
                         logger.info(
@@ -510,7 +510,7 @@ class EnsureAuthorized:
         print("Debug from the call function, ", request, dir(request))
 
         if x_token:
-            req_ref_token = tokens.select().where(
+            req_ref_token: Select = tokens.select().where(
                 (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
             )
 
@@ -525,7 +525,7 @@ class EnsureAuthorized:
                     users.c.unique_address == ref_token.from_user
                 )
 
-                user_role = await db.fetch_val(user_role_ref)
+                user_role: Mapping = await db.fetch_val(user_role_ref)
 
                 if isinstance(self._as, list):
                     for each_role in self._as:

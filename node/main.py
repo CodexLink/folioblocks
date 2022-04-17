@@ -16,7 +16,7 @@ from errno import EADDRINUSE, EADDRNOTAVAIL
 from logging.config import dictConfig
 from os import environ as env
 from socket import AF_INET, SOCK_STREAM, error, socket
-from typing import Any, Final
+from typing import Any, Final, Mapping
 
 import uvicorn
 from fastapi import FastAPI
@@ -293,7 +293,7 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
             (tokens.c.state != TokenStatus.EXPIRED)
             & (tokens.c.expiration.isnot(None))  # type: ignore
         )
-        tokens_available = await get_database_instance().fetch_all(token_query)
+        tokens_available: list[Mapping] = await get_database_instance().fetch_all(token_query)
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")

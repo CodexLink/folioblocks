@@ -10,7 +10,7 @@ from secrets import token_urlsafe
 from sqlite3 import IntegrityError
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
-from typing import Any, Callable, Final
+from typing import Any, Callable, Final, Mapping
 from uuid import uuid4
 
 from aiofiles import open as aopen
@@ -57,7 +57,17 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
-from node.core.email import EmailService, get_email_instance
+from core.email import EmailService, get_email_instance
+from node.blueprint.schemas import (
+    AgnosticCredentialValidator,
+    OrganizationIdentityValidator,
+)
+from node.core.constants import AssociationGroupType, TransactionContextMappingType
+from node.utils.processors import (
+    validate_organization_existence,
+    validate_transaction_mapping_exists,
+    validate_user_existence,
+)
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -127,9 +137,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         self.block_timer_seconds: Final[int] = block_timer_seconds
         self.mine_duration: timedelta = timedelta()
-        self.consensus_timer_expiration: datetime = (
-            datetime.now()
-        )
+        self.consensus_timer_expiration: datetime = datetime.now()
 
         # # Containers
         self.transaction_container: list[Transaction] = []
@@ -257,7 +265,7 @@ class BlockchainMechanism(ConsensusMechanism):
             # - [1] Ensure that the `from_address` is existing.
             # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
             # ! I will be dividing those into two statements.
-            get_existing_from_address_stmt, get_existing_to_address_stmt = select(
+            get_existing_from_address_query, get_existing_to_address_query = select(
                 [func.count()]
             ).where(users.c.unique_address == from_address), select(
                 [func.count()]
@@ -271,9 +279,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 is_existing_from_address,
                 is_existing_to_address,
             ) = await self.db_instance.fetch_one(
-                get_existing_from_address_stmt
+                get_existing_from_address_query
             ), await self.db_instance.fetch_one(
-                get_existing_to_address_stmt
+                get_existing_to_address_query
             )
 
             # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
@@ -305,33 +313,46 @@ class BlockchainMechanism(ConsensusMechanism):
                     # - Since this was a new entry, we need to do some handling for the database entry.
                     try:
                         # @o It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
-                        if action is TransactionActions.APPLICANT_APPLY:
-                            application_process_stmt: Insert | Update = (
-                                applications.insert().values(
-                                    process_id=RandomUUID(token_urlsafe(16)),
-                                    requestor=data.requestor,
-                                    to=data.receiver,
-                                    state=EmploymentApplicationState.REQUESTED,
-                                )
+                        if (
+                            await validate_transaction_mapping_exists(
+                                reference_address=AddressUUID(to_address),
+                                content_type=TransactionContextMappingType.APPLICANT_BASE,
                             )
-                        else:
-                            application_process_stmt = (
-                                applications.update()
-                                .where(applications.c.process_uuid == data.process_id)
-                                .values(
-                                    state=EmploymentApplicationState.ACCEPTED
-                                    if action
-                                    is TransactionActions.APPLICANT_APPLY_CONFIRMED
-                                    else EmploymentApplicationState.REJECTED
+                            is True
+                        ):
+                            if action is TransactionActions.APPLICANT_APPLY:
+                                application_process_query: Insert | Update = (
+                                    applications.insert().values(
+                                        process_id=RandomUUID(token_urlsafe(16)),
+                                        requestor=data.requestor,
+                                        to=data.receiver,
+                                        state=EmploymentApplicationState.REQUESTED,
+                                    )
                                 )
-                            )
+                            else:
+                                application_process_query = (
+                                    applications.update()
+                                    .where(
+                                        applications.c.process_uuid == data.process_id
+                                    )
+                                    .values(
+                                        state=EmploymentApplicationState.ACCEPTED
+                                        if action
+                                        is TransactionActions.APPLICANT_APPLY_CONFIRMED
+                                        else EmploymentApplicationState.REJECTED
+                                    )
+                                )
 
-                        await self.db_instance.execute(application_process_stmt)
+                            await self.db_instance.execute(application_process_query)
+
+                        else:
+                            return False
 
                     except IntegrityError as e:
                         logger.error(
                             f"There was an error regarding application process entry to database. | Info: {e}"
                         )
+                        return False
 
                     resolved_payload = data
 
@@ -352,77 +373,121 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     # @o Since `XXXInternal` subclasses `XXXExternal`, we only need `Internal` and break down until we get to the `XXXExternal`.
 
-                    # - Validate conditions before user generation.
-
                     # #  ADD CONDITION FOR TRANSACTION MAPPING.
+
+                    # - Validate conditions before user generation.
+                    # - Validate if there's an existing association/organzization for the new applicant to refer.
+
+                    # @d Type-hints.
+                    validate_user: bool
+                    existing_association: Mapping | None
 
                     if (
                         isinstance(data, ApplicantUserTransactionInitializer)
-                        and data.association_address is None
-                        and data.association_name is None
-                        and data.association_group_type is None
+                        and data.association_address is not None
                     ):
-                        logger.error(
-                            "Association context is empty. Please add references as it is required to identify where do you belong. This is a developer-issue regarding API processing and object instantiation, please contact as possible."
+
+                        validate_user = await validate_user_existence(
+                            user_identity=AgnosticCredentialValidator(
+                                first_name=data.first_name,
+                                last_name=data.last_name,
+                                username=data.username,
+                                email=data.email,
+                            )
                         )
-                        return False
+
+                        if validate_user:
+                            return False
+
+                        existing_association = await validate_organization_existence(
+                            org_identity=OrganizationIdentityValidator(
+                                association_address=data.association_address,
+                                association_name=data.association_name,
+                                association_group_type=data.association_group_type,
+                            ),
+                            is_org_scope=False,
+                        )
+
+                        if existing_association is None:
+                            logger.error(
+                                "The associate address does not exists! Please refer to the right associate/organization or association to proceed the registration."
+                            )
+                            return False
+
+                    # - For the case of registering with the associate/organization, sometimes user can register with associate/organization reference existing and otherwise. With that, we need to handle the part where if the associate/organization doesn't exist then create a new one. Otherwise, refer its self from that associate/organization and we are good to go.
 
                     elif isinstance(data, OrganizationTransactionInitializer):
-
-                        # - Validate if there's an association under the following condition.
-                        if (
-                            data.association_address is not None
-                            and data.association_group_type is not None
-                            and data.association_name is None
-                        ):
-                            validate_existence_association_stmt: Select = select(
-                                [associations.c.address]
-                            ).where(associations.c.address == data.association_address)
-
-                            validated_association = await self.db_instance.fetch_one(
-                                validate_existence_association_stmt
+                        # - Validate the existence of the user based on the sensitive information.
+                        validate_user = await validate_user_existence(
+                            user_identity=AgnosticCredentialValidator(
+                                first_name=data.first_name,
+                                last_name=data.last_name,
+                                username=data.username,
+                                email=data.email,
                             )
+                        )
 
-                            if validated_association is None:
-                                logger.error(
-                                    "The supplied parameter for the `association` address reference does not exist! This is a developer-issue, please contact as possible."
-                                )
-                                return False
+                        if validate_user:
+                            return False
 
-                        # - Create an organization when name is only provided assuming its a new instance.
-                        elif (
+                        # - Validate the existence of an associate/organization.
+                        existing_association = await validate_organization_existence(
+                            org_identity=OrganizationIdentityValidator(
+                                association_address=data.association_address,
+                                association_name=data.association_name,
+                                association_group_type=data.association_group_type,
+                            ),
+                            is_org_scope=True,
+                        )
+
+                        # - Condition for creating a new associate/organization wherein there's no referrable address.
+                        if (
                             data.association_address is None
                             and data.association_group_type is not None
                             and data.association_name is not None
+                            and existing_association is None
                         ):
                             generated_address: Final[AddressUUID] = AddressUUID(
                                 f"{ADDRESS_UUID_KEY_PREFIX}:{uuid4().hex}"
                             )
 
-                            new_association_stmt = associations.insert().values(
-                                address=generated_address,
-                                name=data.association_name,
-                                group=data.association_group_type,
+                            # - Create an associate/organization when name is only provided assuming its a new instance.
+                            new_association_query: Insert = (
+                                associations.insert().values(
+                                    address=generated_address,
+                                    name=data.association_name,
+                                    group=data.association_group_type,
+                                )
                             )
+                            await self.db_instance.execute(new_association_query)
 
-                            await self.db_instance.execute(new_association_stmt)
-
+                            # - Assign the generated association address from the context.
                             # @o Since our approach is cascading, we need to assign this `generated_address` instead so that we don't need to do some resolution steps to get the newly inserted association address from the database again.
                             data.association_address = generated_address
 
+                        # - Condition for assigning a user (that will be generated later) from this address.
+                        elif (
+                            data.association_address is not None
+                            and data.association_group_type is None
+                            and data.association_name is None
+                            and existing_association is not None
+                        ):
+                            data.association_address = existing_association.address  # type: ignore
+
+                            if existing_association is not None:
+                                logger.error(
+                                    "The supplied parameter for the `association` address reference does not exist! This is a developer-issue, please contact as possible."
+                                )
+                            return False
+
                         else:
                             logger.error(
-                                "Condition regarding `association` and `association_name` were unmet. Please refer to the developer for more information on how to use the API."
+                                f"Instances has condition unmet. Either the `association` contains nothing or the instance along with the `association` condition does not met. Please try again."
                             )
-
-                    else:
-                        logger.error(
-                            f"Instances has condition unmet. Either the `association` contains nothing or the instance along with the `association` condition does not met. Please try again."
-                        )
 
                     # @o When all of the checks are done, then create the user.
                     try:
-                        insert_user_stmt = users.insert().values(
+                        insert_user_query: Insert = users.insert().values(
                             association=data.association_address,
                             first_name=data.first_name,
                             last_name=data.last_name,
@@ -431,7 +496,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             password=hash_context(pwd=RawData(data.password)),
                         )
 
-                        await self.db_instance.execute(insert_user_stmt)
+                        await self.db_instance.execute(insert_user_query)
 
                     except IntegrityError as e:
                         logger.error(
@@ -439,10 +504,11 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                         return False
 
-                    # - After that, its time to resolve those context for the `External` (for the blockchain to record).
+                    # - After all that, its time to resolve those context for the `External` model. (For the blockchain to record).
 
                     # ! Excluding fields via Model is not possible.
                     # ! https://github.com/samuelcolvin/pydantic/issues/1862.
+
                     # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
                     removed_credentials_context: dict = data.dict(
                         exclude={
@@ -471,8 +537,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     and isinstance(data, ApplicantLogTransaction)
                 ):
                     if (
-                        await validate_user_address(
-                            supplied_address=AddressUUID(to_address)
+                        await validate_transaction_mapping_exists(
+                            reference_address=AddressUUID(to_address),
+                            content_type=TransactionContextMappingType.APPLICANT_BASE,
                         )
                         is True
                     ):
@@ -524,9 +591,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         resolved_payload = data
 
                     else:
-                        logger.info(
-                            "Cannot proceed further due to address is missing or is invalid. Please try again."
-                        )
                         return False
 
                 # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
@@ -535,9 +599,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
                     TransactionActions.INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO,
                 ] and isinstance(data, AdditionalContextTransaction):
+                    # * Query the transaction
 
                     # * Just validate if the specified entity address does exists.
-                    if validate_user_address(supplied_address=AddressUUID(to_address)):
+                    if (
+                        validate_user_address(supplied_address=AddressUUID(to_address))
+                        is True
+                    ):
                         resolved_payload = data
 
                 else:
@@ -617,7 +685,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     parsed_args.target_port,
                 )
 
-                recorded_consensus_negotiation_stmt: Select = select(
+                recorded_consensus_negotiation_query: Select = select(
                     [consensus_negotiation.c.consensus_negotiation_id]
                 ).where(
                     (consensus_negotiation.c.block_no_ref == mined_block.id)
@@ -625,7 +693,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 recorded_consensus_negotiation = await self.db_instance.fetch_one(
-                    recorded_consensus_negotiation_stmt
+                    recorded_consensus_negotiation_query
                 )
 
                 if recorded_consensus_negotiation is not None:
@@ -649,7 +717,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     if payload_to_master.ok:
                         # - Update the Consensus Negotiation ID.
-                        update_completed_consensus_negotiation_stmt: Update = (
+                        update_completed_consensus_negotiation_query: Update = (
                             consensus_negotiation.update()
                             .where(
                                 (
@@ -665,7 +733,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
 
                         await get_database_instance().execute(
-                            update_completed_consensus_negotiation_stmt
+                            update_completed_consensus_negotiation_query
                         )
                         logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED}!")  # type: ignore
 
@@ -761,11 +829,11 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
     async def get_chain_hash(self) -> HashUUID:
-        fetch_chain_hash_stmt = select([file_signatures.c.hash_signature]).where(
+        fetch_chain_hash_query = select([file_signatures.c.hash_signature]).where(
             file_signatures.c.filename == BLOCKCHAIN_NAME
         )
 
-        return HashUUID(await self.db_instance.fetch_val(fetch_chain_hash_stmt))
+        return HashUUID(await self.db_instance.fetch_val(fetch_chain_hash_query))
 
     async def get_chain(self) -> str:
         # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
@@ -975,7 +1043,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 if attempt_deliver_payload.ok:
                     # - Save this consensus negotiation ID as well for the retrieval verification of the hashed/mined block.
-                    save_in_progress_negotiation_stmt: Insert = (
+                    save_in_progress_negotiation_query: Insert = (
                         consensus_negotiation.insert().values(
                             block_no_ref=generated_block.id,
                             consensus_negotiation_id=generated_consensus_negotiation_id,
@@ -984,7 +1052,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                     )
 
-                    await self.db_instance.execute(save_in_progress_negotiation_stmt)
+                    await self.db_instance.execute(save_in_progress_negotiation_query)
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
                     self.confirming_block_container.append(generated_block)
@@ -1112,7 +1180,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self,
     ) -> ArchivalMinerNodeInformation | None:
 
-        available_nodes_stmt = select(
+        available_nodes_query = select(
             [
                 associated_nodes.c.user_address,
                 associated_nodes.c.source_address,
@@ -1120,7 +1188,7 @@ class BlockchainMechanism(ConsensusMechanism):
             ]
         ).where(associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE)
 
-        available_nodes = await self.db_instance.fetch_all(available_nodes_stmt)
+        available_nodes: list[Mapping] = await self.db_instance.fetch_all(available_nodes_query)
 
         if not len(available_nodes):
             logger.info(
@@ -1196,11 +1264,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def _get_own_certificate(self) -> str | None:
         if self.node_role is NodeType.ARCHIVAL_MINER_NODE:
-            find_existing_certificate_stmt = select(
+            find_existing_certificate_query = select(
                 [associated_nodes.c.certificate]
             ).where(associated_nodes.c.user_address == self.identity[0])
 
-            return await self.db_instance.fetch_val(find_existing_certificate_stmt)
+            return await self.db_instance.fetch_val(find_existing_certificate_query)
 
         logger.error(
             f"You cannot fetch your own certificate as a {NodeType.MASTER_NODE.name}!"
@@ -1886,17 +1954,17 @@ class BlockchainMechanism(ConsensusMechanism):
             return
 
     async def _update_chain_hash(self, *, new_hash: str) -> None:
-        blockchain_hash_update_stmt = (
+        blockchain_hash_update_query = (
             file_signatures.update()
             .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
             .values(hash_signature=new_hash)
         )
 
-        await self.db_instance.execute(blockchain_hash_update_stmt)
+        await self.db_instance.execute(blockchain_hash_update_query)
 
 
 # # This approach was (not completely) taken from stackoverflow.
-# * Please refer to the node/core/email.py:132 for more information.
+# * Please refer to the node/core/email.py for more information.
 blockchain_service: BlockchainMechanism | None = None
 
 

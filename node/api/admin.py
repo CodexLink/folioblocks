@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with Fol
 
 """
 # Further Notice
-This endpoint should be used for generating users as a organization or as a node. When running this endpoint, ensure that you look for
+This endpoint should be used for generating users as a associate/organization or as a node. When running this endpoint, ensure that you look for
 
 """
 
@@ -25,6 +25,7 @@ from core.constants import BaseAPI, NodeAPI, RequestPayloadContext, UserEntity
 from core.email import EmailService, get_email_instance
 from databases import Database
 from fastapi import APIRouter, Header, HTTPException
+from sqlalchemy.sql.expression import Insert
 
 admin_router = APIRouter(
     prefix="/admin",
@@ -83,14 +84,14 @@ async def generate_auth_token_for_other_nodes(
         )
 
         try:
-            insert_generated_token_stmt = auth_codes.insert().values(
+            insert_generated_token_query: Insert = auth_codes.insert().values(
                 code=generated_token,
                 account_type=payload.role_to_infer,
                 to_email=payload.email,
                 expiration=datetime.now() + timedelta(days=2),
             )
 
-            await db_instance.execute(insert_generated_token_stmt)
+            await db_instance.execute(insert_generated_token_query)
 
         except IntegrityError as e:
             raise HTTPException(

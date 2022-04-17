@@ -97,11 +97,31 @@ class AdditionalContextTransaction(BaseModel):
 
 # # Generalized Transactions — END
 
-# # Organization-based Transactions — START
-class AgnosticTransactionUserCredentials(BaseModel):
+# # Generalized Validator — START
+
+
+class AgnosticCredentialValidator(BaseModel):
+    # @d This model was created for the validation for `insert_external_transaction` method.
+    first_name: str
+    last_name: str
+    email: EmailStr
+    username: str
+
+
+class OrganizationIdentityValidator(BaseModel):
     association_address: AddressUUID | None
     association_name: str | None
     association_group_type: AssociationGroupType | None
+
+
+# # Generalized Validator — END
+
+# # Organization-based Transactions — START
+
+
+class AgnosticTransactionUserCredentials(
+    AgnosticCredentialValidator, OrganizationIdentityValidator, BaseModel
+):
     first_name: str
     last_name: str
     email: EmailStr

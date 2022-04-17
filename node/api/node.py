@@ -131,7 +131,7 @@ async def process_hashed_block(
     blockchain_current_instance: BlockchainMechanism = get_blockchain_instance()
 
     # - Update the Consensus Negotiation ID.
-    update_consensus_negotiation_stmt: Update = (
+    update_consensus_negotiation_query: Update = (
         consensus_negotiation.update()
         .where(
             (
@@ -143,7 +143,7 @@ async def process_hashed_block(
         .values(status=ConsensusNegotiationStatus.COMPLETED)
     )
 
-    await get_database_instance().execute(update_consensus_negotiation_stmt)
+    await get_database_instance().execute(update_consensus_negotiation_query)
 
     # - Insert the block.
     await get_blockchain_instance().insert_mined_block(
@@ -179,7 +179,7 @@ async def receive_block_to_mine(
 ) -> Response:
 
     # - Record the Consensus Negotiation ID.
-    save_generated_consensus_negotiation_id_stmt: Insert = (
+    save_generated_consensus_negotiation_id_query: Insert = (
         consensus_negotiation.insert().values(
             block_no_ref=context_from_master.block.id,
             consensus_negotiation_id=context_from_master.consensus_negotiation_id,
@@ -187,7 +187,7 @@ async def receive_block_to_mine(
             status=ConsensusNegotiationStatus.ON_PROGRESS,
         )
     )
-    await get_database_instance().execute(save_generated_consensus_negotiation_id_stmt)
+    await get_database_instance().execute(save_generated_consensus_negotiation_id_query)
     logger.info(
         f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
     )
@@ -268,30 +268,30 @@ async def acknowledge_as_response(
 
     # - [1] Validate such entries from the header.
     # - [1.1] Get the source first.
-    fetch_node_source_stmt = select([users.c.unique_address, users.c.email]).where(
+    fetch_node_source_query = select([users.c.unique_address, users.c.email]).where(
         users.c.unique_address == x_source
     )
-    validated_source_address = await db.fetch_one(fetch_node_source_stmt)
+    validated_source_address = await db.fetch_one(fetch_node_source_query)
 
     # - [1.2] Then validate the token by incorporating previous query and the header `x_acceptance`.
     # * Validate other credentials and beyond at this point.
     if validated_source_address is not None:
-        fetch_node_auth_stmt = select([auth_codes.c.id]).where(
+        fetch_node_auth_query = select([auth_codes.c.id]).where(
             (auth_codes.c.code == x_acceptance)
             & (
                 auth_codes.c.to_email == validated_source_address.email
             )  # @o Equivalent to validated_source_address.email.
         )
 
-        validated_auth_code = await db.fetch_one(fetch_node_auth_stmt)
+        validated_auth_code = await db.fetch_one(fetch_node_auth_query)
 
         if validated_auth_code is not None:
-            fetch_node_token_stmt = select([tokens.c.id]).where(
+            fetch_node_token_query = select([tokens.c.id]).where(
                 (tokens.c.token == x_session)
                 & (tokens.c.from_user == validated_source_address.unique_address)
             )
 
-            validated_node_token = await db.fetch_one(fetch_node_token_stmt)
+            validated_node_token = await db.fetch_one(fetch_node_token_query)
 
             if validated_node_token is not None:
                 authority_code: str | None = env.get("AUTH_KEY", None)
@@ -317,7 +317,7 @@ async def acknowledge_as_response(
                     encrypted_authored_token: bytes = encrypter.encrypt(authored_token)
 
                     # @o As a `MASTER` node, store it for validation later.
-                    store_authored_token_stmt = associated_nodes.insert().values(
+                    store_authored_token_query: Insert = associated_nodes.insert().values(
                         user_address=validated_source_address.unique_address,
                         certificate=encrypted_authored_token.decode("utf-8"),
                         # # We need to ensure that the source address and port is right when this was deployed in external.
@@ -326,7 +326,7 @@ async def acknowledge_as_response(
                         source_address=origin.source_address,
                         source_port=origin.source_port,
                     )
-                    await db.execute(store_authored_token_stmt)
+                    await db.execute(store_authored_token_query)
 
                     # - Record this action from the blockchain.
                     await get_blockchain_instance()._insert_internal_transaction(
