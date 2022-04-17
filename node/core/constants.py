@@ -105,7 +105,7 @@ BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
 ] = 3  # NOTE: #  ! I'm not quite sure if this would be okay. As per checked, 2 to 3 more transactions takes more time. We might need to adjust block timer from this.
 BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
-BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 5
+BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 1
 BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION: Final[int] = 3
 BLOCKCHAIN_NEGOTIATION_ID_LENGTH: Final[int] = 8
 

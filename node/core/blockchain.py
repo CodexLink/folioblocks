@@ -1338,7 +1338,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return
 
-    @restrict_call(on=NodeType.MASTER_NODE)
     async def _insert_internal_transaction(
         self, action: TransactionActions, data: NodeTransaction
     ) -> None:
@@ -1489,7 +1488,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 else:
                     logger.warning(
-                        "Bypass from the update method has been imposed. Attempting to insert data "
+                        "Bypass from the update method has been imposed. Attempting to insert data ..."
                     )
                     await self._update_chain_hash(new_hash=context_from_update[0])
                     await content_buffer.write(context_from_update[1])

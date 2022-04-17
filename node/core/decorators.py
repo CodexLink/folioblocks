@@ -49,11 +49,11 @@ def restrict_call(*, on: NodeType) -> Callable:
         def instance(
             self: Any, *args: list[Any], **kwargs: dict[Any, Any]
         ) -> Callable | None:
-            if self.role == on:
+            if self.node_role == on:
                 return fn(self, *args, **kwargs)
 
             logger.warning(
-                f"Your role {self.role} cannot call the following method `{fn.__name__}` due to role restriction, which prohibits '{on}' from accessing this method."
+                f"Your role {self.role.name} cannot call the following method `{fn.__name__}` due to role restriction, which prohibits '{on.name}' from accessing this method."
             )
             return None
 
