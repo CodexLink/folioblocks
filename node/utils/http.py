@@ -18,6 +18,7 @@ from core.constants import (
     RequestPayloadContext,
     URLAddress,
 )
+from core.constants import AddressUUID
 from utils.exceptions import (
     HTTPClientFeatureUnavailable,
 )
@@ -61,8 +62,9 @@ class HTTPClient:
         headers: RequestPayloadContext | None = None,
         await_result_immediate: bool = True,
         do_not_retry: bool = False,
-        retry_attempt: int = 5,
         name: str | None = None,
+        retry_attempt: int = 5,
+        use_secure_protocol: bool = False,
     ) -> Any:
         """
         A method that enqueues request payload to the LIFO list container to execute in burst or for the latter.
@@ -78,7 +80,12 @@ class HTTPClient:
                                         ! With the name being required when the request is not `await_result_immediate`, in the case of `await_result_immediate` requests, there's no need for the name as it was automatically generated since it returns the values immediately. Having a not `await_result_immediate` doesn't have a name is prohibited because you are technically losing the returned response even though you may or may not need its returned response.
                                         # Sidenote that, this queueing is requried for the consensus mechanism of the blockchain.
         """
-        response_name: str = ""
+        response_name: str = (
+            ""  # ! Need to declare outside due to potential out of bounds.
+        )
+
+        # - Invoke and resolve protocol to use for the URL regardless of condition.
+        url = URLAddress(f"http{'s' if use_secure_protocol else ''}://{url}")
 
         # # First, resolve the request name before handling the condition if its allowed to be retrieved or enqueued basesd on self.is_ready.
         if name:

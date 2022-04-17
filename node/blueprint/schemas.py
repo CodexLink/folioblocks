@@ -10,37 +10,34 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from datetime import datetime
 
-from fastapi import UploadFile
-
 from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
     AddressUUID,
+    ApplicantLogContentType,
+    AssociationGroupType,
     CredentialContext,
+    EmploymentApplicationState,
     HashUUID,
     HTTPQueueMethods,
     JWTToken,
+    NodeTransactionInternalActions,
     NodeType,
     NotificationContext,
+    OrganizationType,
+    RandomUUID,
     RequestPayloadContext,
     RoleContext,
     TokenStatus,
     TransactionActions,
+    URLAddress,
     UserActivityState,
     UserEntity,
     UserRole,
 )
+from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field, FileUrl
-
-from core.constants import NodeTransactionInternalActions
-from core.constants import (
-    ApplicantLogContentType,
-    EmploymentApplicationState,
-    OrganizationType,
-)
-from core.constants import RandomUUID
-from core.constants import AssociationGroupType
 
 # # Dashboard API — START
 
@@ -189,24 +186,25 @@ class NodeSyncTransaction(BaseModel):
     timestamp: datetime
 
 
-class NodeNegotiationTransaction(BaseModel):
+class NodeConsensusTransaction(BaseModel):
     candidate_no: int
-    negotiation_id: RandomUUID
+    consensus_negotiation_id: RandomUUID
     miner_address: AddressUUID
     master_address: AddressUUID
+    provided_consensus_sleep_seconds: float
 
 
 class NodeMinerProofTransaction(BaseModel):
     miner_address: HashUUID
     receiver_address: HashUUID
-    negotiation_id: RandomUUID
+    consensus_negotiation_id: RandomUUID
     block_hash: HashUUID
     time_delivery: datetime
 
 
 class NodeTransaction(BaseModel):
     action: NodeTransactionInternalActions
-    context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeNegotiationTransaction | NodeMinerProofTransaction | HashUUID
+    context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeConsensusTransaction | NodeMinerProofTransaction | HashUUID
 
 
 class TransactionSignatures(BaseModel):
@@ -250,12 +248,35 @@ class BlockOverview(BaseBlock):
 # # APIs
 
 
+class ArchivalMinerNodeInformation(BaseModel):
+    miner_address: AddressUUID
+    source_host: URLAddress
+    source_port: int
+
+
+class ConsensusSuccessPayload(BaseModel):
+    reiterate_master_address: AddressUUID
+    addon_consensus_sleep_seconds: float
+
+
+class ConsensusFromMasterPayload(BaseModel):
+    consensus_negotiation_id: str
+    master_address: AddressUUID
+    block: Block
+
+
+class ConsensusToMasterPayload(BaseModel):
+    consensus_negotiation_id: str
+    miner_address: AddressUUID
+    block: Block
+
+
 class NodeConsensusInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
     is_mining: bool
     node_role: NodeType
-    consensus_timer_seconds: float
+    consensus_timer_expiration: datetime
     last_mined_block: int
 
 

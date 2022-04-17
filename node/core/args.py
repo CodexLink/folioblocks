@@ -9,11 +9,6 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-if __name__ == "__main__":
-    raise SystemExit(
-        f"This {__file__} (module) should not be executed as an entrypoint code! It only contains handling for the arguments when the '__main__' module is launched."
-    )
-
 from argparse import ArgumentParser
 from re import Pattern, compile
 

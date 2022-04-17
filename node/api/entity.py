@@ -16,50 +16,53 @@ from os import environ as env
 from sqlite3 import IntegrityError
 from typing import Any
 from uuid import uuid4
+
 import jwt
-from sqlalchemy import false, select
-from blueprint.models import auth_codes, associated_nodes, tokens, users
+from blueprint.models import associated_nodes, auth_codes, tokens, users
 from blueprint.schemas import (
     EntityLoginCredentials,
     EntityLoginResult,
     EntityRegisterCredentials,
     EntityRegisterResult,
+    NodeRegisterTransaction,
+    NodeTransaction,
 )
+from core.blockchain import get_blockchain_instance
 from core.constants import (
+    ADDRESS_UUID_KEY_PREFIX,
     ASYNC_TARGET_LOOP,
     JWT_ALGORITHM,
     JWT_DAY_EXPIRATION,
     MAX_JWT_HOLD_TOKEN,
-    ADDRESS_UUID_KEY_PREFIX,
     AddressUUID,
+    AssociatedNodeStatus,
     BaseAPI,
     EntityAPI,
     HashedData,
+    IdentityTokens,
     JWTToken,
+    NodeTransactionInternalActions,
     NodeType,
     RawData,
     TokenStatus,
+    TransactionActions,
     UserActivityState,
     UserEntity,
 )
-from core.dependencies import get_args_value, get_database_instance
+from core.dependencies import (
+    get_args_values,
+    get_database_instance,
+    get_identity_tokens,
+)
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
-from core.constants import AssociatedNodeStatus
-from blueprint.schemas import NodeRegisterTransaction, NodeTransaction
-from core.blockchain import get_blockchain_instance
-from core.constants import (
-    IdentityTokens,
-    NodeTransactionInternalActions,
-    TransactionActions,
-)
-from core.dependencies import get_identity_tokens
-from utils.processors import hash_context, verify_hash_context
+from sqlalchemy import false, select
 from sqlalchemy.sql.expression import Select
+from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
-evaluated_role: NodeType = NodeType(get_args_value().node_role)
+evaluated_role: NodeType = NodeType(get_args_values().node_role)
 
 entity_router = APIRouter(
     prefix="/entity",

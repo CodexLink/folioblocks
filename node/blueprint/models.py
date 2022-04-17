@@ -13,18 +13,19 @@ you should have received a copy of the gnu general public license along with Fol
 from typing import Final
 
 from core.constants import (
+    AssociatedNodeStatus,
     AssociationGroupType,
+    ConsensusNegotiationStatus,
+    EmploymentApplicationState,
     TokenStatus,
+    TransactionContextMappingType,
     UserActivityState,
     UserEntity,
 )
-from sqlalchemy import Boolean, Column, DateTime, false
+from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, func
+from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, false, func
 from sqlalchemy.orm import relationship
-
-from core.constants import AssociatedNodeStatus
-from core.constants import EmploymentApplicationState, TransactionContextMappingType
 
 # TODO: We might wanna create a key where it combines all of the certain fields and when it was inserted for reset password, it should resulted to that!
 
@@ -171,8 +172,9 @@ consensus_negotiation = Table(
     model_metadata,
     Column("id", Integer, nullable=False, primary_key=True, unique=False),
     Column("block_no_ref", Integer, nullable=False, unique=True),
-    Column("negotiation_id", String(32), nullable=False, unique=True),
+    Column("consensus_negotiation_id", String(11), nullable=False, unique=True),
     Column("peer_address", ForeignKey(user_addr_ref), nullable=False, unique=False),
+    Column("status", SQLEnum(ConsensusNegotiationStatus), nullable=False, unique=False),
     Column(
         "date_negotiation",
         DateTime,

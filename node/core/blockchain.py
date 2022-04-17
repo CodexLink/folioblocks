@@ -1,8 +1,10 @@
+from argparse import Namespace
 from asyncio import create_task, get_event_loop, sleep
 from base64 import urlsafe_b64encode
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
+from http import HTTPStatus
 from logging import Logger, getLogger
 from secrets import token_urlsafe
 from sqlite3 import IntegrityError
@@ -12,70 +14,69 @@ from typing import Any, Callable, Final
 from uuid import uuid4
 
 from aiofiles import open as aopen
-from fastapi import UploadFile
 from blueprint.models import (
     applications,
-    associations,
     associated_nodes,
+    associations,
+    consensus_negotiation,
     file_signatures,
     users,
 )
 from blueprint.schemas import (
+    AdditionalContextTransaction,
     ApplicantLogTransaction,
     ApplicantProcessTransaction,
+    ApplicantUserTransaction,
     ApplicantUserTransactionInitializer,
+    ArchivalMinerNodeInformation,
     Block,
     BlockOverview,
     HashableBlock,
+    NodeCertificateTransaction,
     NodeConsensusInformation,
+    NodeConsensusTransaction,
+    NodeGenesisTransaction,
     NodeMasterInformation,
+    NodeMinerProofTransaction,
+    NodeRegisterTransaction,
+    NodeSyncTransaction,
     NodeTransaction,
+    OrganizationTransaction,
+    OrganizationTransactionInitializer,
     Transaction,
+    TransactionSignatures,
 )
 from cryptography.fernet import Fernet
 from databases import Database
+from fastapi import UploadFile
 from frozendict import frozendict
-from blueprint.schemas import (
-    AdditionalContextTransaction,
-    TransactionSignatures,
-)
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
-from pydantic import BaseModel, ValidationError as PydanticValidationError
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
-from blueprint.schemas import OrganizationTransactionInitializer
-from core.constants import ADDRESS_UUID_KEY_PREFIX, RawData
-from blueprint.schemas import (
-    ApplicantUserTransaction,
-    OrganizationTransaction,
-)
-from core.constants import EmploymentApplicationState, RandomUUID
-from blueprint.schemas import NodeGenesisTransaction, NodeSyncTransaction
-from core.constants import NodeTransactionInternalActions
-from blueprint.schemas import (
-    NodeCertificateTransaction,
-    NodeMinerProofTransaction,
-    NodeNegotiationTransaction,
-    NodeRegisterTransaction,
-)
-from core.constants import INFINITE_TIMER
-from core.constants import RawBlockchainPayload
-from utils.processors import validate_user_address
-from utils.processors import hash_context
+from sqlalchemy.sql.expression import Insert, Select, Update
 from utils.http import HTTPClient, get_http_client_instance
-from utils.processors import unconventional_terminate
+from utils.processors import (
+    hash_context,
+    unconventional_terminate,
+    validate_user_address,
+)
 
 from core.consensus import ConsensusMechanism
 from core.constants import (
+    ADDRESS_UUID_KEY_PREFIX,
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
     BLOCKCHAIN_NAME,
+    BLOCKCHAIN_NEGOTIATION_ID_LENGTH,
     BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION,
+    INFINITE_TIMER,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
     AddressUUID,
@@ -84,21 +85,28 @@ from core.constants import (
     BlockchainFileContext,
     BlockchainIOAction,
     BlockchainPayload,
+    ConsensusNegotiationStatus,
+    EmploymentApplicationState,
     HashUUID,
     HTTPQueueMethods,
     IdentityTokens,
+    NodeTransactionInternalActions,
     NodeType,
+    RandomUUID,
+    RawBlockchainPayload,
+    RawData,
+    SourceNodeOrigin,
     TransactionActions,
     URLAddress,
     random_generator,
 )
+from core.decorators import ensure_blockchain_ready, restrict_call
 from core.dependencies import (
+    get_args_values,
     get_database_instance,
     get_identity_tokens,
     get_master_node_properties,
 )
-from sqlalchemy.sql.expression import Insert, Update, Select
-from core.decorators import ensure_blockchain_ready, restrict_call
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -117,12 +125,15 @@ class BlockchainMechanism(ConsensusMechanism):
         self.auth_token: IdentityTokens = auth_tokens
 
         self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.consensus_timer: timedelta = timedelta(
-            seconds=0
+        self.mine_duration: timedelta = timedelta()
+        self.consensus_timer_expiration: datetime = (
+            datetime.now()
         )  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
 
+        # # Containers
         self.transaction_container: list[Transaction] = []
         self.hashed_block_container: list[Block] = []
+        self.confirming_block_container: list[Block] = []
         self.unsent_block_container: list[Block] = []
 
         # # Instances
@@ -340,6 +351,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     # @o Since `XXXInternal` subclasses `XXXExternal`, we only need `Internal` and break down until we get to the `XXXExternal`.
 
                     # - Validate conditions before user generation.
+
+                    # #  ADD CONDITION FOR TRANSACTION MAPPING.
+
                     if (
                         isinstance(data, ApplicantUserTransactionInitializer)
                         and data.association_address is None
@@ -521,10 +535,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 ] and isinstance(data, AdditionalContextTransaction):
 
                     # * Just validate if the specified entity address does exists.
-                    # ! WHAT?
-                    if not validate_user_address(
-                        supplied_address=AddressUUID(to_address)
-                    ):
+                    if validate_user_address(supplied_address=AddressUUID(to_address)):
                         resolved_payload = data
 
                 else:
@@ -536,15 +547,20 @@ class BlockchainMechanism(ConsensusMechanism):
                 # TODO: Returning necessary contents for the transaction mapping.
                 # ! NOTE We are only doing this at certain transactions.
                 if resolved_payload is not None:
-                    transaction_context = self._resolve_transaction_payload(
-                        action=action,
-                        from_address=from_address,
-                        to_address=to_address,
-                        payload=resolved_payload,
-                        is_internal_payload=False,
+                    transaction_context: dict | bool = (
+                        await self._resolve_transaction_payload(
+                            action=action,
+                            from_address=from_address,
+                            to_address=to_address,
+                            payload=resolved_payload,
+                            is_internal_payload=False,
+                        )
                     )
 
-                # * Append the transaction mapping
+                    if isinstance(transaction_context, dict):
+                        pass
+
+                # * Append the transaction mapping here.
 
                 return True
 
@@ -558,6 +574,156 @@ class BlockchainMechanism(ConsensusMechanism):
         return False
 
         # - Attempt to recognize the action by referring to the instance of the data.
+
+    async def insert_mined_block(
+        self,
+        *,
+        block: Block,
+        from_origin: SourceNodeOrigin,
+        master_address_ref: AddressUUID | None = None,
+    ) -> None:
+        if from_origin in SourceNodeOrigin:
+            block_mining_processor = await (
+                get_event_loop().run_in_executor(
+                    None,
+                    self._mine_block,
+                    block,
+                )
+            )
+            mined_block: Block = await block_mining_processor
+
+            await self._append_block(context=mined_block)
+            logger.info(
+                f"Block {block.id} has been enqueued for appending from the the blockchain after mining."
+            )
+
+            if (
+                from_origin is SourceNodeOrigin.FROM_MASTER
+                and master_address_ref is not None
+                and isinstance(master_address_ref, str)
+            ):
+                logger.info(
+                    f"Block {block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the {NodeType.MASTER_NODE.name}. Sending back the hashed/mined block."
+                )
+
+                parsed_args: Namespace = get_args_values()
+                master_origin_source_host, master_origin_source_port = (
+                    parsed_args.target_host,
+                    parsed_args.target_port,
+                )
+
+                recorded_consensus_negotiation_stmt: Select = select(
+                    [consensus_negotiation.c.consensus_negotiation_id]
+                ).where(
+                    (consensus_negotiation.c.block_no_ref == mined_block.id)
+                    & (consensus_negotiation.c.peer_address == master_address_ref)
+                )
+
+                recorded_consensus_negotiation = await self.db_instance.fetch_one(
+                    recorded_consensus_negotiation_stmt
+                )
+
+                if recorded_consensus_negotiation is not None:
+                    payload_to_master = await self.http_instance.enqueue_request(
+                        url=URLAddress(
+                            f"{master_origin_source_host}:{master_origin_source_port}/receive_hashed_block"
+                        ),
+                        method=HTTPQueueMethods.POST,
+                        headers={
+                            "x-certificate-token": await self._get_own_certificate(),
+                            "x-token": self.identity[1],
+                        },
+                        data={
+                            "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
+                            "miner_address": self.identity[0],
+                            "block": mined_block.json(),
+                        },
+                        retry_attempt=150,
+                        name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
+                    )
+
+                    if payload_to_master.ok:
+                        # - Update the Consensus Negotiation ID.
+                        update_completed_consensus_negotiation_stmt: Update = (
+                            consensus_negotiation.update()
+                            .where(
+                                (
+                                    consensus_negotiation.c.consensus_negotiation_id
+                                    == recorded_consensus_negotiation.consensus_negotiation_id  # type: ignore
+                                )
+                                & (
+                                    consensus_negotiation.c.status
+                                    == ConsensusNegotiationStatus.COMPLETED
+                                )
+                            )
+                            .values(status=ConsensusNegotiationStatus.COMPLETED)
+                        )
+
+                        await get_database_instance().execute(
+                            update_completed_consensus_negotiation_stmt
+                        )
+                        logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED}!")  # type: ignore
+
+                    else:
+                        if payload_to_master.status == HTTPStatus.INTERNAL_SERVER_ERROR:
+                            logger.critical(
+                                "There was an error from the server regarding block processing. This is probably a master server-side issue. Please report to the administrator to get this fixed."
+                            )
+                        else:
+                            logger.error(
+                                "There was an unexpected error from keeping this request to be sent or received from other server. This may be an unidentifable cause of an issue. This may stop the service, please try again."
+                            )
+                            return None
+                else:
+                    logger.error(
+                        f"There were no recorded negotiation from the Block ID {block.id} with the peer address {master_address_ref}. This is a developer-issue regarding logic error. Please report to them as possible to fix."
+                    )
+                    return None
+
+            else:  # - Asserts to NodeSourceOrigin.ARCHIVAL_MINER with master_address_ref is None.
+
+                block_confirmed: bool = False
+                # - Validate the given block by checking its id and other fields that is outside from the context.
+                for each_confirming_block in self.confirming_block_container:
+
+                    logger.debug(
+                        f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {mined_block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {mined_block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {mined_block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {mined_block.contents.timestamp})"
+                    )
+
+                    if (
+                        each_confirming_block.id == mined_block.id
+                        and each_confirming_block.block_size_bytes
+                        == mined_block.block_size_bytes
+                        and each_confirming_block.prev_hash_block
+                        == mined_block.prev_hash_block
+                        and each_confirming_block.contents.timestamp
+                        == mined_block.contents.timestamp
+                    ):
+                        self.confirming_block_container.remove(
+                            each_confirming_block
+                        )  # - Remove from the container as it was already confirmed.
+
+                        block_confirmed = True
+                        break
+
+                if not block_confirmed:
+                    logger.error(
+                        "Cannot confirm any confirming blocks from the received mined blocks. This is not possible for this logic condition to be hit. There may be a missing implementation, please report this to the developer."
+                    )
+                    return None
+
+            # * Regardless of who receives it, append it from their block.
+            # - For MASTER_NODE, this may be a redundant check, but its fine.
+            if self.cached_block_id == mined_block.id:
+                await self._append_block(context=mined_block)
+
+                return None
+
+        else:
+            logger.error(
+                f"The provided value for `from_origin` is not a valid enum! Got {from_origin} instead. This is a developer-issue logic error, please report to them this issue as soon as possible."
+            )
+            return None
 
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
@@ -581,7 +747,7 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self._get_last_block()
 
         return NodeConsensusInformation(
-            consensus_timer_seconds=self.consensus_timer.total_seconds(),
+            consensus_timer_expiration=self.consensus_timer_expiration,
             is_mining=not self.is_blockchain_ready,
             is_sleeping=self.is_node_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
@@ -706,6 +872,8 @@ class BlockchainMechanism(ConsensusMechanism):
             await self._process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
+            logger.info(f"Block {context.id} has been appended from the blockchain!")
+
             await self._consensus_sleeping_phase()
 
         else:
@@ -718,6 +886,7 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.info(
             f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
         )
+
         while True:
             logger.warning(
                 f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions."
@@ -727,72 +896,42 @@ class BlockchainMechanism(ConsensusMechanism):
             await sleep(self.block_timer_seconds)
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can mine the block.
-            available_node: NodeConsensusInformation | None = (
+            available_node_info: ArchivalMinerNodeInformation | None = (
                 await self._get_available_archival_miner_nodes()
             )
 
-            # @o When there's no miner, then sleep for a while and requeue again.
-            if available_node is None:
+            # @o When there's no miner active, sleep for a while and requeue again.
+            if available_node_info is None:
                 continue
 
-            print("Available node get!", available_node)
+            # @o Added for type-hints.
+            generated_block: Block | None = None
 
             # @o When there's a miner, do a closed-loop process.
 
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
             # - Since we already have a node, do not let this one go.
-            if (
-                len(self.transaction_container)
-                > BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+            if len(
+                self.transaction_container
+            ) > BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK and not len(
+                self.unsent_block_container
             ):
 
                 logger.info(
                     f"Number of required transactions were sufficient! There are {len(self.transaction_container)} transactions that will be converted to a block for processing."
                 )
 
-                # @o We need to deepcopy the container to ensure that when we did something from them, the source of this transactions are not modified.
-                # @o Note that whenever you pass an object, specially the `dict` objects, their reference is not mangled or not referred as a new object.
-                # @o With that, any changes being done to one object will be reflected from the other object that you recently modified, this was due to references were still the same.
-                # - Create a deepcopy of the object to process its last state.
-                last_state_transaction_container = deepcopy(self.transaction_container)
-
                 # - Create a block from all of the transactions.
-                generated_block: Block | None = self._create_block()
+                generated_block = await self._create_block()
 
             elif len(self.unsent_block_container):
                 logger.info(
-                    f"Block {self.unsent_block_container[0]} has been left from mining due to previous miner unable to respond in time. Using this block to for the process instead."
+                    f"Block {self.unsent_block_container[0]} has been left-out from mining due to previous miner unable to respond in time. Using this block for the mining process instead."
                 )
 
                 generated_block = self.unsent_block_container.pop(0)
 
-                return  # TODO
-
-                # @o When a block was created. Create a negotiation ID for the nodes to remember that this happened.
-
-                # - Create a negotiation ID out of urlsafe_b64encode.
-
-                # @o Even though we already have the certification token, we still need this one to prove that we are actually know what the heck are we doing and we should be remembering it since it contains transactions or tokens which shouldn't go loss.
-
-                # - Insert the negotiation ID.
-
-                # # Send the context via create_task() with a custom function with retry_attempts of 99.
-                # # As deliver_block_or_store().
-
-                # # Send it at node/blockchain/send_raw_block.
-                # @o Require certification, and insert the negotiation ID for it to be sent later.
-
-                # - If that failed after numerous retries then insert the block as unsent_blocks.
-                # - And unbind the negotiation ID.
-
-                # ! Repeat.
-
-                # * The miner node has to hit the endpoint along with the negotiation ID for it to give its final processed block.
-
-                # # TODO AS FINAL.
-                # Prune the transaction container beyond this point.
-                # self.transaction_container = [leftover_transactions for leftover_transactions in self.]
             else:
                 logger.warning(
                     f"There isn't enough transactions to create a block. Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
@@ -800,21 +939,67 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
 
-            # # MOVE THE REST AFTER CONFIRMING THE FLOW FROM ALL CONDITIONALS.
+            # - Create a Consensus Negotiation ID out of `urlsafe_b64encode`.
+            # @o Create a Consensus Negotiation ID for the nodes to remember that this happened.
+            # @o Even though we already have the certification token, we still need this one to track current negotiations between nodes.
 
-            # TODO: process_hashed_block.
+            if generated_block is not None:
+                generated_consensus_negotiation_id: str = token_urlsafe(
+                    BLOCKCHAIN_NEGOTIATION_ID_LENGTH
+                )
 
-            # NOTE: After all of these, file handling left and we are done with the core backend =).
+                attempt_deliver_payload = await self.http_instance.enqueue_request(
+                    url=URLAddress(
+                        f"{available_node_info.source_host}:{available_node_info.source_port}/blockchain/receive_raw_block"
+                    ),
+                    method=HTTPQueueMethods.POST,
+                    await_result_immediate=True,
+                    headers={
+                        "x-certificate-token": await self._get_own_certificate(),
+                        "x-hash": await self.get_chain_hash(),
+                        "x-token": self.identity[1],
+                    },
+                    data={
+                        "block": generated_block.json(),
+                        "master_address": self.identity[0],
+                        "consensus_negotiation": generated_consensus_negotiation_id,
+                    },
+                    retry_attempt=99,
+                    name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info.miner_address[-6:]}",
+                )
 
-            # However, when there's a time that this chosen node is not available, then it will be skipped.
+                if attempt_deliver_payload.ok:
+                    # - Save this consensus negotiation ID as well for the retrieval verification of the hashed/mined block.
+                    save_in_progress_negotiation_stmt: Insert = (
+                        consensus_negotiation.insert().values(
+                            block_no_ref=generated_block.id,
+                            consensus_negotiation_id=generated_consensus_negotiation_id,
+                            peer_address=self.identity[0],
+                            status=ConsensusNegotiationStatus.ON_PROGRESS,
+                        )
+                    )
 
-    def _consensus_calculate_sleep_time(self, *, mine_duration: float | int) -> None:
+                    # - Store this for a while for the verification upon receiving a hashed/mined block.
+                    self.confirming_block_container.append(generated_block)
+
+                else:
+                    logger.warning(
+                        "After multiple retries, the generated block will be stored and will find archival miner node candidates who doesn't disconnect."
+                    )
+                    self.unsent_block_container.append(generated_block)
+
+            logger.error(
+                f"Cannot proceed when block generated returned {generated_block}! This is probably a developer-logic error issue. Please contact the developer regarding this."
+            )
+
+    def _consensus_calculate_sleep_time(self, *, mining_duration: float) -> None:
         if not self.is_blockchain_ready and not self.new_master_instance:
-            self.consensus_timer = timedelta(
-                seconds=mine_duration
-            )  # TODO: Get the average mining seconds to confluence with the timer.
+
+            self.mine_duration = timedelta(seconds=mining_duration)  # type: ignore # - Let timedelta convert if there's a residue (ie. milliseconds).
+            self.consensus_timer_expiration = datetime.now() + self.mine_duration
+
             logger.debug(
-                f"Consensus timer is calculated. Set to {self.consensus_timer.total_seconds()} seconds before waking. | Object: {self.consensus_timer}"
+                f"Consensus timer is calculated. Set to {self.mine_duration} seconds before waking. | Will expire (wakes up and approximately) at {self.consensus_timer_expiration}"
             )
 
     async def _consensus_sleeping_phase(self) -> None:
@@ -822,10 +1007,10 @@ class BlockchainMechanism(ConsensusMechanism):
             self.sleeping_from_consensus = True
 
             logger.info(
-                f"Block mining is finished. Sleeping for {self.consensus_timer.total_seconds()} seconds."
+                f"Block mining is finished. Sleeping until {self.consensus_timer_expiration}."
             )
 
-            await sleep(self.consensus_timer.total_seconds())
+            await sleep(self.mine_duration.total_seconds())
             self.sleeping_from_consensus = False
 
             # * When done, ensure that the node's sate is changed.
@@ -840,8 +1025,7 @@ class BlockchainMechanism(ConsensusMechanism):
             f"Consensus timer ignored due to condition. | Is new instance: {self.new_master_instance}, Blockchain ready: {self.blockchain_ready}"
         )
 
-    def _create_block(self) -> Block | None:
-
+    async def _create_block(self) -> Block | None:
         # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size_bytes, and hash_block.
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
@@ -864,11 +1048,15 @@ class BlockchainMechanism(ConsensusMechanism):
 
         _block: Block = Block(
             id=self.cached_block_id,
-            block_size_bytes=None,  # * Unsolvable at instantiation but can be filled before returning it.
+            block_size_bytes=None,  # * To be resolved on the later process.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
-            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH) if last_block is None else HashUUID(last_block.hash_block),  # type: ignore
+            prev_hash_block=HashUUID(
+                last_block.hash_block
+                if last_block is not None and last_block.hash_block is not None
+                else "0" * BLOCK_HASH_LENGTH
+            ),
             contents=HashableBlock(
-                nonce=None,  # ! Unsolvable, these are determined during the process of mining.
+                nonce=None,  # - This are determined during the process of mining.
                 validator=self.identity[0],
                 transactions=shadow_transaction_container,
                 timestamp=datetime.now(),
@@ -901,20 +1089,21 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
         ),
 
-        mined_genesis_block = await (
-            get_event_loop().run_in_executor(
-                None,
-                self._mine_block,
-                self._create_block(),
-            )
-        )
+        generated_block_w_genesis: Block | None = await self._create_block()
 
-        await self._append_block(context=mined_genesis_block)
+        if generated_block_w_genesis is not None:
+            await self.insert_mined_block(
+                from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,  # * Fake it.
+                block=generated_block_w_genesis,
+            )
+        else:
+            logger.error("There was an error while generating a genesis block.")
+
+        return None
 
     async def _get_available_archival_miner_nodes(
         self,
-    ) -> NodeConsensusInformation | None:
-        # Get all available miner nodes.
+    ) -> ArchivalMinerNodeInformation | None:
 
         available_nodes_stmt = select(
             [
@@ -937,7 +1126,7 @@ class BlockchainMechanism(ConsensusMechanism):
         for each_candidate in available_nodes:
             candidate_response = await get_http_client_instance().enqueue_request(
                 url=URLAddress(
-                    f"http://{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
+                    f"{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
                 ),
                 method=HTTPQueueMethods.GET,
                 await_result_immediate=True,
@@ -956,17 +1145,25 @@ class BlockchainMechanism(ConsensusMechanism):
                     f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the mining request!"
                 )
 
-                if not resolved_candidate_state_info["is_mining"]:
-                    if (
-                        resolved_candidate_state_info["node_role"]
-                        is NodeType.ARCHIVAL_MINER_NODE.name
-                    ):
-                        return NodeConsensusInformation(**resolved_candidate_state_info)
+                if (
+                    not resolved_candidate_state_info["is_mining"]
+                    and NodeType(resolved_candidate_state_info["node_role"])
+                    is NodeType.ARCHIVAL_MINER_NODE
+                    and datetime.now()
+                    >= datetime.fromisoformat(
+                        resolved_candidate_state_info["consensus_timer_expiration"]
+                    )
+                ):
+                    return ArchivalMinerNodeInformation(
+                        miner_address=resolved_candidate_state_info["owner"],
+                        source_host=URLAddress(each_candidate["source_address"]),
+                        source_port=each_candidate["source_port"],
+                    )
 
-                    continue
                 logger.warning(
                     f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be mining but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
                 )
+                continue
 
         logger.warning(
             f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.block_timer_seconds} seconds)"
@@ -1064,7 +1261,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 data.context.requestor_address,
             )
 
-        elif isinstance(data.context, NodeNegotiationTransaction):
+        elif isinstance(data.context, NodeConsensusTransaction):
             resolved_from_address, resolved_to_address = (
                 data.context.master_address,
                 data.context.miner_address,
@@ -1095,7 +1292,7 @@ class BlockchainMechanism(ConsensusMechanism):
         unconventional_terminate(message="Cannot resolve transaction.")
 
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
-    def _mine_block(self, block: Block) -> Block:
+    async def _mine_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
         self.blockchain_ready = False
         prev: float = time()
@@ -1119,7 +1316,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(
                     f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
-                self._consensus_calculate_sleep_time(mine_duration=time() - prev)
+                self._consensus_calculate_sleep_time(mining_duration=time() - prev)
                 self.blockchain_ready = True
                 return block
 
@@ -1593,7 +1790,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             master_hash_valid_response = await self.http_instance.enqueue_request(
                 url=URLAddress(
-                    f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/verify_hash"  # type: ignore
+                    f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/verify_hash"  # type: ignore
                 ),
                 method=HTTPQueueMethods.POST,
                 await_result_immediate=True,
@@ -1610,7 +1807,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - If that's the case then fetch the blockchain file.
                 blockchain_content = await self.http_instance.enqueue_request(
                     url=URLAddress(
-                        f"http://{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
+                        f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
@@ -1626,14 +1823,21 @@ class BlockchainMechanism(ConsensusMechanism):
                 if blockchain_content.ok:
                     dict_blockchain_content = await blockchain_content.json()
 
-                    # TODO: Documentation.
-                    # - When we got a result, pop from the asyncio._Tasks to expose the `ClientResponse`.
-                    # - With that, parse the `ClientResponse` to be converted to a pythonic dictionary data type.
-                    self._chain = (
+                    in_memory_chain: frozendict | None = (
                         self._process_deserialize_to_load_blockchain_in_memory(
                             import_raw_json_to_dict(dict_blockchain_content["content"])
                         )
                     )
+                    # TODO
+
+                    if not isinstance(in_memory_chain, frozendict):
+                        logger.error(
+                            "There was an error duing loading the blockchain from file to in-memory. It should not be possible to get on this condition as the method already handles it. But since we are in async state, please wait for it to terminate."
+                        )
+                        await sleep(INFINITE_TIMER)
+
+                    else:
+                        self._chain = in_memory_chain
 
                     # ! Once we inject the new payload after fetch, then write it from the file.
 

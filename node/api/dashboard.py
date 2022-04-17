@@ -10,11 +10,8 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from typing import Any
-from blueprint.schemas import (
-    DashboardContext,
-    NewStudentOut,
-    Student,
-)
+
+from blueprint.schemas import DashboardContext, NewStudentOut, Student
 from core.constants import (
     QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
     QUERY_CURRENT_INDEX_PAGE_NAME,

@@ -66,7 +66,7 @@ def store_args_value(args: Namespace) -> None:
     args_value = args
 
 
-def get_args_value() -> Namespace:
+def get_args_values() -> Namespace:
     global args_value
     return args_value
 
@@ -316,7 +316,7 @@ async def authenticate_node_client(
                 )
 
                 resolved_origin: tuple[str, int] = (
-                    (get_args_value().node_host, get_args_value().node_port)
+                    (get_args_values().node_host, get_args_values().node_port)
                     if role is NodeType.MASTER_NODE
                     else (instances[0].target_host, instances[0].target_port)
                 )
@@ -325,7 +325,7 @@ async def authenticate_node_client(
 
                 register_node: Any = await get_http_client_instance().enqueue_request(
                     url=URLAddress(
-                        f"http://{resolved_origin[0]}:{resolved_origin[1]}/entity/register"
+                        f"{resolved_origin[0]}:{resolved_origin[1]}/entity/register"
                     ),
                     method=HTTPQueueMethods.POST,
                     do_not_retry=True,
@@ -424,9 +424,7 @@ async def authenticate_node_client(
 
             login_request: ClientResponse | None = (
                 await get_http_client_instance().enqueue_request(
-                    url=URLAddress(
-                        f"http://{resolved_host}:{resolved_port}/entity/login"
-                    ),
+                    url=URLAddress(f"{resolved_host}:{resolved_port}/entity/login"),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     do_not_retry=True,
@@ -451,11 +449,11 @@ async def authenticate_node_client(
                     )
 
                     # TODO: Please test this one.
-                    if resolve_entity_to_role.value != get_args_value().node_role:
+                    if resolve_entity_to_role.value != get_args_values().node_role:
                         from utils.processors import unconventional_terminate
 
                         unconventional_terminate(
-                            message=f"Node was able to login successfully but the acccount type is not suitable for the type of instance. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_value().node_role} instead.",
+                            message=f"Node was able to login successfully but the acccount type is not suitable for the type of instance. Account has a type suitable `for {resolve_entity_to_role}`, got {get_args_values().node_role} instead.",
                             early=True,
                         )
 
@@ -507,7 +505,7 @@ class EnsureAuthorized:
         x_certificate_token: str
         | None = Header(
             None,
-            description=f"The certificate token that proves the negotiation between {NodeType.ARCHIVAL_MINER_NODE.name} and {NodeType.MASTER_NODE.name}",
+            description=f"The certificate token that proves the consensus negotiation between {NodeType.ARCHIVAL_MINER_NODE.name} and {NodeType.MASTER_NODE.name}",
         ),  # TODO: Type-hint.
         db: Database = Depends(get_database_instance),
     ) -> None:  # TODO.

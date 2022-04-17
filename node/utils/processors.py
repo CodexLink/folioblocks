@@ -298,7 +298,7 @@ async def initialize_resources_and_return_db_context(
                 # @o Despite mismatched, we can just fetch a new one from the NodeType.MASTER_NODE.
 
                 logger.critical(
-                    f"Blockchain's file content signature were mismatch! Database: {blockchain_retrieved_hash} | Computed: {blockchain_context_hash} | This will be refreshed upon negotiation with the {NodeType.MASTER_NODE.name}."
+                    f"Blockchain's file content signature were mismatch! Database: {blockchain_retrieved_hash} | Computed: {blockchain_context_hash} | This will be refreshed upon consensus negotiation with the {NodeType.MASTER_NODE.name}."
                 )
             else:
                 logger.info("Blockchain file content signature is valid!")
@@ -727,7 +727,7 @@ async def contact_master_node(*, master_host: str, master_port: int) -> None:
     )
 
     master_node_response = await get_http_client_instance().enqueue_request(
-        url=URLAddress(f"http://{master_host}:{master_port}/explorer/chain"),
+        url=URLAddress(f"{master_host}:{master_port}/explorer/chain"),
         method=HTTPQueueMethods.GET,
         await_result_immediate=True,
         retry_attempt=99,

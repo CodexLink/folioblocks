@@ -10,12 +10,6 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
-
-if __name__ == "__main__":
-    raise SystemExit(
-        "This {__file__} (module) should not be executed as an entrypoint code! This module contains API endpoints for the Node API, which is an extension of this Explorer API."
-    )
-
 from http import HTTPStatus
 
 from blueprint.schemas import (

@@ -11,19 +11,43 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from datetime import datetime
 from http import HTTPStatus
+from logging import Logger, getLogger
 from os import environ as env
 from typing import Any
 
-from blueprint.models import associated_nodes, auth_codes, tokens, users
-from blueprint.schemas import NodeConsensusInformation
-from core.blockchain import get_blockchain_instance
+from blueprint.models import (
+    associated_nodes,
+    auth_codes,
+    consensus_negotiation,
+    tokens,
+    users,
+)
+from blueprint.schemas import (
+    ConsensusFromMasterPayload,
+    ConsensusSuccessPayload,
+    ConsensusToMasterPayload,
+    NodeCertificateTransaction,
+    NodeConsensusInformation,
+    NodeInformation,
+    NodeMasterInformation,
+    NodeTransaction,
+    SourcePayload,
+)
+from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
+    ASYNC_TARGET_LOOP,
     AddressUUID,
     AuthAcceptanceCode,
     BaseAPI,
+    ConsensusNegotiationStatus,
     JWTToken,
     NodeAPI,
+    NodeTransactionInternalActions,
+    NodeType,
+    SourceNodeOrigin,
+    TransactionActions,
     UserEntity,
+    random_generator,
 )
 from core.dependencies import (
     EnsureAuthorized,
@@ -34,13 +58,9 @@ from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
+from sqlalchemy.sql.expression import Insert, Update
 
-from core.constants import NodeType
-from core.blockchain import BlockchainMechanism
-from blueprint.schemas import SourcePayload
-from blueprint.schemas import NodeInformation, NodeMasterInformation
-from blueprint.schemas import NodeCertificateTransaction, NodeTransaction
-from core.constants import NodeTransactionInternalActions, TransactionActions
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 node_router = APIRouter(
     prefix="/node",
@@ -79,8 +99,8 @@ async def get_node_info() -> NodeInformation:
 /consensus/acknowledge | When acknowledging, give something, then it will return something.
 
 # Note that MASTER will have to do this command once! Miners who just finished will have to wait and keep on retrying.
-/consensus/negotiate | This is gonna be complex, on MASTER, if there's current negotiation then create a new one (token). Then return a consensus as initial from the computation of the consensus_timer.
-/consensus/negotiate | When there's already a negotiation, when called by MASTER, return the context of the consensus_timer and other properties that validates you of getting the block when you are selected.
+/consensus/negotiate | This is gonna be complex, on MASTER, if there's current consensus negotiation then create a new one (token). Then return a consensus as initial from the computation of the consensus_timer.
+/consensus/negotiate | When there's already a consensus negotiation, when called by MASTER, return the context of the consensus_timer and other properties that validates you of getting the block when you are selected.
 /consensus/negotiate | When block was fetched then acknowledge it.
 /consensus/negotiate | When the miner is done, call this one again but with a payload, and then keep on retrying, SHOULD BLOCK THIS ONE.
 /consensus/negotiate | When it's done, call this again for you to sleep by sending the calculated consensus, if not right then the MASTER will send a correct timer.
@@ -90,23 +110,61 @@ async def get_node_info() -> NodeInformation:
 
 
 @node_router.post(
-    "/blockchain/process_hashed_block",
+    "/blockchain/receive_hashed_block",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary=f"Receives a hashed block for the {NodeType.MASTER_NODE} to append from the blockchain.",
     description=f"A special API endpoint that receives a raw bock to be mined.",
     dependencies=[
         Depends(
-            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+            EnsureAuthorized(
+                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
+            )
         )
     ],
 )
-async def process_hashed_block() -> None:
-    # - Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
-    return
+async def process_hashed_block(
+    context_from_archival_miner: ConsensusToMasterPayload,
+) -> JSONResponse:
+
+    # # Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
+
+    blockchain_current_instance: BlockchainMechanism = get_blockchain_instance()
+
+    # - Update the Consensus Negotiation ID.
+    update_consensus_negotiation_stmt: Update = (
+        consensus_negotiation.update()
+        .where(
+            (
+                consensus_negotiation.c.consensus_negotiation_id
+                == context_from_archival_miner.consensus_negotiation_id
+            )
+            & (consensus_negotiation.c.status == ConsensusNegotiationStatus.ON_PROGRESS)
+        )
+        .values(status=ConsensusNegotiationStatus.COMPLETED)
+    )
+
+    await get_database_instance().execute(update_consensus_negotiation_stmt)
+
+    # - Insert the block.
+    await get_blockchain_instance().insert_mined_block(
+        block=context_from_archival_miner.block,
+        from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+    )
+
+    # - Insert transaction from the blockchain for the successful thing.
+
+    return JSONResponse(
+        content=ConsensusSuccessPayload(
+            addon_consensus_sleep_seconds=random_generator.uniform(0, 2)
+            * blockchain_current_instance.block_timer_seconds,
+            reiterate_master_address=blockchain_current_instance.identity[0],
+        ),
+        status_code=HTTPStatus.ACCEPTED,
+    )
 
 
 @node_router.post(
-    "/blockchain/send_raw_block",
+    "/blockchain/receive_raw_block",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.ARCHIVAL_MINER_NODE_API.value],
     summary=f"Receives a raw block for the {NodeType.ARCHIVAL_MINER_NODE} to mine.",
     description=f"A special API endpoint that receives a raw bock to be mined.",
@@ -116,9 +174,31 @@ async def process_hashed_block() -> None:
         )
     ],
 )
-async def receive_block_to_mine() -> None:
-    # - Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
-    return
+async def receive_block_to_mine(
+    context_from_master: ConsensusFromMasterPayload,
+) -> Response:
+
+    # - Record the Consensus Negotiation ID.
+    save_generated_consensus_negotiation_id_stmt: Insert = (
+        consensus_negotiation.insert().values(
+            block_no_ref=context_from_master.block.id,
+            consensus_negotiation_id=context_from_master.consensus_negotiation_id,
+            peer_address=context_from_master.master_address,
+            status=ConsensusNegotiationStatus.ON_PROGRESS,
+        )
+    )
+    await get_database_instance().execute(save_generated_consensus_negotiation_id_stmt)
+    logger.info(
+        f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
+    )
+
+    # - Enqueue the block from the local instance of blockchain.
+    await get_blockchain_instance().insert_mined_block(
+        block=context_from_master.block,
+        from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+    )
+
+    return Response(status_code=HTTPStatus.ACCEPTED)
 
 
 @node_router.post(

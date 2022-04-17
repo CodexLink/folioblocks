@@ -55,17 +55,17 @@
         "timestamp": ""
       },
 
-      // - Negotiation, Mine Negotiation
+      // - Consensus, Mine Consensus
       "info_____": {
         "candidate_no": "nth miner to be called",
-        "negotiation_id": "",
+        "consensus_negotiation_id": "",
         "miner_address": "",
         "master_address": ""
       },
 
-      // - Negotiation, Receive Miner Proof
+      // - Consensus, Receive Miner Proof
       "info______": {
-        "negotiation_id": "",
+        "consensus_negotiation_id": "",
         "block_hash": "",
         "time_delivery": ""
       }

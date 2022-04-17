@@ -107,6 +107,7 @@ BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 5
 BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION: Final[int] = 3
+BLOCKCHAIN_NEGOTIATION_ID_LENGTH: Final[int] = 8
 
 REF_MASTER_BLOCKCHAIN_ADDRESS: Final[str] = "MASTER_NODE_ADDRESS"
 REF_MASTER_BLOCKCHAIN_PORT: Final[str] = "MASTER_NODE_PORT"
@@ -211,6 +212,9 @@ class BlockchainContentType(IntEnum):
     ADDRESS = auto()
     TRANSACTION = auto()
 
+class SourceNodeOrigin(IntEnum):
+    FROM_MASTER = auto()
+    FROM_ARCHIVAL_MINER = auto()
 
 # # Enums, Constraints
 class ExplorerBlockItemReturnCount(IntEnum):
@@ -249,6 +253,11 @@ class AssociationGroupType(IntEnum):
     COMPANY = auto()
     INSTITUTION = auto()
     ORGANIZATION = auto()
+
+
+class ConsensusNegotiationStatus(IntEnum):
+    COMPLETED = auto()
+    ON_PROGRESS = auto()
 
 
 class EmploymentApplicationState(IntEnum):
@@ -373,7 +382,7 @@ class TransactionActions(IntEnum):
     NODE_GENERAL_GENESIS_INITIALIZATION = auto()
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
-    # - Node-based Transaction: Negotiation (Consensus)
+    # - Node-based Transaction: Consensus (Consensus)
     NODE_GENERAL_CONSENSUS_BLOCK_SYNC = auto()
     NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = auto()
     NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = auto()

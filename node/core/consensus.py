@@ -15,7 +15,7 @@ from typing import Any, Callable
 
 from blueprint.models import associated_nodes
 from databases import Database
-from core.dependencies import get_args_value
+from core.dependencies import get_args_values
 from utils.http import get_http_client_instance
 from utils.processors import load_env
 
@@ -55,7 +55,7 @@ class ConsensusMechanism:
             key=REF_MASTER_BLOCKCHAIN_ADDRESS
         ), self.master_target(key=REF_MASTER_BLOCKCHAIN_PORT)
 
-        node_instance_args = get_args_value()
+        node_instance_args = get_args_values()
         node_address, node_port = (
             node_instance_args.node_host,
             node_instance_args.node_port,
@@ -88,7 +88,7 @@ class ConsensusMechanism:
 
         master_response = await self.http_instance.enqueue_request(
             url=URLAddress(
-                f"http://{master_origin_address}:{master_origin_port}/node/establish/receive_echo"
+                f"{master_origin_address}:{master_origin_port}/node/establish/receive_echo"
             ),
             headers={
                 "x-source": auth_source,
@@ -138,8 +138,8 @@ class ConsensusMechanism:
 /consensus/acknowledge | When acknowledging, give something, then it will return something.
 
 # Note that MASTER will have to do this command once! Miners who just finished will have to wait and keep on retrying.
-/consensus/negotiate | This is gonna be complex, on MASTER, if there's current negotiation then create a new one (token). Then return a consensus as initial from the computation of the consensus_timer.
-/consensus/negotiate | When there's already a negotiation, when called by MASTER, return the context of the consensus_timer and other properties that validates you of getting the block when you are selected.
+/consensus/negotiate | This is gonna be complex, on MASTER, if there's current consensus negotiation then create a new one (token). Then return a consensus as initial from the computation of the consensus_timer.
+/consensus/negotiate | When there's already a consensus negotiation, when called by MASTER, return the context of the consensus_timer and other properties that validates you of getting the block when you are selected.
 /consensus/negotiate | When block was fetched then acknowledge it.
 /consensus/negotiate | When the miner is done, call this one again but with a payload, and then keep on retrying, SHOULD BLOCK THIS ONE.
 /consensus/negotiate | When it's done, call this again for you to sleep by sending the calculated consensus, if not right then the MASTER will send a correct timer.

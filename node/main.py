@@ -247,7 +247,7 @@ async def terminate() -> None:
 
             await http_instance.enqueue_request(
                 url=URLAddress(
-                    f"http://{parsed_args.target_host}:{parsed_args.target_port}/entity/logout"
+                    f"{parsed_args.target_host}:{parsed_args.target_port}/entity/logout"
                 ),
                 method=HTTPQueueMethods.POST,
                 headers={"X-Token": JWTToken(identity_tokens[1])},
