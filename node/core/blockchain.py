@@ -59,12 +59,12 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from core.email import EmailService, get_email_instance
-from node.blueprint.schemas import (
+from blueprint.schemas import (
     AgnosticCredentialValidator,
     OrganizationIdentityValidator,
 )
-from node.core.constants import TransactionContextMappingType
-from node.utils.processors import (
+from core.constants import TransactionContextMappingType
+from utils.processors import (
     insert_transaction_content_mapping,
     validate_organization_existence,
     validate_transaction_mapping_exists,
@@ -648,13 +648,15 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # * Append the transaction mapping here.
                 if isinstance(transaction_context, dict):
-                    insert_transaction_content_map_query: Insert = tx_content_mappings.insert().values(
+                    insert_transaction_content_map_query: Insert = (
+                        tx_content_mappings.insert().values(
                             address_ref=to_address,
                             block_no_ref=self.cached_block_id,
                             tx_ref=transaction_context["tx_hash"],
                             content_type=tx_content_type,
                             timestamp=datetime.now(),
                         )
+                    )
 
                     await self.db_instance.execute(insert_transaction_content_map_query)
 

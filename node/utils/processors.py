@@ -34,12 +34,12 @@ from core.constants import (
     URLAddress,
 )
 from core.dependencies import set_master_node_properties
-from node.blueprint.schemas import (
+from blueprint.schemas import (
     AgnosticCredentialValidator,
     ApplicantUserTransactionInitializer,
     OrganizationIdentityValidator,
 )
-from node.core.constants import TransactionContextMappingType
+from core.constants import TransactionContextMappingType
 from sqlalchemy.sql.expression import Select
 
 if sys.platform == "win32":
