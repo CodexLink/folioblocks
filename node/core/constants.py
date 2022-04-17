@@ -284,9 +284,9 @@ class TransactionContextMappingType(IntEnum):
     APPLICANT_BASE = auto()
     APPLICANT_LOG = auto()
     APPLICANT_ADDITIONAL = auto()
-    SCHOOL_BASE = auto()
-    SCHOOL_ASSOCIATIONS = auto()
-    SCHOOL_EXTRA_INFO = auto()
+    ORGANIZATION_BASE = auto()
+    ORGANIZATION_ASSOCIATIONS = auto()
+    ORGANIZATION_ADDITIONAL = auto()
 
 
 class UserActivityState(IntEnum):
@@ -403,7 +403,7 @@ class TransactionActions(IntEnum):
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = auto()
     INSTITUTION_ORG_REFER_NEW_DOCUMENT = auto()
-    INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO = auto()
+    INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO = auto()
 
     # - For Organization, in general.
     ORGANIZATION_USER_REGISTER = auto()

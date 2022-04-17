@@ -133,7 +133,7 @@ class ApplicantLogTransaction(BaseModel):
     type: ApplicantLogContentType
     name: str
     description: str
-    role: str | None
+    role: str
     file: UploadFile | HashUUID | None
     duration_start: datetime
     duration_end: datetime | None

@@ -10,7 +10,7 @@ from secrets import token_urlsafe
 from sqlite3 import IntegrityError
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
-from typing import Any, Callable, Final, Mapping
+from typing import Any, Final, Mapping
 from uuid import uuid4
 
 from aiofiles import open as aopen
@@ -20,6 +20,7 @@ from blueprint.models import (
     associations,
     consensus_negotiation,
     file_signatures,
+    tx_content_mappings,
     users,
 )
 from blueprint.schemas import (
@@ -52,7 +53,7 @@ from fastapi import UploadFile
 from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
@@ -62,8 +63,9 @@ from node.blueprint.schemas import (
     AgnosticCredentialValidator,
     OrganizationIdentityValidator,
 )
-from node.core.constants import AssociationGroupType, TransactionContextMappingType
+from node.core.constants import TransactionContextMappingType
 from node.utils.processors import (
+    insert_transaction_content_mapping,
     validate_organization_existence,
     validate_transaction_mapping_exists,
     validate_user_existence,
@@ -265,6 +267,7 @@ class BlockchainMechanism(ConsensusMechanism):
             # - [1] Ensure that the `from_address` is existing.
             # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
             # ! I will be dividing those into two statements.
+
             get_existing_from_address_query, get_existing_to_address_query = select(
                 [func.count()]
             ).where(users.c.unique_address == from_address), select(
@@ -299,6 +302,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction | None = (
                     None
                 )
+                tx_content_type: TransactionContextMappingType | None = None
 
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
                 # # [4]
@@ -357,6 +361,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                         return False
 
+                    tx_content_type = TransactionContextMappingType.APPLICANT_LOG
                     resolved_payload = data
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
@@ -416,6 +421,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 "The associate address does not exists! Please refer to the right associate/organization or association to proceed the registration."
                             )
                             return False
+
+                        tx_content_type = TransactionContextMappingType.APPLICANT_BASE
 
                     # - For the case of registering with the associate/organization, sometimes user can register with associate/organization reference existing and otherwise. With that, we need to handle the part where if the associate/organization doesn't exist then create a new one. Otherwise, refer its self from that associate/organization and we are good to go.
 
@@ -487,6 +494,10 @@ class BlockchainMechanism(ConsensusMechanism):
                             logger.error(
                                 f"Instances has condition unmet. Either the `association` contains nothing or the instance along with the `association` condition does not met. Please try again."
                             )
+
+                        tx_content_type = (
+                            TransactionContextMappingType.ORGANIZATION_BASE
+                        )
 
                     # @o When all of the checks are done, then create the user.
                     try:
@@ -591,6 +602,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
 
                         # - Do the following for all condition.
+                        tx_content_type = TransactionContextMappingType.APPLICANT_LOG
                         resolved_payload = data
 
                     else:
@@ -600,15 +612,19 @@ class BlockchainMechanism(ConsensusMechanism):
                 # # [2]
                 elif action in [
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
-                    TransactionActions.INSTITUATION_ORG_APPLICANT_REFER_EXTRA_INFO,
+                    TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
                 ] and isinstance(data, AdditionalContextTransaction):
-                    # * Query the transaction
-
                     # * Just validate if the specified entity address does exists.
                     if (
                         validate_user_address(supplied_address=AddressUUID(to_address))
                         is True
                     ):
+                        tx_content_type = (
+                            TransactionContextMappingType.APPLICANT_ADDITIONAL
+                            if action
+                            is TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
+                            else TransactionContextMappingType.ORGANIZATION_ADDITIONAL
+                        )
                         resolved_payload = data
 
                 else:
@@ -617,32 +633,61 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     return False
 
-                # TODO: Returning necessary contents for the transaction mapping.
-                # ! NOTE We are only doing this at certain transactions.
-                if resolved_payload is not None:
-                    transaction_context: dict | bool = (
-                        await self._resolve_transaction_payload(
-                            action=action,
-                            from_address=from_address,
-                            to_address=to_address,
-                            payload=resolved_payload,
-                            is_internal_payload=False,
-                        )
-                    )
+                if resolved_payload is None:
+                    return False  # * There was already a log so there's no need to output something from here.
 
-                    if isinstance(transaction_context, dict):
-                        pass
+                transaction_context: dict | bool = (
+                    await self._resolve_transaction_payload(
+                        action=action,
+                        from_address=from_address,
+                        to_address=to_address,
+                        payload=resolved_payload,
+                        is_internal_payload=False,
+                    )
+                )
 
                 # * Append the transaction mapping here.
+                if isinstance(transaction_context, dict):
+                    insert_transaction_content_map_query: Insert = tx_content_mappings.insert().values(
+                            address_ref=to_address,
+                            block_no_ref=self.cached_block_id,
+                            tx_ref=transaction_context["tx_hash"],
+                            content_type=tx_content_type,
+                            timestamp=datetime.now(),
+                        )
 
-                return True
+                    await self.db_instance.execute(insert_transaction_content_map_query)
+
+                else:
+                    logger.error(
+                        f"Received a `{transaction_context}` instead of a `{dict}`. This is not what I wanted. From this method, we should be receiving a `dict` instead. Please report this issue to the developer."
+                    )
+
+                get_from_address_email_query: Select = select([users.c.email]).where(
+                    users.c.unique_address == from_address
+                )
+
+                from_address_email = await self.db_instance.fetch_one(
+                    get_from_address_email_query
+                )
+
+                if from_address_email is not None and tx_content_type is not None:
+                    create_task(
+                        self.email_service.send(
+                            content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {tx_content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                            subject="Error Transaction from Folioblock!",
+                            to=EmailStr(from_address_email),
+                        ),
+                        name="send_email_invalid_address_notification",
+                    )
+                else:
+                    logger.error("Failed to send an email regarding the error.")
+                return False
 
             logger.error(
                 f"{'Sender' if from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be disregarded."
             )
-            # TODO: Send to email when this happened, only when `from_address` exists.
-            # create_task(self.email_service.send(content="<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-            #         subject="Error Transaction from Folioblock!", to=), name="send_email_invalid_address_notification")
+            return False
 
         logger.error(
             f"There was a missing or invalid value inserted from  the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `{TransactionActions}`, `from_address` should contain a valid {str} and `data` should be wrapped in a pydantic model ({BaseModel})! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
@@ -1704,7 +1749,7 @@ class BlockchainMechanism(ConsensusMechanism):
         is_internal_payload: bool,  # @o Even though I can logically assume its a `Node-based transaction` when `to_address` is None, it is not possible since some `Node-based transactions` actually has a point to `address`.
     ) -> dict | bool:
 
-        print(payload, type(payload))
+        logger.debug(f"{payload} | {type(payload)}")
 
         if not any(
             isinstance(payload, context_model_candidates)
@@ -1803,6 +1848,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 to_address=AddressUUID(to_address) if to_address is not None else None,
             )
             print("DEBUG", built_internal_transaction)
+
         except PydanticValidationError as e:
             logger.error(f"There was an error during payload transformation. Info: {e}")
             return False
