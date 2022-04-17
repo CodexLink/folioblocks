@@ -27,7 +27,7 @@ from blueprint.schemas import (
     NodeRegisterTransaction,
     NodeTransaction,
 )
-from core.blockchain import get_blockchain_instance
+from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ADDRESS_UUID_KEY_PREFIX,
     ASYNC_TARGET_LOOP,
@@ -58,7 +58,6 @@ from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import MetaData, false, select
 from sqlalchemy.sql.expression import Insert, Select, Update
-from .core.blockchain import BlockchainMechanism
 from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
