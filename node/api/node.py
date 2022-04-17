@@ -27,9 +27,11 @@ from blueprint.schemas import (
     ConsensusSuccessPayload,
     ConsensusToMasterPayload,
     NodeCertificateTransaction,
+    NodeConfirmMineConsensusTransaction,
     NodeConsensusInformation,
     NodeInformation,
     NodeMasterInformation,
+    NodeSyncTransaction,
     NodeTransaction,
     SourcePayload,
 )
@@ -59,8 +61,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Update
-
-from .blueprint.schemas import NodeConfirmMineConsensusTransaction, NodeSyncTransaction
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 

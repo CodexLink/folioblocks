@@ -33,10 +33,11 @@ from blueprint.schemas import (
     ArchivalMinerNodeInformation,
     Block,
     BlockOverview,
+    ConsensusSuccessPayload,
     HashableBlock,
     NodeCertificateTransaction,
-    NodeConsensusInformation,
     NodeConfirmMineConsensusTransaction,
+    NodeConsensusInformation,
     NodeGenesisTransaction,
     NodeMasterInformation,
     NodeMineConsensusSuccessProofTransaction,
@@ -60,7 +61,6 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
-from .blueprint.schemas import ConsensusSuccessPayload
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
