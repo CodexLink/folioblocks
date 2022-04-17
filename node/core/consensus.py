@@ -128,12 +128,19 @@ class ConsensusMechanism:
 
         return None
 
-    @restrict_call(on=NodeType.MASTER_NODE)
-    async def negotiate(self) -> None:
-        return
-
 
 """
+# # THESE COMMENTS WILL BE PRUNED SOON.
+
+# Node-to-Node Consensus Blockchain Operation Endpoints
+
+@o Whenever the blockchain's `MASTER_NODE` is looking for `ARCHIVAL_MINER_NODE`s. It has to ping them in a way that it shows their availability.
+@o However, since we already did some established connection between them, we need to pass them off from the `ARCHIVAL_MINER_NODE`s themselves to the
+@o `MASTER_NODE`. This was to ensure that the node under communication is not a fake node by providing the `AssociationCertificate`.
+
+! These endpoints are being used both.
+
+=========================
 /consensus/echo | When received ensure its the master by fetching its info.
 /consensus/acknowledge | When acknowledging, give something, then it will return something.
 
@@ -145,54 +152,7 @@ class ConsensusMechanism:
 /consensus/negotiate | When it's done, call this again for you to sleep by sending the calculated consensus, if not right then the MASTER will send a correct timer.
 /consensus/negotiate | Repeat.
 # TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
-"""
 
-"""
-# Node-to-Node Consensus Blockchain Operation Endpoints
-
-@o Whenever the blockchain's `MASTER_NODE` is looking for `ARCHIVAL_MINER_NODE`s. It has to ping them in a way that it shows their availability.
-@o However, since we already did some established connection between them, we need to pass them off from the `ARCHIVAL_MINER_NODE`s themselves to the
-@o `MASTER_NODE`. This was to ensure that the node under communication is not a fake node by providing the `AssociationCertificate`.
-
-! These endpoints are being used both.
-"""
-
-
-# @node_router.post(
-# 	"/consensus/acknowledge",
-# 	tags=[NodeAPI.NODE_TO_NODE_API.value],
-# 	summary="",
-# 	description="",
-# 	dependencies=[
-# 		Depends(
-# 			EnsureAuthorized(
-# 				_as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
-# 			)
-# 		)
-# 	],
-# )
-# async def consensus_acknowledge() -> None:
-# 	return
-
-
-# @node_router.post(
-# 	"/consensus/echo",
-# 	tags=[NodeAPI.NODE_TO_NODE_API.value],
-# 	summary="",
-# 	description="",
-# 	dependencies=[
-# 		Depends(
-# 			EnsureAuthorized(
-# 				_as=[UserEntity.ARCHIVAL_MINER_NODE_USER, UserEntity.MASTER_NODE_USER]
-# 			)
-# 		)
-# 	],
-# )
-# async def consensus_echo() -> None:
-# 	return
-
-
-"""
 # Node-to-Node Establish Connection Endpoints
 
 @o Before doing anything, an `ARCHIVAL_MINER_NODE` has to establish connection to the `MASTER_NODE`.
@@ -212,54 +172,3 @@ class ConsensusMechanism:
 
 - When this was created, `ARCHIVAL_MINER_NODE` will save this under the database and will be used further with no expiration.
 """
-
-
-# @node_router.post(
-# 	"/establish/acknowledge",
-# 	tags=[NodeAPI.NODE_TO_NODE_API.value],
-# 	summary="",
-# 	description="",
-# 	dependencies=[Depends(EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER))],
-# )
-# async def establish_acknowledge() -> None:
-# 	return
-
-
-# @node_router.post(
-# 	"/establish/echo",
-# 	tags=[NodeAPI.NODE_TO_NODE_API.value],
-# 	summary="",
-# 	description="",
-# 	dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
-# )
-# async def establish_echo() -> None:
-# 	"""
-# 	An endpoint that the ARCHIVAL_MINER_NODE_USER will use to provide information to the master node.
-# 	"""
-
-
-# 	echo_to_master_data = await get_http_client_instance().enqueue_request(
-
-# 		method=HTTPQueueMethods.POST,
-# 		data={
-# 			"session_token": "",
-# 			"auth_acceptance": "",
-# 		}
-# 		await_result_immediate=True
-# 	)
-# 	return
-
-
-"""
-Blockchain operation
-"""
-
-# @node_router.post(
-#     "/establish/echo",
-#     tags=[NodeAPI.NODE_TO_NODE_API.value],
-#     summary="",
-#     description="",
-#     dependencies=[Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER))],
-# )
-# async def establish_echo() -> None:
-#     return

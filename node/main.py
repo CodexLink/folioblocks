@@ -14,6 +14,7 @@ from asyncio import create_task, sleep
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
 from logging.config import dictConfig
+from os import environ as env
 from socket import AF_INET, SOCK_STREAM, error, socket
 from typing import Any, Final
 
@@ -21,6 +22,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
+from sqlalchemy.sql.expression import Insert, Select, Update
 
 from api.admin import admin_router
 from api.dashboard import dashboard_router
@@ -28,7 +30,6 @@ from api.explorer import explorer_router
 from blueprint.models import tokens, users
 from blueprint.schemas import Tokens
 from core.args import args_handler as ArgsHandler
-from os import environ as env
 from core.blockchain import get_blockchain_instance
 from core.constants import (
     ASGI_APP_TARGET,
@@ -58,12 +59,12 @@ from core.dependencies import (
 )
 from core.email import EmailService, get_email_instance
 from core.logger import LoggerHandler
-from utils.processors import look_for_archival_nodes
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     close_resources,
-    initialize_resources_and_return_db_context,
     contact_master_node,
+    initialize_resources_and_return_db_context,
+    look_for_archival_nodes,
     supress_exceptions_and_warnings,
     unconventional_terminate,
 )
@@ -230,7 +231,7 @@ async def terminate() -> None:
         # * Remove the token related to this master, as well as, change the state of this master account to Offline.
         if identity_tokens is not None:
 
-            master_state = (
+            master_state: Update = (
                 users.update()
                 .where(users.c.unique_address == identity_tokens[0])
                 .values(activity=UserActivityState.OFFLINE)
@@ -286,12 +287,13 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
     @api_handler.on_event("startup")
     @repeat_every(seconds=120, wait_first=True)
     async def jwt_invalidation_on_users() -> None:
-        ## Query available tokens.
-        token_query = tokens.select().where(tokens.c.state != TokenStatus.EXPIRED)
-        tokens_available = await get_database_instance().fetch_all(token_query)
 
-        # TODO: Target users from the dashboard instead of nodes.
-        # # LOOK OUT FOR INNER JOIN IN SQLALCHEMY.
+        ## Query available tokens.
+        token_query: Select = tokens.select().where(
+            (tokens.c.state != TokenStatus.EXPIRED)
+            & (tokens.c.expiration.isnot(None))  # type: ignore
+        )
+        tokens_available = await get_database_instance().fetch_all(token_query)
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")
@@ -307,7 +309,7 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
                 )
 
                 if current_datetime >= token.expiration:
-                    token_to_del = (
+                    token_to_del: Update = (
                         tokens.update()
                         .where(tokens.c.expiration == token.expiration)
                         .values(state=TokenStatus.EXPIRED)

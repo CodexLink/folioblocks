@@ -49,17 +49,27 @@ class EmailService:
         *,
         url: URLAddress,
         port: IPPort,
-        username: CredentialContext,
-        password: CredentialContext,
+        username: CredentialContext | None,
+        password: CredentialContext | None,
         max_retries: int = DEFAULT_SMTP_CONNECT_MAX_RETRIES,
     ) -> None:
+
+        # - Validate if there's crdentials.
+        if any(
+            credential is None or not isinstance(credential, str)
+            for credential in [username, password]
+        ):
+            unconventional_terminate(
+                message="Email instance can't be instantiated due to possibly non-existent credentials. The following are required: [address (EMAIL_ADDRESS), pwd (EMAIL_PWD)]."
+            )
+        else:
+            self.username: CredentialContext = CredentialContext(username)  # type: ignore # - Statement already checked from `if` clause.
+            self.password: CredentialContext = CredentialContext(password)  # type: ignore # - Statement already checked from `if` clause.
 
         self.connection_validated: bool = False  # ! A switch that we can use to tick whether the first connection from the email service would fail or not. When email fails on initialization fail with `unconventional_terminate` method.
         self.max_retries = max_retries
         self.url = URLAddress(url)
         self.port = IPPort(port)
-        self.username: CredentialContext = CredentialContext(username)
-        self.password: CredentialContext = CredentialContext(password)
 
         self._email_service: SMTP = SMTP(
             hostname=self.url,
@@ -138,7 +148,7 @@ class EmailService:
         content: str,
         subject: str,
         to: EmailStr,
-    ) -> None:  # TODO: This should require a pydantic class for the message??????
+    ) -> None:
         if not self._email_service.is_connected:
             logger.warning(
                 "Connection to the email service is not available or the connetion is dead, re-connecting ..."
@@ -175,31 +185,25 @@ class EmailService:
 * By the time I code this, I can't comprehend basic logic anymore because I'm tired. But I do have knowledge about global variables, it's just that for this case we are actually sharing this instance across the whole system.
 
 """
-email_service: EmailService | None = None
+email_service: EmailService
 
-# TODO: Enforce, contains a context not `None`.
+
 def get_email_instance() -> EmailService:
     global email_service
 
-    if email_service is None:
-        address: str | None = env.get("EMAIL_SERVER_ADDRESS", None)
-        pwd: str | None = env.get("EMAIL_SERVER_PWD", None)
+    try:
+        globals()[
+            "email_service"
+        ]  # - Only attempt to call this, otherwise just return the reference that is declared outside from this function.
 
+    except KeyError:
         logger.debug("Initializing or returning emails service instance ...")
 
-        if address is not None and pwd is not None:
-            email_service = EmailService(
-                url=URLAddress(DEFAULT_SMTP_URL),
-                port=IPPort(DEFAULT_SMTP_PORT),
-                username=CredentialContext(address),
-                password=CredentialContext(pwd),
-            )
+        email_service = EmailService(
+            url=URLAddress(DEFAULT_SMTP_URL),
+            port=IPPort(DEFAULT_SMTP_PORT),
+            username=CredentialContext(env.get("EMAIL_SERVER_ADDRESS", "")),
+            password=CredentialContext(env.get("EMAIL_SERVER_PWD", "")),
+        )
 
-            return email_service
-
-        else:
-            unconventional_terminate(
-                message="Email instance can't be instantiated due to possibly non-existent credentials. The following are required: [address (EMAIL_ADDRESS), pwd (EMAIL_PWD)]."
-            )
-    else:
-        return email_service
+    return email_service

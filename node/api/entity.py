@@ -168,7 +168,6 @@ async def register_entity(
             )
 
             # - After that, record this transaction from the blockchain.
-            # TODO, This role for now.
             if auth_token.account_type == UserEntity.ARCHIVAL_MINER_NODE_USER:
                 await get_blockchain_instance()._insert_internal_transaction(
                     action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
@@ -220,9 +219,6 @@ async def login_entity(
     credential_to_look = users.select().where(users.c.username == credentials.username)
     fetched_credential_data = await db.fetch_one(credential_to_look)
 
-    # TODO: Check if they are unlocked or not. THIS REQUIRES ANOTHER CHECK TO ANOTHER DATABASE. SUCH AS THE BLACKLISTED.
-    # - This is implementable when we have the capability to lock out users due to suspicious activities.
-
     if fetched_credential_data is not None:
 
         # We cannot use pydantic model because we need to do some modification that violates use-case of pydantic.
@@ -260,7 +256,7 @@ async def login_entity(
 
             # - If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
-            if fetched_credential_data.type is NodeType.ARCHIVAL_MINER_NODE:
+            if fetched_credential_data.type is UserEntity.DASHBOARD_USER:
                 jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
                 payload[

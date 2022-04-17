@@ -577,7 +577,6 @@ async def ensure_input_prompt(
     while True:
         input_s: list[str] | str = "" if isinstance(input_context, str) else []
 
-        # TODO
         # # Implementation-wise, I understand that the code below is too redundant, but I can't fix it as of now.
 
         if isinstance(input_context, list) and isinstance(hide_input_from_field, list):
@@ -719,9 +718,7 @@ async def handle_input_function(
 
 
 # # Blockchain
-# TODO: We need to import the HTTP here.
 async def contact_master_node(*, master_host: str, master_port: int) -> None:
-
     logger.info(
         f"Attempting to contact the {NodeType.MASTER_NODE.name} at host {master_host} in port {master_port} ..."
     )
@@ -743,13 +740,10 @@ async def contact_master_node(*, master_host: str, master_port: int) -> None:
 
         logger.info(f"Master node responded at {master_host}:{master_port}!")
 
-    return
-
 
 # # This may be moved inside BlockchainMechanism.
 async def look_for_archival_nodes() -> None:
     logger.error("This function is NotYetImplemented.")
-    return
 
 
 # # Input Stoppers — START

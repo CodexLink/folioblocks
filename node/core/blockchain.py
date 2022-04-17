@@ -57,6 +57,7 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from node.core.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -128,7 +129,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self.mine_duration: timedelta = timedelta()
         self.consensus_timer_expiration: datetime = (
             datetime.now()
-        )  # TODO: This will be computed based on the information by the MASTER_NODE on how much is being participated, along with its computed value based on the average mining and iteration.
+        )
 
         # # Containers
         self.transaction_container: list[Transaction] = []
@@ -139,6 +140,7 @@ class BlockchainMechanism(ConsensusMechanism):
         # # Instances
         self.db_instance: Final[Database] = get_database_instance()
         self.http_instance: HTTPClient = get_http_client_instance()
+        self.email_service: EmailService = get_email_instance()
         self.identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
         # # State and Variable References
@@ -566,7 +568,10 @@ class BlockchainMechanism(ConsensusMechanism):
 
             logger.error(
                 f"{'Sender' if from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be disregarded."
-            )  # TODO: Send to email when this happened, only when `from_address` exists.
+            )
+            # TODO: Send to email when this happened, only when `from_address` exists.
+            # create_task(self.email_service.send(content="<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+            #         subject="Error Transaction from Folioblock!", to=), name="send_email_invalid_address_notification")
 
         logger.error(
             f"There was a missing or invalid value inserted from  the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `{TransactionActions}`, `from_address` should contain a valid {str} and `data` should be wrapped in a pydantic model ({BaseModel})! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
@@ -979,6 +984,8 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                     )
 
+                    await self.db_instance.execute(save_in_progress_negotiation_stmt)
+
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
                     self.confirming_block_container.append(generated_block)
 
@@ -1163,7 +1170,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.warning(
                     f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be mining but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
                 )
-                continue
 
         logger.warning(
             f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.block_timer_seconds} seconds)"
@@ -1758,9 +1764,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return True
 
-    # TODO: Ensure to follow the rule that we made last time.
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
-        pass
+        return
 
     def _set_node_state(self) -> None:
         self.node_ready = (
@@ -1819,7 +1824,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.
-
                 if blockchain_content.ok:
                     dict_blockchain_content = await blockchain_content.json()
 
@@ -1828,7 +1832,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             import_raw_json_to_dict(dict_blockchain_content["content"])
                         )
                     )
-                    # TODO
 
                     if not isinstance(in_memory_chain, frozendict):
                         logger.error(

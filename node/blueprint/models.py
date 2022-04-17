@@ -27,8 +27,6 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, MetaData, String, Table, Text, false, func
 from sqlalchemy.orm import relationship
 
-# TODO: We might wanna create a key where it combines all of the certain fields and when it was inserted for reset password, it should resulted to that!
-
 """
     @o Notes:
     - SQLAlchemy doesn't use enum.Enum as their Enum.

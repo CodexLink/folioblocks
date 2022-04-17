@@ -8,7 +8,11 @@ from utils.processors import unconventional_terminate
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
-def ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!", terminate_on_call: bool = False) -> Callable:  # type: ignore
+
+def ensure_blockchain_ready(
+    message: str = "Blockchain system is not yet ready!",
+    terminate_on_call: bool = False,
+) -> Callable:
     def deco(fn: Callable) -> Callable:
         def instance(
             self: Any, *args: list[Any], **kwargs: dict[Any, Any]
@@ -16,7 +20,6 @@ def ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!"
             if self.is_blockchain_ready:
                 return fn(self, *args, **kwargs)
 
-            # TODO: Why do we have this?
             if terminate_on_call:
                 unconventional_terminate(message=message)
 
@@ -27,21 +30,19 @@ def ensure_blockchain_ready(message: str = "Blockchain system is not yet ready!"
     return deco
 
 
-def restrict_call(*, on: NodeType) -> Callable:  # type: ignore
+def restrict_call(*, on: NodeType) -> Callable:
     """
-    Restricts the method to be called depending on their `self.role`.
-    Since most of the methods is designed respectively based on their role.
-    Ever process requires this certain role to only call this method and nothing else.
+        Restricts the method to be called depending on their `self.role`.
+        Since most of the methods is designed respectively based on their role.
+        Ever process requires this certain role to only call this method and nothing else.
 
-    Args:
-                    on (NodeType): The `role` of the node.
-
+        Args:
+            on (NodeType): The `role` of the node.
     Returns:
-                    Callable: Calls the decorator method.
-
+            Callable: Calls the decorator method.
     Notes:
-    # This was duplicated, it was originated from the consensus.py.
-    # I cannot get it because its inside of the class and it doesn't get shared because it has not `self` attribute.
+        # This was duplicated, it was originated from the consensus.py.
+        # I cannot get it because its inside of the class and it doesn't get shared because it has not `self` attribute.
     """
 
     def deco(fn: Callable) -> Callable:

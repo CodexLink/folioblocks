@@ -115,8 +115,6 @@ def get_master_node_properties(
     )
 
 
-# TODO: Not sure why we have this function signature.
-# def generate_auth_token(to: EmailStr, type: UserEntity, expires: timedelta) -> None:
 def generate_auth_token() -> str:
     generated: str = token_hex(
         random_generator.randint(AUTH_CODE_MIN_CONTEXT, AUTH_CODE_MAX_CONTEXT)
@@ -448,7 +446,6 @@ async def authenticate_node_client(
                         else NodeType.ARCHIVAL_MINER_NODE
                     )
 
-                    # TODO: Please test this one.
                     if resolve_entity_to_role.value != get_args_values().node_role:
                         from utils.processors import unconventional_terminate
 
@@ -506,9 +503,9 @@ class EnsureAuthorized:
         | None = Header(
             None,
             description=f"The certificate token that proves the consensus negotiation between {NodeType.ARCHIVAL_MINER_NODE.name} and {NodeType.MASTER_NODE.name}",
-        ),  # TODO: Type-hint.
+        ),
         db: Database = Depends(get_database_instance),
-    ) -> None:  # TODO.
+    ) -> None:
 
         print("Debug from the call function, ", request, dir(request))
 
@@ -545,17 +542,6 @@ class EnsureAuthorized:
             status_code=HTTPStatus.UNAUTHORIZED,
             detail="You are unauthorized to access this endpoint.",
         )
-
-
-# TODO: MAY BE DEPRECATED LATER.
-def ensure_past_negotiations(
-    *,
-    identity: tuple[AddressUUID, JWTToken] = Depends(get_identity_tokens),
-    db: Database = Depends(get_database_instance),
-) -> bool:
-    # Maybe query or use the current session or the Node ID.
-    # We need to contact the other part to ensure that there is negotiations.
-    return False
 
 
 # # Passcode Generators — START

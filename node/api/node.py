@@ -208,9 +208,7 @@ async def receive_block_to_mine(
     description=f"A special API endpoint that accepts payload from the dashboard. This requires special credentials and handling outside the scope of node.",
     dependencies=[
         Depends(
-            EnsureAuthorized(
-                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
-            )  # TODO: We need to use the `UserEntity.DASHBOARD_USER` here.
+            EnsureAuthorized(_as=UserEntity.DASHBOARD_USER, blockchain_related=True)
         )
     ],
 )
@@ -220,7 +218,6 @@ async def recieve_action_from_dashboard() -> None:
     # - Encrypt it via AES from the generated file. (Code should be derived from the existing Fernet() or should we create another one? [such as, AUTH (mid 16 characters) of master + sender ]) and make the filename as UUID with datetime with no extensions.
 
     # - Field of the file should be changed to a SHA256 with UUID as a base location from where it was located.
-    # TODO: We need an API regarding returning it.
     #
     return
 
@@ -323,7 +320,6 @@ async def acknowledge_as_response(
                     store_authored_token_stmt = associated_nodes.insert().values(
                         user_address=validated_source_address.unique_address,
                         certificate=encrypted_authored_token.decode("utf-8"),
-                        # TODO
                         # # We need to ensure that the source address and port is right when this was deployed in external.
                         # source_address=request.client.host,
                         # source_port=request.client.port,
