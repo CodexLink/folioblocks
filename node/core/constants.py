@@ -379,15 +379,16 @@ class TransactionActions(IntEnum):
     # - https://softwareengineering.stackexchange.com/questions/266582/is-it-better-to-use-strings-or-int-to-reference-enums-outside-the-java-part-of-t
 
     # - Node-based Transactions: General
-    NODE_GENERAL_CONSENSUS_INITIATE = auto()
+    NODE_GENERAL_CONSENSUS_INIT = auto()
     NODE_GENERAL_REGISTER_INIT = auto()
-    NODE_GENERAL_GENESIS_INITIALIZATION = auto()
+    NODE_GENERAL_GENESIS_BLOCK_INIT = auto()
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
+
     # - Node-based Transaction: Consensus (Consensus)
-    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = auto()
-    NODE_GENERAL_CONSENSUS_NEGOTIATION_MINE = auto()
-    NODE_GENERAL_CONSENSUS_NEGOTIATION_PROCESSING_PROOF = auto()
+    NODE_GENERAL_CONSENSUS_BLOCK_SYNC = auto()  # - To edit.
+    NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START = auto()
+    NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING = auto()
 
     # - For Students as Applicants.
     APPLICANT_APPLY = auto()

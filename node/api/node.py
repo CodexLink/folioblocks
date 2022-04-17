@@ -60,6 +60,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Update
 
+from .blueprint.schemas import NodeConfirmMineConsensusTransaction, NodeSyncTransaction
+
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 node_router = APIRouter(
@@ -121,10 +123,12 @@ async def get_node_info() -> NodeInformation:
             )
         )
     ],
+    response_model=ConsensusSuccessPayload,
+    status_code=HTTPStatus.ACCEPTED,
 )
 async def process_hashed_block(
     context_from_archival_miner: ConsensusToMasterPayload,
-) -> JSONResponse:
+) -> ConsensusSuccessPayload:
 
     # # Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
 
@@ -151,15 +155,25 @@ async def process_hashed_block(
         from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
     )
 
-    # - Insert transaction from the blockchain for the successful thing.
-
-    return JSONResponse(
-        content=ConsensusSuccessPayload(
-            addon_consensus_sleep_seconds=random_generator.uniform(0, 2)
-            * blockchain_current_instance.block_timer_seconds,
-            reiterate_master_address=blockchain_current_instance.identity[0],
+    # - Insert an internal transaction.
+    # @o This was seperated from the consolidated internal transaction handler due to the need of handling extra variables as `ARCHIVAL_MINER_NODE` sent a payload.
+    await blockchain_current_instance._insert_internal_transaction(
+        action=TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING,
+        data=NodeTransaction(
+            action=NodeTransactionInternalActions.CONSENSUS,
+            context=NodeConfirmMineConsensusTransaction(
+                miner_address=context_from_archival_miner.miner_address,
+                master_address=blockchain_current_instance.identity[0],
+                consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
+            ),
         ),
-        status_code=HTTPStatus.ACCEPTED,
+    )
+
+    # - Insert transaction from the blockchain for the successful thing.
+    return ConsensusSuccessPayload(
+        addon_consensus_sleep_seconds=random_generator.uniform(0, 2)
+        * blockchain_current_instance.block_timer_seconds,
+        reiterate_master_address=blockchain_current_instance.identity[0],
     )
 
 
@@ -328,9 +342,8 @@ async def acknowledge_as_response(
                     )
                     await db.execute(store_authored_token_query)
 
-                    # - Record this action from the blockchain.
                     await get_blockchain_instance()._insert_internal_transaction(
-                        action=TransactionActions.NODE_GENERAL_CONSENSUS_INITIATE,
+                        action=TransactionActions.NODE_GENERAL_CONSENSUS_INIT,
                         data=NodeTransaction(
                             action=NodeTransactionInternalActions.INIT,
                             context=NodeCertificateTransaction(
@@ -370,6 +383,18 @@ async def acknowledge_as_response(
 )
 async def request_blockchain_upstream() -> JSONResponse:
     blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+
+    await blockchain_instance._insert_internal_transaction(
+        action=TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC,
+        data=NodeTransaction(
+            action=NodeTransactionInternalActions.SYNC,
+            context=NodeSyncTransaction(
+                requestor_address=AddressUUID(blockchain_instance.identity[0]),
+                timestamp=datetime.now(),
+            ),
+        ),
+    )
+
     return JSONResponse(
         content={
             "current_hash": await blockchain_instance.get_chain_hash(),

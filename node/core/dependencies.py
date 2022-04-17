@@ -19,10 +19,7 @@ from secrets import token_hex
 from sqlite3 import IntegrityError
 from typing import Any, Final, Mapping
 
-from aiohttp import (
-    ClientError,
-    ClientResponse,
-)
+from aiohttp import ClientError, ClientResponse
 from blueprint.models import auth_codes, tokens, users
 from blueprint.schemas import EntityLoginResult, Tokens
 from databases import Database
@@ -30,11 +27,9 @@ from fastapi import Depends, Header, HTTPException, Request
 from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import and_, false, select, true
-from core.constants import IdentityTokens
-from core.constants import ArgsPlusDatabaseInstances, UserCredentials
-from core.constants import CredentialContext
+from sqlalchemy.sql.expression import Insert, Select, Update
 from utils.http import get_http_client_instance
-from sqlalchemy.sql.expression import Select
+
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_CODE_MAX_CONTEXT,
@@ -43,15 +38,18 @@ from core.constants import (
     TOTP_PASSCODE_REFRESH_INTERVAL,
     TOTP_VALID_WINDOW_SECONDS,
     AddressUUID,
+    ArgsPlusDatabaseInstances,
+    CredentialContext,
     HTTPQueueMethods,
+    IdentityTokens,
     JWTToken,
     NodeType,
     TokenStatus,
     URLAddress,
+    UserCredentials,
     UserEntity,
     random_generator,
 )
-from sqlalchemy.sql.expression import Insert, Select, Update
 
 args_value: Namespace
 identity_tokens: IdentityTokens
@@ -495,7 +493,6 @@ class EnsureAuthorized:
 
     async def __call__(
         self,
-        request: Request,
         x_token: JWTToken = Header(
             ..., description="The token that is inferred for validation."
         ),
@@ -506,8 +503,6 @@ class EnsureAuthorized:
         ),
         db: Database = Depends(get_database_instance),
     ) -> None:
-
-        print("Debug from the call function, ", request, dir(request))
 
         if x_token:
             req_ref_token: Select = tokens.select().where(

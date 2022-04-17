@@ -36,10 +36,10 @@ from blueprint.schemas import (
     HashableBlock,
     NodeCertificateTransaction,
     NodeConsensusInformation,
-    NodeConsensusTransaction,
+    NodeConfirmMineConsensusTransaction,
     NodeGenesisTransaction,
     NodeMasterInformation,
-    NodeMinerProofTransaction,
+    NodeMineConsensusSuccessProofTransaction,
     NodeRegisterTransaction,
     NodeSyncTransaction,
     NodeTransaction,
@@ -60,6 +60,7 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from .blueprint.schemas import ConsensusSuccessPayload
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -761,6 +762,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     if payload_to_master.ok:
+                        payload_master_response_ref = ConsensusSuccessPayload(
+                            **payload_to_master
+                        )
                         # - Update the Consensus Negotiation ID.
                         update_completed_consensus_negotiation_query: Update = (
                             consensus_negotiation.update()
@@ -780,7 +784,16 @@ class BlockchainMechanism(ConsensusMechanism):
                         await get_database_instance().execute(
                             update_completed_consensus_negotiation_query
                         )
+
                         logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED}!")  # type: ignore
+
+                        # - Sum the mined_timer sleep phase + given random sleep timer.
+                        self.mine_duration += timedelta(
+                            payload_master_response_ref.addon_consensus_sleep_seconds
+                        )
+
+                        # - Run the consensus sleeping phase.
+                        await self._consensus_sleeping_phase()
 
                     else:
                         if payload_to_master.status == HTTPStatus.INTERNAL_SERVER_ERROR:
@@ -798,7 +811,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     return None
 
-            else:  # - Asserts to NodeSourceOrigin.ARCHIVAL_MINER with master_address_ref is None.
+            else:  # - Asserts to `NodeSourceOrigin.ARCHIVAL_MINER` with `master_address_ref` is None.
 
                 block_confirmed: bool = False
                 # - Validate the given block by checking its id and other fields that is outside from the context.
@@ -1102,6 +1115,22 @@ class BlockchainMechanism(ConsensusMechanism):
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
                     self.confirming_block_container.append(generated_block)
 
+                    # - And save this that the negotiation consensus to mine a block has been confirmed.
+                    await self._insert_internal_transaction(
+                        action=TransactionActions.NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START,
+                        data=NodeTransaction(
+                            action=NodeTransactionInternalActions.CONSENSUS,
+                            context=NodeConfirmMineConsensusTransaction(
+                                candidate_no=available_node_info.candidate_no,
+                                consensus_negotiation_id=RandomUUID(
+                                    generated_consensus_negotiation_id
+                                ),
+                                master_address=self.identity[0],
+                                miner_address=available_node_info.miner_address,
+                            ),
+                        ),
+                    )
+
                 else:
                     logger.warning(
                         "After multiple retries, the generated block will be stored and will find archival miner node candidates who doesn't disconnect."
@@ -1191,6 +1220,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return _block
 
+    @restrict_call(on=NodeType.MASTER_NODE)
     async def _create_genesis_block(self) -> None:
         """
         Generates a block, hash it and append it within the context of the blockchain, for both the file and the in-memory.
@@ -1198,7 +1228,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # * Create a transaction for the generation of the genesis block.
         await self._insert_internal_transaction(
-            action=TransactionActions.NODE_GENERAL_GENESIS_INITIALIZATION,
+            action=TransactionActions.NODE_GENERAL_GENESIS_BLOCK_INIT,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.INIT,
                 context=NodeGenesisTransaction(
@@ -1245,7 +1275,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         logger.info(f"There are {len(available_nodes)} candidates available!")
 
-        for each_candidate in available_nodes:
+        for candidate_idx, each_candidate in enumerate(available_nodes):
             candidate_response = await get_http_client_instance().enqueue_request(
                 url=URLAddress(
                     f"{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
@@ -1262,7 +1292,6 @@ class BlockchainMechanism(ConsensusMechanism):
                     "properties"
                 ]
 
-                print(resolved_candidate_state_info)
                 logger.info(
                     f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the mining request!"
                 )
@@ -1277,6 +1306,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 ):
                     return ArchivalMinerNodeInformation(
+                        candidate_no=candidate_idx,
                         miner_address=resolved_candidate_state_info["owner"],
                         source_host=URLAddress(each_candidate["source_address"]),
                         source_port=each_candidate["source_port"],
@@ -1338,6 +1368,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return
 
+    @restrict_call(on=NodeType.MASTER_NODE)
     async def _insert_internal_transaction(
         self, action: TransactionActions, data: NodeTransaction
     ) -> None:
@@ -1381,13 +1412,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 data.context.requestor_address,
             )
 
-        elif isinstance(data.context, NodeConsensusTransaction):
+        elif isinstance(data.context, NodeConfirmMineConsensusTransaction):
             resolved_from_address, resolved_to_address = (
                 data.context.master_address,
                 data.context.miner_address,
             )
 
-        elif isinstance(data.context, NodeMinerProofTransaction):
+        elif isinstance(data.context, NodeMineConsensusSuccessProofTransaction):
             resolved_from_address, resolved_to_address = (
                 data.context.receiver_address,
                 data.context.miner_address,
@@ -1569,7 +1600,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                     transaction_idx
                                 ]["action"]
                             )
-                            == TransactionActions.NODE_GENERAL_GENESIS_INITIALIZATION
+                            == TransactionActions.NODE_GENERAL_GENESIS_BLOCK_INIT
                         ):
                             genesis_transaction_identifier = True
 
@@ -1966,18 +1997,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             BlockchainFileContext(dict_blockchain_content["content"]),
                         ),
                         bypass_from_update=True,
-                    )
-
-                    # - Record this to the blockchain.
-                    await self._insert_internal_transaction(
-                        action=TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC,
-                        data=NodeTransaction(
-                            action=NodeTransactionInternalActions.SYNC,
-                            context=NodeSyncTransaction(
-                                requestor_address=AddressUUID(self.identity[0]),
-                                timestamp=datetime.now(),
-                            ),
-                        ),
                     )
 
                     logger.info(

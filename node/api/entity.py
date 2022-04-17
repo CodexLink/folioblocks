@@ -58,6 +58,7 @@ from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import MetaData, false, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from .core.blockchain import BlockchainMechanism
 from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -167,9 +168,18 @@ async def register_entity(
                 name=f"{get_email_instance.__name__}_send_register_welcome_notification",
             )
 
+            blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+
             # - After that, record this transaction from the blockchain.
-            if auth_token.account_type == UserEntity.ARCHIVAL_MINER_NODE_USER:
-                await get_blockchain_instance()._insert_internal_transaction(
+            # @o This callback in particular is not part of the consolidated internal transactions declared from the `dependencies.py` under < class 'EnsureAuthorized'>
+            # ! That is due to its several previous variables were used.
+            if (
+                UserEntity(auth_token.account_type) is UserEntity.MASTER_NODE_USER
+                or UserEntity(auth_token.account_type)
+                is UserEntity.ARCHIVAL_MINER_NODE_USER
+                and blockchain_instance.node_role is NodeType.MASTER_NODE
+            ):
+                await blockchain_instance._insert_internal_transaction(
                     action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
                     data=NodeTransaction(
                         action=NodeTransactionInternalActions.INIT,

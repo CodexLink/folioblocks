@@ -206,15 +206,13 @@ class NodeSyncTransaction(BaseModel):
     timestamp: datetime
 
 
-class NodeConsensusTransaction(BaseModel):
-    candidate_no: int
+class NodeConfirmMineConsensusTransaction(BaseModel):
     consensus_negotiation_id: RandomUUID
     miner_address: AddressUUID
     master_address: AddressUUID
-    provided_consensus_sleep_seconds: float
 
 
-class NodeMinerProofTransaction(BaseModel):
+class NodeMineConsensusSuccessProofTransaction(BaseModel):
     miner_address: HashUUID
     receiver_address: HashUUID
     consensus_negotiation_id: RandomUUID
@@ -224,7 +222,7 @@ class NodeMinerProofTransaction(BaseModel):
 
 class NodeTransaction(BaseModel):
     action: NodeTransactionInternalActions
-    context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeConsensusTransaction | NodeMinerProofTransaction | HashUUID
+    context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeConfirmMineConsensusTransaction | NodeMineConsensusSuccessProofTransaction | HashUUID
 
 
 class TransactionSignatures(BaseModel):
@@ -269,6 +267,7 @@ class BlockOverview(BaseBlock):
 
 
 class ArchivalMinerNodeInformation(BaseModel):
+    candidate_no: int
     miner_address: AddressUUID
     source_host: URLAddress
     source_port: int
@@ -286,7 +285,7 @@ class ConsensusFromMasterPayload(BaseModel):
 
 
 class ConsensusToMasterPayload(BaseModel):
-    consensus_negotiation_id: str
+    consensus_negotiation_id: RandomUUID
     miner_address: AddressUUID
     block: Block
 
