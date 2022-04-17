@@ -320,8 +320,11 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
                             is True
                         ):
+                            # @o Type-hint.
+                            application_process_query: Insert | Update
+
                             if action is TransactionActions.APPLICANT_APPLY:
-                                application_process_query: Insert | Update = (
+                                application_process_query = (
                                     applications.insert().values(
                                         process_id=RandomUUID(token_urlsafe(16)),
                                         requestor=data.requestor,
@@ -1188,7 +1191,9 @@ class BlockchainMechanism(ConsensusMechanism):
             ]
         ).where(associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE)
 
-        available_nodes: list[Mapping] = await self.db_instance.fetch_all(available_nodes_query)
+        available_nodes: list[Mapping] = await self.db_instance.fetch_all(
+            available_nodes_query
+        )
 
         if not len(available_nodes):
             logger.info(
@@ -1954,7 +1959,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return
 
     async def _update_chain_hash(self, *, new_hash: str) -> None:
-        blockchain_hash_update_query = (
+        blockchain_hash_update_query: Update = (
             file_signatures.update()
             .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
             .values(hash_signature=new_hash)

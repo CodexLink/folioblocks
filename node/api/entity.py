@@ -57,7 +57,7 @@ from core.dependencies import (
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import MetaData, false, select
-from sqlalchemy.sql.expression import Insert, Select
+from sqlalchemy.sql.expression import Insert, Select, Update
 from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -149,7 +149,7 @@ async def register_entity(
             password=hash_context(pwd=RawData(credentials.password))
             # association=, # I'm not sure on what to do with this one, as of now.
         )
-        dispose_auth_code = (
+        dispose_auth_code: Update = (
             auth_codes.update()
             .where(auth_codes.c.code == auth_token.code)
             .values(is_used=True)
@@ -273,7 +273,7 @@ async def login_entity(
                 token=token,
                 expiration=jwt_expire_at,
             )
-            logged_user_query = (
+            logged_user_query: Update = (
                 users.update()
                 .where(users.c.unique_address == fetched_credential_data.unique_address)
                 .values(activity=UserActivityState.ONLINE)
@@ -307,7 +307,7 @@ async def login_entity(
                     )
 
                     if associated_token_from_logged_user is not None:
-                        update_associate_node_state_query = (
+                        update_associate_node_state_query: Update = (
                             associated_nodes.update()
                             .where(
                                 associated_nodes.c.user_address
@@ -366,7 +366,7 @@ async def logout_entity(
     fetched_token = await db.fetch_one(fetched_token_query)
 
     if fetched_token is not None:
-        token_ref = (
+        token_ref: Update = (
             tokens.update()
             .where(tokens.c.token == x_token)
             .values(state=TokenStatus.EXPIRED)
@@ -394,7 +394,7 @@ async def logout_entity(
                 )
 
                 if associate_from_user_ref is not None:
-                    update_associate_state_from_user_query = (
+                    update_associate_state_from_user_query: Update = (
                         associated_nodes.update()
                         .where(
                             associated_nodes.c.user_address == user_ref.unique_address
