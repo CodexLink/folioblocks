@@ -25,6 +25,7 @@ from blueprint.models import (
 )
 from blueprint.schemas import (
     AdditionalContextTransaction,
+    AgnosticCredentialValidator,
     ApplicantLogTransaction,
     ApplicantProcessTransaction,
     ApplicantUserTransaction,
@@ -42,6 +43,7 @@ from blueprint.schemas import (
     NodeRegisterTransaction,
     NodeSyncTransaction,
     NodeTransaction,
+    OrganizationIdentityValidator,
     OrganizationTransaction,
     OrganizationTransactionInitializer,
     Transaction,
@@ -58,23 +60,14 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
-from core.email import EmailService, get_email_instance
-from blueprint.schemas import (
-    AgnosticCredentialValidator,
-    OrganizationIdentityValidator,
-)
-from core.constants import TransactionContextMappingType
-from utils.processors import (
-    insert_transaction_content_mapping,
-    validate_organization_existence,
-    validate_transaction_mapping_exists,
-    validate_user_existence,
-)
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
     unconventional_terminate,
+    validate_organization_existence,
+    validate_transaction_mapping_exists,
     validate_user_address,
+    validate_user_existence,
 )
 
 from core.consensus import ConsensusMechanism
@@ -110,6 +103,7 @@ from core.constants import (
     RawData,
     SourceNodeOrigin,
     TransactionActions,
+    TransactionContextMappingType,
     URLAddress,
     random_generator,
 )
@@ -120,6 +114,7 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
+from core.email import EmailService, get_email_instance
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 

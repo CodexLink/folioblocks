@@ -50,7 +50,7 @@ associations = Table(
     Column(
         "group",
         SQLEnum(AssociationGroupType),
-        server_default=AssociationGroupType.ORGANIZATION,
+        server_default=AssociationGroupType.ORGANIZATION.name,
         nullable=False,
     ),
     Column("date_added", DateTime, default=func.now()),
@@ -172,7 +172,13 @@ consensus_negotiation = Table(
     Column("block_no_ref", Integer, nullable=False, unique=True),
     Column("consensus_negotiation_id", String(11), nullable=False, unique=True),
     Column("peer_address", ForeignKey(user_addr_ref), nullable=False, unique=False),
-    Column("status", SQLEnum(ConsensusNegotiationStatus), nullable=False, unique=False),
+    Column(
+        "status",
+        SQLEnum(ConsensusNegotiationStatus),
+        nullable=False,
+        server_default=ConsensusNegotiationStatus.ON_PROGRESS.name,
+        unique=False,
+    ),
     Column(
         "date_negotiation",
         DateTime,
@@ -228,7 +234,9 @@ tx_content_mappings = Table(
     Column("tx_ref", String(64), nullable=False, unique=False),
     Column(
         "content_type",
-        SQLEnum(TransactionContextMappingType),
+        SQLEnum(
+            TransactionContextMappingType
+        ),  # - We dont want to automatically fill this on `INSERT`.
         nullable=False,
         unique=False,
     ),
