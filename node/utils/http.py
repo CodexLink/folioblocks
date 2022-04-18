@@ -19,7 +19,7 @@ from core.constants import (
     URLAddress,
 )
 from core.constants import AddressUUID
-from node.core.constants import (
+from core.constants import (
     HTTP_MICRO_SLEEP_TO_FETCH_REQUEST,
     HTTP_SLEEP_TO_RETRY_SECONDS,
 )
