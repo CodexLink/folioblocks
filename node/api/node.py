@@ -218,7 +218,9 @@ async def receive_block_to_mine(
                 status=ConsensusNegotiationStatus.ON_PROGRESS,
             )
         )
-        await get_database_instance().execute(save_generated_consensus_negotiation_id_query)
+        await get_database_instance().execute(
+            save_generated_consensus_negotiation_id_query
+        )
         logger.info(
             f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
         )
@@ -227,6 +229,7 @@ async def receive_block_to_mine(
         await blockchain_instance.insert_mined_block(
             block=context_from_master.block,
             from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+            master_address_ref=context_from_master.master_address,
         )
 
         return Response(status_code=HTTPStatus.ACCEPTED)

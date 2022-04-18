@@ -1009,8 +1009,6 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             logger.info(f"Block {context.id} has been appended from the blockchain!")
 
-            await self._consensus_sleeping_phase()
-
         else:
             unconventional_terminate(
                 message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
@@ -1102,7 +1100,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             export_to_json(generated_block.dict())
                         ),
                         "master_address": self.identity[0],
-                        "consensus_negotiation": generated_consensus_negotiation_id,
+                        "consensus_negotiation_id": generated_consensus_negotiation_id,
                     },
                     retry_attempt=99,
                     name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info.miner_address[-6:]}",
@@ -1144,6 +1142,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         "After multiple retries, the generated block will be stored and will find archival miner node candidates who doesn't disconnect."
                     )
                     self.unsent_block_container.append(generated_block)
+                    continue
 
             logger.error(
                 f"Cannot proceed when block generated returned {generated_block}! This is probably a developer-logic error issue. Please contact the developer regarding this."
