@@ -63,7 +63,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from blueprint.schemas import GroupTransaction
-from node.core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
+from core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -774,7 +774,9 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
-        logger.warning(f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to consume all necessary requests from the {NodeType.MASTER_NODE} API-side before deadlocking-self to mine the block.")
+        logger.warning(
+            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to consume all necessary requests from the {NodeType.MASTER_NODE} API-side before deadlocking-self to mine the block."
+        )
         await sleep(BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER)
 
         mined_block: Block | None = await self._miner_block_processor(
