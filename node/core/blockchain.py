@@ -1,5 +1,5 @@
 from argparse import Namespace
-from asyncio import create_task, get_event_loop, sleep
+from asyncio import create_task, gather, get_event_loop, sleep
 from base64 import urlsafe_b64encode
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -156,8 +156,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # # Timer Containers
         self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.mine_duration: timedelta = timedelta()
-        self.consensus_timer_expiration: datetime = datetime.now()
+        self.mine_duration: timedelta = timedelta(seconds=0)
+        self.consensus_sleep_date_expiration: datetime = datetime.now()
 
         # # State and Variable References
         self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
@@ -726,7 +726,7 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self._get_last_block()
 
         return NodeConsensusInformation(
-            consensus_timer_expiration=self.consensus_timer_expiration,
+            consensus_timer_expiration=self.consensus_sleep_date_expiration,
             is_mining=not self.is_blockchain_ready,
             is_sleeping=self.is_node_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
@@ -790,7 +790,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.info(
-            f"Block {block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the {NodeType.MASTER_NODE.name}. Sending back the hashed/mined block."
+            f"Block #{block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the `{NodeType.MASTER_NODE.name}`. Sending back the hashed/mined block."
         )
 
         parsed_args: Namespace = get_args_values()
@@ -811,6 +811,8 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         if recorded_consensus_negotiation is not None:
+            self.consensus_sleep_date_expiration = datetime.now() + self.mine_duration
+
             payload_to_master: ClientResponse = await self.http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_origin_source_host}:{master_origin_source_port}/node/blockchain/receive_hashed_block"
@@ -826,6 +828,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     "block": import_raw_json_to_dict(
                         export_to_json((mined_block.dict()))
                     ),
+                    "consensus_sleep_expiration": self.consensus_sleep_date_expiration,
                 },
                 retry_attempts=100,
                 name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
@@ -858,8 +861,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
 
                 # - Sum the mined_timer sleep phase + given random sleep timer.
-                self.mine_duration += timedelta(
-                    payload_master_response_ref.addon_consensus_sleep_seconds
+                self._consensus_calculate_sleep_time(
+                    mining_duration=payload_master_response_ref.addon_consensus_sleep_seconds,
+                    add_on=True,
                 )
 
                 # - Run the consensus sleeping phase.
@@ -1018,7 +1022,7 @@ class BlockchainMechanism(ConsensusMechanism):
             # - Since we already have a node, do not let this one go.
             if len(
                 self.transaction_container
-            ) > BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK and not len(
+            ) >= BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK and not len(
                 self.unsent_block_container
             ):
 
@@ -1089,7 +1093,20 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                     )
 
-                    await self.db_instance.execute(save_in_progress_negotiation_query)
+                    # - And remember that this node was in the state of `CURRENTLY_MINING`.
+                    set_miner_state_as_mining_query: Update = (
+                        associated_nodes.update()
+                        .where(
+                            associated_nodes.c.user_address
+                            == available_node_info.miner_address
+                        )
+                        .values(state=AssociatedNodeStatus.CURRENTLY_MINING)
+                    )
+
+                    await gather(
+                        self.db_instance.execute(save_in_progress_negotiation_query),
+                        self.db_instance.execute(set_miner_state_as_mining_query),
+                    )
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
                     self.confirming_block_container.append(generated_block)
@@ -1125,22 +1142,28 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"Cannot proceed when block generated returned {generated_block}! This is probably a developer-logic error issue. Please contact the developer regarding this."
             )
 
-    def _consensus_calculate_sleep_time(self, *, mining_duration: float) -> None:
+    def _consensus_calculate_sleep_time(
+        self, *, mining_duration: int | float, add_on: bool
+    ) -> None:
+
         if not self.is_blockchain_ready and not self.new_master_instance:
 
-            self.mine_duration = timedelta(seconds=mining_duration)  # type: ignore # - Let timedelta convert if there's a residue (ie. milliseconds).
-            self.consensus_timer_expiration = datetime.now() + self.mine_duration
+            if add_on:
+                self.mine_duration += timedelta(seconds=mining_duration)
+            else:
+                self.mine_duration = timedelta(seconds=mining_duration)
 
-            logger.debug(
-                f"Consensus timer is calculated. Set to {self.mine_duration} seconds before waking. | Will expire (wakes up and approximately) at {self.consensus_timer_expiration}"
-            )
+            logger.info(f"Consensus sleep timer were set to {self.mine_duration}.")
+            return
+
+        logger.error("Unable to set the consensus timer.")
 
     async def _consensus_sleeping_phase(self) -> None:
         if not self.new_master_instance:
             self.sleeping_from_consensus = True
 
             logger.info(
-                f"Block mining is finished. Sleeping until {self.consensus_timer_expiration}."
+                f"Block mining is finished. Sleeping for seconds. until {datetime.now() + self.mine_duration}."
             )
 
             await sleep(self.mine_duration.total_seconds())
@@ -1155,7 +1178,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return
 
         logger.info(
-            f"Consensus timer ignored due to condition. | Is new instance: {self.new_master_instance}, Blockchain ready: {self.blockchain_ready}"
+            f"Consensus timer ignored due to condition (ie. new instance, blockchain state not ready or otherwise."
         )
 
     async def _create_block(self) -> Block | None:
@@ -1279,13 +1302,34 @@ class BlockchainMechanism(ConsensusMechanism):
                     f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the mining request!"
                 )
 
+                last_selected_node_consensus_sleep_datetime_query: Select = select(
+                    [associated_nodes.c.consensus_sleep_expiration]
+                ).where(
+                    associated_nodes.c.user_address
+                    == resolved_candidate_state_info["owner"]
+                )
+
+                selected_node_last_consensus_sleep_datetime = (
+                    await self.db_instance.fetch_one(
+                        last_selected_node_consensus_sleep_datetime_query
+                    )
+                )
+
+                # @o Type-hint.
+                resolved_last_consensus_sleep_datetime: datetime
+                if selected_node_last_consensus_sleep_datetime is None:
+                    resolved_last_consensus_sleep_datetime = datetime.now()
+                else:
+                    resolved_last_consensus_sleep_datetime = (
+                        selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration  # type: ignore
+                    )
+
                 if (
                     not resolved_candidate_state_info["is_mining"]
                     and NodeType(resolved_candidate_state_info["node_role"])
                     is NodeType.ARCHIVAL_MINER_NODE
-                    and datetime.now()
-                    >= datetime.fromisoformat(
-                        resolved_candidate_state_info["consensus_timer_expiration"]
+                    and (
+                        datetime.now() >= resolved_last_consensus_sleep_datetime  # type: ignore
                     )
                 ):
                     return ArchivalMinerNodeInformation(
@@ -1451,7 +1495,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(
                     f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
-                self._consensus_calculate_sleep_time(mining_duration=time() - prev)
+                self._consensus_calculate_sleep_time(
+                    mining_duration=time() - prev, add_on=False
+                )
                 self.blockchain_ready = True
                 return block
 

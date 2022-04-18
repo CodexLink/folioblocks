@@ -9,12 +9,14 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
-from asyncio import create_task
-from datetime import datetime
+from asyncio import create_task, gather
+from datetime import datetime, timedelta
 from http import HTTPStatus
 from logging import Logger, getLogger
 from os import environ as env
 from typing import Any
+
+from databases import Database
 
 from blueprint.models import (
     associated_nodes,
@@ -62,6 +64,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Update
+
+from core.constants import AssociatedNodeStatus
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -137,17 +141,15 @@ async def get_node_info() -> NodeInformation:
 )
 async def process_hashed_block(
     context_from_archival_miner: ConsensusToMasterPayload,
+    database_instance: Database = Depends(get_database_instance),
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> ConsensusSuccessPayload:
 
-    blockchain_current_instance: BlockchainMechanism | None = get_blockchain_instance()
-
-    if isinstance(blockchain_current_instance, BlockchainMechanism):
+    if isinstance(blockchain_instance, BlockchainMechanism):
 
         block_confirmed: bool = False
         # - Validate the given block by checking its id and other fields that is outside from the context.
-        for (
-            each_confirming_block
-        ) in blockchain_current_instance.confirming_block_container:
+        for each_confirming_block in blockchain_instance.confirming_block_container:
 
             logger.debug(
                 f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {context_from_archival_miner.block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {context_from_archival_miner.block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
@@ -156,7 +158,7 @@ async def process_hashed_block(
             if (
                 (
                     each_confirming_block.id == context_from_archival_miner.block.id
-                    and blockchain_current_instance.cached_block_id
+                    and blockchain_instance.cached_block_id
                     == context_from_archival_miner.block.id
                 )
                 and each_confirming_block.block_size_bytes
@@ -166,7 +168,7 @@ async def process_hashed_block(
                 and each_confirming_block.contents.timestamp
                 == context_from_archival_miner.block.contents.timestamp
             ):
-                blockchain_current_instance.confirming_block_container.remove(
+                blockchain_instance.confirming_block_container.remove(
                     each_confirming_block
                 )  # - Remove from the container as it was already confirmed.
 
@@ -181,14 +183,15 @@ async def process_hashed_block(
 
         # * Regardless of who receives it, append it from their context_from_archival_miner.block.
         # - For MASTER_NODE, this may be a redundant check, but its fine.
-        if (
-            blockchain_current_instance.cached_block_id
-            != context_from_archival_miner.block.id
-        ):
+        if blockchain_instance.cached_block_id != context_from_archival_miner.block.id:
             raise HTTPException(
                 detail="The given block seem to be out of sync! This is not possible in terms of implementation, contact the developers to investigate this issue.",
                 status_code=HTTPStatus.NOT_ACCEPTABLE,
             )
+
+        proposed_consensus_addon_timer: float = (
+            random_generator.uniform(0, 2) * blockchain_instance.block_timer_seconds
+        )
 
         # - Update the Consensus Negotiation ID.
         update_consensus_negotiation_query: Update = (
@@ -206,7 +209,24 @@ async def process_hashed_block(
             .values(status=ConsensusNegotiationStatus.COMPLETED)
         )
 
-        await get_database_instance().execute(update_consensus_negotiation_query)
+        # - As well as the association of the miner node.
+        update_associate_state_query: Update = (
+            associated_nodes.update()
+            .where(
+                associated_nodes.c.user_address
+                == context_from_archival_miner.miner_address
+            )
+            .values(
+                state=AssociatedNodeStatus.CURRENTLY_AVAILABLE,
+                consensus_sleep_expiration=context_from_archival_miner.consensus_sleep_expiration
+                + timedelta(seconds=proposed_consensus_addon_timer),
+            )
+        )
+
+        await gather(
+            database_instance.execute(update_consensus_negotiation_query),
+            database_instance.execute(update_associate_state_query),
+        )
 
         # - Since we lost the identity value of the enums from the fields, we need to re-bind them so that the loaded block from memory has a referrable enum when called.
         for transaction_idx, transaction_context in enumerate(
@@ -226,19 +246,19 @@ async def process_hashed_block(
             # ].action = TransactionActions(transaction_context.action)
 
         # - Insert the block.
-        await blockchain_current_instance._append_block(
+        await blockchain_instance._append_block(
             context=context_from_archival_miner.block
         )
 
         # - Insert an internal transaction.
         # @o This was seperated from the consolidated internal transaction handler due to the need of handling extra variables as `ARCHIVAL_MINER_NODE` sent a payload.
-        await blockchain_current_instance._insert_internal_transaction(
+        await blockchain_instance._insert_internal_transaction(
             action=TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.CONSENSUS,
                 context=NodeConfirmMineConsensusTransaction(
                     miner_address=context_from_archival_miner.miner_address,
-                    master_address=blockchain_current_instance.identity[0],
+                    master_address=blockchain_instance.identity[0],
                     consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
                 ),
             ),
@@ -246,9 +266,8 @@ async def process_hashed_block(
 
         # - Insert transaction from the blockchain for the successful thing.
         return ConsensusSuccessPayload(
-            addon_consensus_sleep_seconds=random_generator.uniform(0, 2)
-            * blockchain_current_instance.block_timer_seconds,
-            reiterate_master_address=blockchain_current_instance.identity[0],
+            addon_consensus_sleep_seconds=proposed_consensus_addon_timer,
+            reiterate_master_address=blockchain_instance.identity[0],
         )
 
     raise HTTPException(
@@ -270,9 +289,8 @@ async def process_hashed_block(
 )
 async def process_raw_block(
     context_from_master: ConsensusFromMasterPayload,
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> Response:
-
-    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
     if isinstance(blockchain_instance, BlockchainMechanism):
         # - Record the Consensus Negotiation ID.
@@ -369,8 +387,8 @@ async def acknowledge_as_response(
         ...,
         description="The auth code that is known as acceptance code, used for extra validation.",
     ),
+    db: Database = Depends(get_database_instance),
 ) -> Response:
-    db: Any = get_database_instance()  # * Initialized on scope.
 
     # - [1] Validate such entries from the header.
     # - [1.1] Get the source first.
@@ -480,8 +498,9 @@ async def acknowledge_as_response(
         )
     ],
 )
-async def request_blockchain_upstream() -> JSONResponse:
-    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
+async def request_blockchain_upstream(
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+) -> JSONResponse:
 
     if isinstance(blockchain_instance, BlockchainMechanism):
         await blockchain_instance._insert_internal_transaction(
@@ -524,10 +543,10 @@ async def verify_given_hash(
     x_hash: str = Header(
         ...,
         description=f"The input hash that is going to be compared against the {NodeType.MASTER_NODE.name}.",
-    )
+    ),
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> Response:
 
-    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
     is_hash_equal: bool = False
 
     if isinstance(blockchain_instance, BlockchainMechanism):

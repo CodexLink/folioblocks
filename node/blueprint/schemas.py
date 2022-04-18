@@ -295,6 +295,7 @@ class ConsensusToMasterPayload(BaseModel):
     consensus_negotiation_id: RandomUUID
     miner_address: AddressUUID
     block: Block
+    consensus_sleep_expiration: datetime
 
 
 class NodeConsensusInformation(BaseModel):

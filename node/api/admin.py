@@ -48,6 +48,8 @@ async def generate_auth_token_for_other_nodes(
         description="The special passcode that allows the generation of `auth_code`.",
     ),
 ) -> RequestPayloadContext:
+
+    # ! We cannot append these dependencies from the function due to circular import dependencies.
     from core.dependencies import (
         PasscodeTOTP,
         generate_auth_token,
