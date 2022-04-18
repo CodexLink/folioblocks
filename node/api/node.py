@@ -217,7 +217,7 @@ async def process_hashed_block(
                 == context_from_archival_miner.miner_address
             )
             .values(
-                state=AssociatedNodeStatus.CURRENTLY_AVAILABLE,
+                status=AssociatedNodeStatus.CURRENTLY_AVAILABLE,
                 consensus_sleep_expiration=context_from_archival_miner.consensus_sleep_expiration
                 + timedelta(seconds=proposed_consensus_addon_timer),
             )

@@ -1100,7 +1100,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             associated_nodes.c.user_address
                             == available_node_info.miner_address
                         )
-                        .values(state=AssociatedNodeStatus.CURRENTLY_MINING)
+                        .values(status=AssociatedNodeStatus.CURRENTLY_MINING)
                     )
 
                     await gather(
@@ -1316,8 +1316,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 # @o Type-hint.
+
                 resolved_last_consensus_sleep_datetime: datetime
-                if selected_node_last_consensus_sleep_datetime is None:
+                if selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration is None:  # type: ignore
                     resolved_last_consensus_sleep_datetime = datetime.now()
                 else:
                     resolved_last_consensus_sleep_datetime = (
