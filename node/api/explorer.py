@@ -66,20 +66,22 @@ explorer_router = APIRouter(
     description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",
 )
 async def get_blockchain() -> Blockchain:
-    blockchain_instance: BlockchainMechanism = get_blockchain_instance()
-    blockchain_blocks: list[
-        BlockOverview
-    ] | None = await blockchain_instance.overview_blocks(limit_to=5)
+    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
-    blockchain_state: NodeMasterInformation | None = (
-        get_blockchain_instance().get_blockchain_public_state()
-    )
+    if isinstance(blockchain_instance, BlockchainMechanism):
+        blockchain_blocks: list[
+            BlockOverview
+        ] | None = await blockchain_instance.overview_blocks(limit_to=5)
 
-    if blockchain_state is not None:
-        # TODO: Transaction fetching. This may be hard to do.
-        return Blockchain(
-            block=blockchain_blocks, transactions=None, node_info=blockchain_state
+        blockchain_state: NodeMasterInformation | None = (
+            blockchain_instance.get_blockchain_public_state()
         )
+
+        if blockchain_state is not None:
+            # TODO: Transaction fetching. This may be hard to do.
+            return Blockchain(
+                block=blockchain_blocks, transactions=None, node_info=blockchain_state
+            )
 
     raise HTTPException(
         detail="Unable to fetch information for the state of the MASTER node. This is a developer-issue, please report it to them as possible at CodexLink/folioblocks @ Github.",

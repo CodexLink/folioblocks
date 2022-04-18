@@ -155,7 +155,9 @@ class HTTPClient:
                 f"Await-immediate enabled on the following request '{name}' ..."
             )
 
-            request_iterator: int = retry_attempt  # @o Declare here so that, we can break from the inner-while loop (request re-attempt) after executing the outer-while loop (request fetching).
+            request_iterator: int = (
+                retry_attempt - 1
+            )  # @o Declare here so that, we can break from the inner-while loop (request re-attempt) after executing the outer-while loop (request fetching).
             current_iterator: int = 1
             while True:
 

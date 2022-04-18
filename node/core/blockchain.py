@@ -716,6 +716,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"Block {block.id} has been enqueued for appending from the the blockchain after mining."
             )
 
+            print("CHECK PARAMETERS", block, from_origin, master_address_ref)
+
             if (
                 from_origin is SourceNodeOrigin.FROM_MASTER
                 and master_address_ref is not None
@@ -1137,6 +1139,11 @@ class BlockchainMechanism(ConsensusMechanism):
                             ),
                         ),
                     )
+
+                    logger.info(
+                        f"Block {generated_block.id} has been sent and is in process for mining! (By miner node: {available_node_info.miner_address})"
+                    )
+                    continue
 
                 else:
                     logger.warning(

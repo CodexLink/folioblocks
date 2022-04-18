@@ -157,7 +157,7 @@ async def process_hashed_block(
 
     await get_database_instance().execute(update_consensus_negotiation_query)
 
-    if blockchain_current_instance is not None:
+    if isinstance(blockchain_current_instance, BlockchainMechanism):
         # - Insert the block.
         await blockchain_current_instance.insert_mined_block(
             block=context_from_archival_miner.block,
@@ -202,7 +202,7 @@ async def process_hashed_block(
         )
     ],
 )
-async def receive_block_to_mine(
+async def process_raw_block(
     context_from_master: ConsensusFromMasterPayload,
 ) -> Response:
 
@@ -228,7 +228,7 @@ async def receive_block_to_mine(
         # - Enqueue the block from the local instance of blockchain.
         await blockchain_instance.insert_mined_block(
             block=context_from_master.block,
-            from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+            from_origin=SourceNodeOrigin.FROM_MASTER,
             master_address_ref=context_from_master.master_address,
         )
 
