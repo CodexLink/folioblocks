@@ -141,6 +141,58 @@ async def process_hashed_block(
     blockchain_current_instance: BlockchainMechanism | None = get_blockchain_instance()
 
     if isinstance(blockchain_current_instance, BlockchainMechanism):
+
+        block_confirmed: bool = False
+        # - Validate the given block by checking its id and other fields that is outside from the context.
+        for (
+            each_confirming_block
+        ) in blockchain_current_instance.confirming_block_container:
+
+            logger.debug(
+                f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {context_from_archival_miner.block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {context_from_archival_miner.block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
+            )
+
+            if (
+                (
+                    each_confirming_block.id == context_from_archival_miner.block.id
+                    and blockchain_current_instance.cached_block_id
+                    == context_from_archival_miner.block.id
+                )
+                and each_confirming_block.block_size_bytes
+                == context_from_archival_miner.block.block_size_bytes
+                and each_confirming_block.prev_hash_block
+                == context_from_archival_miner.block.prev_hash_block
+                and each_confirming_block.contents.timestamp
+                == context_from_archival_miner.block.contents.timestamp
+            ):
+                blockchain_current_instance.confirming_block_container.remove(
+                    each_confirming_block
+                )  # - Remove from the container as it was already confirmed.
+
+                block_confirmed = True
+                break
+
+            if not block_confirmed:
+                raise HTTPException(
+                    detail="Cannot confirm any confirming blocks from the received mined blocks. This is not possible for this logic condition to be hit. There may be a missing implementation, please report this to the developer.",
+                    status_code=HTTPStatus.NO_CONTENT,
+                )
+
+        # * Regardless of who receives it, append it from their context_from_archival_miner.block.
+        # - For MASTER_NODE, this may be a redundant check, but its fine.
+        if (
+            blockchain_current_instance.cached_block_id
+            != context_from_archival_miner.block.id
+        ):
+            raise HTTPException(
+                detail="The given block seem to be out of sync! This is not possible in terms of implementation, contact the developers to investigate this issue.",
+                status_code=HTTPStatus.NOT_ACCEPTABLE,
+            )
+
+        await blockchain_current_instance._append_block(
+            context=context_from_archival_miner.block
+        )
+
         # - Update the Consensus Negotiation ID.
         update_consensus_negotiation_query: Update = (
             consensus_negotiation.update()
@@ -177,7 +229,7 @@ async def process_hashed_block(
             # ].action = TransactionActions(transaction_context.action)
 
         # - Insert the block.
-        await blockchain_current_instance.mine_store_given_block(
+        await blockchain_current_instance.hashed_then_store_given_block(
             block=context_from_archival_miner.block,
             from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
         )
@@ -244,7 +296,7 @@ async def process_raw_block(
         )
 
         # - Enqueue the block from the local instance of blockchain.
-        await blockchain_instance.mine_store_given_block(
+        await blockchain_instance.hashed_then_store_given_block(
             block=context_from_master.block,
             from_origin=SourceNodeOrigin.FROM_MASTER,
             master_address_ref=context_from_master.master_address,

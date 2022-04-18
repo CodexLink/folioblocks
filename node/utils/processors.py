@@ -737,12 +737,14 @@ async def contact_master_node(*, master_host: str, master_port: int) -> None:
         f"Attempting to contact the {NodeType.MASTER_NODE.name} at host {master_host} in port {master_port} ..."
     )
 
-    master_node_response: ClientResponse = await get_http_client_instance().enqueue_request(
-        url=URLAddress(f"{master_host}:{master_port}/explorer/chain"),
-        method=HTTPQueueMethods.GET,
-        await_result_immediate=True,
-        retry_attempt=99,
-        name="contact_master_node",
+    master_node_response: ClientResponse = (
+        await get_http_client_instance().enqueue_request(
+            url=URLAddress(f"{master_host}:{master_port}/explorer/chain"),
+            method=HTTPQueueMethods.GET,
+            await_result_immediate=True,
+            retry_attempts=99,
+            name="contact_master_node",
+        )
     )
 
     if master_node_response.ok:

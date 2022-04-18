@@ -699,169 +699,127 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Attempt to recognize the action by referring to the instance of the data.
 
-    async def mine_store_given_block(
+    @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
+    async def hashed_then_store_given_block(
         self,
         *,
         block: Block,
         from_origin: SourceNodeOrigin,
         master_address_ref: AddressUUID | None = None,
     ) -> None:
-        if from_origin in SourceNodeOrigin:
             if (
-                from_origin is SourceNodeOrigin.FROM_MASTER
-                and master_address_ref is not None
-                and isinstance(master_address_ref, str)
+                from_origin is not SourceNodeOrigin.FROM_MASTER
+                and (master_address_ref is None
+                or not isinstance(master_address_ref, str))
             ):
-                mined_block: Block | None = await self._miner_block_processor(
-                    block=block, return_hashed=True
-                )
-
-                if not isinstance(mined_block, Block):
-                    logger.info(
-                        f"Block given is {type(mined_block)} This should not occur as a {self.node_role.name}, please contact the developer regarding this issue."
-                    )
-                    return None
-
-                logger.info(
-                    f"Block {block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the {NodeType.MASTER_NODE.name}. Sending back the hashed/mined block."
-                )
-
-                parsed_args: Namespace = get_args_values()
-                master_origin_source_host, master_origin_source_port = (
-                    parsed_args.target_host,
-                    parsed_args.target_port,
-                )
-
-                recorded_consensus_negotiation_query: Select = select(
-                    [consensus_negotiation.c.consensus_negotiation_id]
-                ).where(
-                    (consensus_negotiation.c.block_no_ref == mined_block.id)
-                    & (consensus_negotiation.c.peer_address == master_address_ref)
-                )
-
-                recorded_consensus_negotiation = await self.db_instance.fetch_one(
-                    recorded_consensus_negotiation_query
-                )
-
-                if recorded_consensus_negotiation is not None:
-                    payload_to_master: ClientResponse = await self.http_instance.enqueue_request(
-                        url=URLAddress(
-                            f"{master_origin_source_host}:{master_origin_source_port}/node/blockchain/receive_hashed_block"
-                        ),
-                        method=HTTPQueueMethods.POST,
-                        headers={
-                            "x-certificate-token": await self._get_consensus_certificate(),
-                            "x-token": self.identity[1],
-                        },
-                        data={
-                            "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
-                            "miner_address": self.identity[0],
-                            "block": import_raw_json_to_dict(
-                                export_to_json((mined_block.dict()))
-                            ),
-                        },
-                        retry_attempt=150,
-                        name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
-                    )
-
-                    if payload_to_master.ok:
-                        payload_master_response_ref = ConsensusSuccessPayload(
-                            **await payload_to_master.json()
-                        )
-                        # - Update the Consensus Negotiation ID.
-                        update_completed_consensus_negotiation_query: Update = (
-                            consensus_negotiation.update()
-                            .where(
-                                (
-                                    consensus_negotiation.c.consensus_negotiation_id
-                                    == recorded_consensus_negotiation.consensus_negotiation_id  # type: ignore
-                                )
-                                & (
-                                    consensus_negotiation.c.status
-                                    == ConsensusNegotiationStatus.COMPLETED
-                                )
-                            )
-                            .values(status=ConsensusNegotiationStatus.COMPLETED)
-                        )
-
-                        await get_database_instance().execute(
-                            update_completed_consensus_negotiation_query
-                        )
-
-                        logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
-
-                        # - Sum the mined_timer sleep phase + given random sleep timer.
-                        self.mine_duration += timedelta(
-                            payload_master_response_ref.addon_consensus_sleep_seconds
-                        )
-
-                        # - Run the consensus sleeping phase.
-                        await self._consensus_sleeping_phase()
-
-                    else:
-                        if payload_to_master.status == HTTPStatus.INTERNAL_SERVER_ERROR:
-                            logger.critical(
-                                "There was an error from the server regarding block processing. This is probably a master server-side issue. Please report to the administrator to get this fixed."
-                            )
-                        else:
-                            logger.error(
-                                "There was an unexpected error from keeping this request to be sent or received from other server. This may be an unidentifable cause of an issue. This may stop the service, please try again."
-                            )
-                            return None
-                else:
-                    logger.error(
-                        f"There were no recorded negotiation from the Block ID {block.id} with the peer address {master_address_ref}. This is a developer-issue regarding logic error. Please report to them as possible to fix."
-                    )
-                    return None
-
-            else:  # - Asserts to `NodeSourceOrigin.ARCHIVAL_MINER` with `master_address_ref` is None.
-
-                logger.debug(
-                    f"Confirming Block Container: {self.confirming_block_container}"
-                )
-
-                block_confirmed: bool = False
-                # - Validate the given block by checking its id and other fields that is outside from the context.
-                for each_confirming_block in self.confirming_block_container:
-
-                    logger.debug(
-                        f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {block.contents.timestamp})"
-                    )
-
-                    if (
-                        each_confirming_block.id == block.id
-                        and each_confirming_block.block_size_bytes
-                        == block.block_size_bytes
-                        and each_confirming_block.prev_hash_block
-                        == block.prev_hash_block
-                        and each_confirming_block.contents.timestamp
-                        == block.contents.timestamp
-                    ):
-                        self.confirming_block_container.remove(
-                            each_confirming_block
-                        )  # - Remove from the container as it was already confirmed.
-
-                        block_confirmed = True
-                        break
-
-                if not block_confirmed:
-                    logger.error(
-                        "Cannot confirm any confirming blocks from the received mined blocks. This is not possible for this logic condition to be hit. There may be a missing implementation, please report this to the developer."
-                    )
-                    return None
-
-            # * Regardless of who receives it, append it from their block.
-            # - For MASTER_NODE, this may be a redundant check, but its fine.
-            if self.cached_block_id == block.id:
-                await self._append_block(context=block)
-
+                logger.error(f"The provided value for the parameters seem to be invalid. This is an implementation-error, please contact the administration regarding this issue."
+            )
                 return None
 
-        else:
-            logger.error(
-                f"The provided value for `from_origin` is not a valid enum! Got {from_origin} instead. This is a developer-issue logic error, please report to them this issue as soon as possible."
+            mined_block: Block | None = await self._miner_block_processor(
+                block=block, return_hashed=True
             )
-            return None
+
+            if not isinstance(mined_block, Block):
+                logger.info(
+                    f"Block given is {type(mined_block)} This should not occur as a {self.node_role.name}, please contact the developer regarding this issue."
+                )
+                return None
+
+            logger.info(
+                f"Block {block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the {NodeType.MASTER_NODE.name}. Sending back the hashed/mined block."
+            )
+
+            parsed_args: Namespace = get_args_values()
+            master_origin_source_host, master_origin_source_port = (
+                parsed_args.target_host,
+                parsed_args.target_port,
+            )
+
+            recorded_consensus_negotiation_query: Select = select(
+                [consensus_negotiation.c.consensus_negotiation_id]
+            ).where(
+                (consensus_negotiation.c.block_no_ref == mined_block.id)
+                & (consensus_negotiation.c.peer_address == master_address_ref)
+            )
+
+            recorded_consensus_negotiation = await self.db_instance.fetch_one(
+                recorded_consensus_negotiation_query
+            )
+
+            if recorded_consensus_negotiation is not None:
+                payload_to_master: ClientResponse = await self.http_instance.enqueue_request(
+                    url=URLAddress(
+                        f"{master_origin_source_host}:{master_origin_source_port}/node/blockchain/receive_hashed_block"
+                    ),
+                    method=HTTPQueueMethods.POST,
+                    headers={
+                        "x-certificate-token": await self._get_consensus_certificate(),
+                        "x-token": self.identity[1],
+                    },
+                    data={
+                        "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
+                        "miner_address": self.identity[0],
+                        "block": import_raw_json_to_dict(
+                            export_to_json((mined_block.dict()))
+                        ),
+                    },
+                    retry_attempts=100,
+                    name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
+                )
+
+                if payload_to_master.ok:
+                    payload_master_response_ref = ConsensusSuccessPayload(
+                        **await payload_to_master.json()
+                    )
+                    # - Update the Consensus Negotiation ID.
+                    update_completed_consensus_negotiation_query: Update = (
+                        consensus_negotiation.update()
+                        .where(
+                            (
+                                consensus_negotiation.c.consensus_negotiation_id
+                                == recorded_consensus_negotiation.consensus_negotiation_id  # type: ignore
+                            )
+                            & (
+                                consensus_negotiation.c.status
+                                == ConsensusNegotiationStatus.COMPLETED
+                            )
+                        )
+                        .values(status=ConsensusNegotiationStatus.COMPLETED)
+                    )
+
+                    await get_database_instance().execute(
+                        update_completed_consensus_negotiation_query
+                    )
+
+                    logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
+
+                    # - Sum the mined_timer sleep phase + given random sleep timer.
+                    self.mine_duration += timedelta(
+                        payload_master_response_ref.addon_consensus_sleep_seconds
+                    )
+
+                    # - Run the consensus sleeping phase.
+                    await self._consensus_sleeping_phase()
+
+                else:
+                    if payload_to_master.status == HTTPStatus.INTERNAL_SERVER_ERROR:
+                        logger.critical(
+                            "There was an error from the server regarding block processing. This is probably a master server-side issue. Please report to the administrator to get this fixed."
+                        )
+                    else:
+                        logger.error(
+                            "There was an unexpected error from keeping this request to be sent or received from other server. This may be an unidentifable cause of an issue. This may stop the service, please try again."
+                        )
+                        return None
+            else:
+                logger.error(
+                    f"There were no recorded negotiation from the Block ID {block.id} with the peer address {master_address_ref}. This is a developer-issue regarding logic error. Please report to them as possible to fix."
+                )
+                return None
+
+
+
 
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
@@ -1110,7 +1068,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         "master_address": self.identity[0],
                         "consensus_negotiation_id": generated_consensus_negotiation_id,
                     },
-                    retry_attempt=99,
+                    retry_attempts=100,
                     name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info.miner_address[-6:]}",
                 )
 

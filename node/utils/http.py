@@ -19,6 +19,10 @@ from core.constants import (
     URLAddress,
 )
 from core.constants import AddressUUID
+from node.core.constants import (
+    HTTP_MICRO_SLEEP_TO_FETCH_REQUEST,
+    HTTP_SLEEP_TO_RETRY_SECONDS,
+)
 from utils.exceptions import (
     HTTPClientFeatureUnavailable,
 )
@@ -63,7 +67,7 @@ class HTTPClient:
         await_result_immediate: bool = True,
         do_not_retry: bool = False,
         name: str | None = None,
-        retry_attempt: int = 5,
+        retry_attempts: int = 5,
         use_secure_protocol: bool = False,
     ) -> Any:
         """
@@ -156,14 +160,14 @@ class HTTPClient:
             )
 
             request_iterator: int = (
-                retry_attempt - 1
+                retry_attempts - 1
             )  # @o Declare here so that, we can break from the inner-while loop (request re-attempt) after executing the outer-while loop (request fetching).
             current_iterator: int = 1
             while True:
 
                 # - Wait for a millisecond to process the request.
                 await sleep(
-                    0.2
+                    HTTP_MICRO_SLEEP_TO_FETCH_REQUEST
                 )  # @o Note that this is not a precise since CPU performance differs from every device.
 
                 res_req_equiv = self.get_remaining_responses.get(name, None)
@@ -188,7 +192,7 @@ class HTTPClient:
                         self._queue.append(wrapped_request)
                         request_iterator -= 1
                         current_iterator += 1
-                        await sleep(1.5)
+                        await sleep(HTTP_SLEEP_TO_RETRY_SECONDS)
                         continue
 
                 if request_iterator and not do_not_retry:
