@@ -36,7 +36,7 @@ from core.constants import (
 from core.dependencies import set_master_node_properties
 from blueprint.schemas import (
     AgnosticCredentialValidator,
-    ApplicantUserTransactionInitializer,
+    ApplicantUserTransaction,
     OrganizationIdentityValidator,
 )
 from core.constants import TransactionContextMappingType

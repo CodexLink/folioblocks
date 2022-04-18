@@ -28,8 +28,8 @@ from blueprint.schemas import (
     AgnosticCredentialValidator,
     ApplicantLogTransaction,
     ApplicantProcessTransaction,
+    ApplicantUserBaseTransaction,
     ApplicantUserTransaction,
-    ApplicantUserTransactionInitializer,
     ArchivalMinerNodeInformation,
     Block,
     BlockOverview,
@@ -45,8 +45,8 @@ from blueprint.schemas import (
     NodeSyncTransaction,
     NodeTransaction,
     OrganizationIdentityValidator,
-    OrganizationTransaction,
-    OrganizationTransactionInitializer,
+    OrganizationUserBaseTransaction,
+    OrganizationUserTransaction,
     Transaction,
     TransactionSignatures,
 )
@@ -61,6 +61,7 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from blueprint.schemas import GroupTransaction
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -221,11 +222,7 @@ class BlockchainMechanism(ConsensusMechanism):
         action: TransactionActions,
         from_address: AddressUUID,
         to_address: AddressUUID,
-        data: ApplicantLogTransaction
-        | ApplicantProcessTransaction
-        | ApplicantUserTransactionInitializer
-        | OrganizationTransaction
-        | AdditionalContextTransaction,
+        data: GroupTransaction,
     ) -> bool:
         """
         @o A method that is callable outside scope that can create a transaction as well as the entity from the database, if possible. It handles the content to render from the transaction as this will be used for content viewing later from the frontend.
@@ -246,15 +243,15 @@ class BlockchainMechanism(ConsensusMechanism):
         supported_models: Final[list[Any]] = [
             ApplicantLogTransaction,
             ApplicantProcessTransaction,
-            ApplicantUserTransactionInitializer,
-            OrganizationTransaction,
+            ApplicantUserTransaction,
+            OrganizationUserBaseTransaction,
             AdditionalContextTransaction,
         ]
 
         # - Check if data is a pydantic model instance.
         # @o If data is an `instance` from one of the elements of `supported_structures` AND `action` provided is under the scope of `TransactionActions`. AND `from_address` as well as `to_address` contains something like a string. Proceed.
         if (
-            any(isinstance(data, each_model) for each_model in supported_models)
+            any(isinstance(data.context, each_model) for each_model in supported_models)
             and action in TransactionActions
             and isinstance(from_address, str)
             and isinstance(to_address, str)
@@ -295,7 +292,7 @@ class BlockchainMechanism(ConsensusMechanism):
             ):
 
                 # @o Declared for type-hint. Initialized on some conditions.
-                resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction | None = (
+                resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | None = (
                     None
                 )
                 tx_content_type: TransactionContextMappingType | None = None
@@ -308,7 +305,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.APPLICANT_APPLY,
                     TransactionActions.APPLICANT_APPLY_CONFIRMED,
                     TransactionActions.APPLICANT_APPLY_REJECTED,
-                ] and isinstance(data, ApplicantProcessTransaction):
+                ] and isinstance(data.context, ApplicantProcessTransaction):
 
                     # - Since this was a new entry, we need to do some handling for the database entry.
                     try:
@@ -327,8 +324,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 application_process_query = (
                                     applications.insert().values(
                                         process_id=RandomUUID(token_urlsafe(16)),
-                                        requestor=data.requestor,
-                                        to=data.receiver,
+                                        requestor=data.context.requestor,
+                                        to=data.context.receiver,
                                         state=EmploymentApplicationState.REQUESTED,
                                     )
                                 )
@@ -336,7 +333,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 application_process_query = (
                                     applications.update()
                                     .where(
-                                        applications.c.process_uuid == data.process_id
+                                        applications.c.process_uuid
+                                        == data.context.process_id
                                     )
                                     .values(
                                         state=EmploymentApplicationState.ACCEPTED
@@ -358,15 +356,15 @@ class BlockchainMechanism(ConsensusMechanism):
                         return False
 
                     tx_content_type = TransactionContextMappingType.APPLICANT_LOG
-                    resolved_payload = data
+                    resolved_payload = data.context
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
                 elif action in [
                     TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
                     TransactionActions.ORGANIZATION_USER_REGISTER,
                 ] and (
-                    isinstance(data, ApplicantUserTransactionInitializer)
-                    or isinstance(data, OrganizationTransactionInitializer)
+                    isinstance(data.context, ApplicantUserTransaction)
+                    or isinstance(data.context, OrganizationUserTransaction)
                 ):
                     # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
                     # @d With that, we need to seperate this transaction with `Internal` and `External`.
@@ -387,16 +385,16 @@ class BlockchainMechanism(ConsensusMechanism):
                     existing_association: Mapping | None
 
                     if (
-                        isinstance(data, ApplicantUserTransactionInitializer)
-                        and data.association_address is not None
+                        isinstance(data.context, ApplicantUserTransaction)
+                        and data.context.association_address is not None
                     ):
 
                         validate_user = await validate_user_existence(
                             user_identity=AgnosticCredentialValidator(
-                                first_name=data.first_name,
-                                last_name=data.last_name,
-                                username=data.username,
-                                email=data.email,
+                                first_name=data.context.first_name,
+                                last_name=data.context.last_name,
+                                username=data.context.username,
+                                email=data.context.email,
                             )
                         )
 
@@ -405,9 +403,9 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         existing_association = await validate_organization_existence(
                             org_identity=OrganizationIdentityValidator(
-                                association_address=data.association_address,
-                                association_name=data.association_name,
-                                association_group_type=data.association_group_type,
+                                association_address=data.context.association_address,
+                                association_name=data.context.association_name,
+                                association_group_type=data.context.association_group_type,
                             ),
                             is_org_scope=False,
                         )
@@ -422,14 +420,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     # - For the case of registering with the associate/organization, sometimes user can register with associate/organization reference existing and otherwise. With that, we need to handle the part where if the associate/organization doesn't exist then create a new one. Otherwise, refer its self from that associate/organization and we are good to go.
 
-                    elif isinstance(data, OrganizationTransactionInitializer):
+                    elif isinstance(data.context, OrganizationUserTransaction):
                         # - Validate the existence of the user based on the sensitive information.
                         validate_user = await validate_user_existence(
                             user_identity=AgnosticCredentialValidator(
-                                first_name=data.first_name,
-                                last_name=data.last_name,
-                                username=data.username,
-                                email=data.email,
+                                first_name=data.context.first_name,
+                                last_name=data.context.last_name,
+                                username=data.context.username,
+                                email=data.context.email,
                             )
                         )
 
@@ -439,18 +437,18 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - Validate the existence of an associate/organization.
                         existing_association = await validate_organization_existence(
                             org_identity=OrganizationIdentityValidator(
-                                association_address=data.association_address,
-                                association_name=data.association_name,
-                                association_group_type=data.association_group_type,
+                                association_address=data.context.association_address,
+                                association_name=data.context.association_name,
+                                association_group_type=data.context.association_group_type,
                             ),
                             is_org_scope=True,
                         )
 
                         # - Condition for creating a new associate/organization wherein there's no referrable address.
                         if (
-                            data.association_address is None
-                            and data.association_group_type is not None
-                            and data.association_name is not None
+                            data.context.association_address is None
+                            and data.context.association_group_type is not None
+                            and data.context.association_name is not None
                             and existing_association is None
                         ):
                             generated_address: Final[AddressUUID] = AddressUUID(
@@ -461,24 +459,24 @@ class BlockchainMechanism(ConsensusMechanism):
                             new_association_query: Insert = (
                                 associations.insert().values(
                                     address=generated_address,
-                                    name=data.association_name,
-                                    group=data.association_group_type,
+                                    name=data.context.association_name,
+                                    group=data.context.association_group_type,
                                 )
                             )
                             await self.db_instance.execute(new_association_query)
 
                             # - Assign the generated association address from the context.
                             # @o Since our approach is cascading, we need to assign this `generated_address` instead so that we don't need to do some resolution steps to get the newly inserted association address from the database again.
-                            data.association_address = generated_address
+                            data.context.association_address = generated_address
 
                         # - Condition for assigning a user (that will be generated later) from this address.
                         elif (
-                            data.association_address is not None
-                            and data.association_group_type is None
-                            and data.association_name is None
+                            data.context.association_address is not None
+                            and data.context.association_group_type is None
+                            and data.context.association_name is None
                             and existing_association is not None
                         ):
-                            data.association_address = existing_association.address  # type: ignore
+                            data.context.association_address = existing_association.address  # type: ignore
 
                             if existing_association is not None:
                                 logger.error(
@@ -498,12 +496,12 @@ class BlockchainMechanism(ConsensusMechanism):
                     # @o When all of the checks are done, then create the user.
                     try:
                         insert_user_query: Insert = users.insert().values(
-                            association=data.association_address,
-                            first_name=data.first_name,
-                            last_name=data.last_name,
-                            email=data.email,
-                            username=data.username,
-                            password=hash_context(pwd=RawData(data.password)),
+                            association=data.context.association_address,
+                            first_name=data.context.first_name,
+                            last_name=data.context.last_name,
+                            email=data.context.email,
+                            username=data.context.username,
+                            password=hash_context(pwd=RawData(data.context.password)),
                         )
 
                         await self.db_instance.execute(insert_user_query)
@@ -520,7 +518,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     # ! https://github.com/samuelcolvin/pydantic/issues/1862.
 
                     # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
-                    removed_credentials_context: dict = data.dict(
+                    removed_credentials_context: dict = data.context.dict(
                         exclude={
                             "association_address": True,
                             "association_name": True,
@@ -534,9 +532,11 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     resolved_payload = (
-                        ApplicantUserTransaction(**removed_credentials_context)
-                        if isinstance(data, ApplicantUserTransactionInitializer)
-                        else OrganizationTransaction(**removed_credentials_context)
+                        ApplicantUserBaseTransaction(**removed_credentials_context)
+                        if isinstance(data.context, ApplicantUserTransaction)
+                        else OrganizationUserBaseTransaction(
+                            **removed_credentials_context
+                        )
                     )
 
                 # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
@@ -544,7 +544,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `ApplicantLogTransaction`.
                 elif (
                     action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
-                    and isinstance(data, ApplicantLogTransaction)
+                    and isinstance(data.context, ApplicantLogTransaction)
                 ):
                     if (
                         await validate_transaction_mapping_exists(
@@ -554,7 +554,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         is True
                     ):
 
-                        if isinstance(data.file, UploadFile):
+                        if isinstance(data.context.file, UploadFile):
                             # @o We combine the current time under isoformat string + given filename + referred user address in full length.
 
                             # ! We need to create our own key because we are going to access these files.
@@ -575,10 +575,12 @@ class BlockchainMechanism(ConsensusMechanism):
                             file_encrypter: Fernet = Fernet(encrypter_key)
 
                             async with aopen(
-                                f"../userfiles/{timestamp.isoformat()}{data.file.filename}{to_address}",
+                                f"../userfiles/{timestamp.isoformat()}{data.context.file.filename}{to_address}",
                                 "wb",
                             ) as file_writer:
-                                raw_context: bytes | str = await data.file.read()
+                                raw_context: bytes | str = (
+                                    await data.context.file.read()
+                                )
                                 encrypted_context: bytes = file_encrypter.encrypt(
                                     raw_context.encode("utf-8")
                                     if isinstance(raw_context, str)
@@ -588,8 +590,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 await file_writer.write(encrypted_context)
 
                             # - Since we got the file and encrypted it, get the SHA256 of the payload.
-                            # - And replace it on the field of the `data.file` so that we will get a reference when we refer from it.
-                            data.file = HashUUID(
+                            # - And replace it on the field of the `data.context.file` so that we will get a reference when we refer from it.
+                            data.context.file = HashUUID(
                                 sha256(
                                     raw_context.encode("utf-8")
                                     if isinstance(raw_context, str)
@@ -599,7 +601,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         # - Do the following for all condition.
                         tx_content_type = TransactionContextMappingType.APPLICANT_LOG
-                        resolved_payload = data
+                        resolved_payload = data.context
 
                     else:
                         return False
@@ -609,7 +611,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 elif action in [
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
                     TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
-                ] and isinstance(data, AdditionalContextTransaction):
+                ] and isinstance(data.context, AdditionalContextTransaction):
                     # * Just validate if the specified entity address does exists.
                     if (
                         validate_user_address(supplied_address=AddressUUID(to_address))
@@ -621,7 +623,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             is TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
                             else TransactionContextMappingType.ORGANIZATION_ADDITIONAL
                         )
-                        resolved_payload = data
+                        resolved_payload = data.context
 
                 else:
                     logger.error(
@@ -656,9 +658,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     await self.db_instance.execute(insert_transaction_content_map_query)
 
+                    return True
+
                 else:
                     logger.error(
-                        f"Received a `{transaction_context}` instead of a `{dict}`. This is not what I wanted. From this method, we should be receiving a `dict` instead. Please report this issue to the developer."
+                        f"Received a `{transaction_context}` instead of a `{dict}`. This is not what I wanted. From this method, we should be receiving a `{dict}` instead. Please report this issue to the developer."
                     )
 
                 get_from_address_email_query: Select = select([users.c.email]).where(
@@ -757,7 +761,9 @@ class BlockchainMechanism(ConsensusMechanism):
                         data={
                             "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
                             "miner_address": self.identity[0],
-                            "block": mined_block.json(),
+                            "block": import_raw_json_to_dict(
+                                export_to_json((mined_block.json()))
+                            ),
                         },
                         retry_attempt=150,
                         name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
@@ -1774,8 +1780,8 @@ class BlockchainMechanism(ConsensusMechanism):
         action: TransactionActions,
         payload: ApplicantLogTransaction
         | ApplicantProcessTransaction
-        | ApplicantUserTransaction
-        | OrganizationTransaction
+        | ApplicantUserBaseTransaction
+        | OrganizationUserBaseTransaction
         | AdditionalContextTransaction
         | NodeTransaction,
         from_address: AddressUUID,
@@ -1790,8 +1796,8 @@ class BlockchainMechanism(ConsensusMechanism):
             for context_model_candidates in [
                 ApplicantLogTransaction,
                 ApplicantProcessTransaction,
-                ApplicantUserTransaction,
-                OrganizationTransaction,
+                ApplicantUserBaseTransaction,
+                OrganizationUserBaseTransaction,
                 AdditionalContextTransaction,
                 NodeTransaction,
             ]
@@ -1844,7 +1850,7 @@ class BlockchainMechanism(ConsensusMechanism):
             f"A key has been generated for the following action `{action.name}`. | Info: {encrypter_key.decode('utf-8')}"
         )
 
-        payload_to_encrypt: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction | AdditionalContextTransaction | NodeTransaction = deepcopy(
+        payload_to_encrypt: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | AdditionalContextTransaction | NodeTransaction = deepcopy(
             payload
         )
 

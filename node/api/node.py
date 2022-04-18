@@ -138,26 +138,44 @@ async def process_hashed_block(
     context_from_archival_miner: ConsensusToMasterPayload,
 ) -> ConsensusSuccessPayload:
 
-    # # Ensure that the block we receive is pydantic-compatible, which is going to be inserted from the container.
-
     blockchain_current_instance: BlockchainMechanism | None = get_blockchain_instance()
 
-    # - Update the Consensus Negotiation ID.
-    update_consensus_negotiation_query: Update = (
-        consensus_negotiation.update()
-        .where(
-            (
-                consensus_negotiation.c.consensus_negotiation_id
-                == context_from_archival_miner.consensus_negotiation_id
-            )
-            & (consensus_negotiation.c.status == ConsensusNegotiationStatus.ON_PROGRESS)
-        )
-        .values(status=ConsensusNegotiationStatus.COMPLETED)
-    )
-
-    await get_database_instance().execute(update_consensus_negotiation_query)
-
     if isinstance(blockchain_current_instance, BlockchainMechanism):
+        # - Update the Consensus Negotiation ID.
+        update_consensus_negotiation_query: Update = (
+            consensus_negotiation.update()
+            .where(
+                (
+                    consensus_negotiation.c.consensus_negotiation_id
+                    == context_from_archival_miner.consensus_negotiation_id
+                )
+                & (
+                    consensus_negotiation.c.status
+                    == ConsensusNegotiationStatus.ON_PROGRESS
+                )
+            )
+            .values(status=ConsensusNegotiationStatus.COMPLETED)
+        )
+
+        await get_database_instance().execute(update_consensus_negotiation_query)
+
+        # - Since we lost the identity value of the enums from the fields, we need to re-bind them so that the loaded block from memory has a referrable enum when called.
+        for transaction_idx, transaction_context in enumerate(
+            context_from_archival_miner.block.contents.transactions
+        ):
+
+            # - Resolve `action` field with `TransactionActions`.
+            context_from_archival_miner.block.contents.transactions[
+                transaction_idx
+            ].action = TransactionActions(transaction_context.action)
+
+            # - Resolve the `action` field from the payload.
+
+            # # - Resolve `status` field with `T`
+            # context_from_archival_miner.block.contents.transactions[
+            #     transaction_idx
+            # ].action = TransactionActions(transaction_context.action)
+
         # - Insert the block.
         await blockchain_current_instance.insert_mined_block(
             block=context_from_archival_miner.block,

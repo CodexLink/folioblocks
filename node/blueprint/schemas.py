@@ -39,6 +39,8 @@ from core.constants import (
 from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field, FileUrl
 
+from core.constants import TransactionContextMappingType
+
 # # Dashboard API — START
 
 
@@ -149,7 +151,7 @@ class ApplicantProcessTransaction(BaseModel):
     timestamp: datetime
 
 
-class ApplicantUserTransaction(BaseModel):
+class ApplicantUserBaseTransaction(BaseModel):
     identity: AddressUUID
     institution_ref: AddressUUID
     course: str
@@ -159,13 +161,13 @@ class ApplicantUserTransaction(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
-class ApplicantUserTransactionInitializer(
-    AgnosticTransactionUserCredentials, ApplicantUserTransaction
+class ApplicantUserTransaction(
+    AgnosticTransactionUserCredentials, ApplicantUserBaseTransaction
 ):
     pass
 
 
-class OrganizationTransaction(BaseModel):
+class OrganizationUserBaseTransaction(BaseModel):
     institution_ref: str
     org_type: OrganizationType
     founded: int
@@ -174,8 +176,8 @@ class OrganizationTransaction(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
-class OrganizationTransactionInitializer(
-    AgnosticTransactionUserCredentials, OrganizationTransaction
+class OrganizationUserTransaction(
+    AgnosticTransactionUserCredentials, OrganizationUserBaseTransaction
 ):
     pass
 
@@ -220,9 +222,14 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
     time_delivery: datetime
 
 
+class GroupTransaction(BaseModel):
+    content_type: TransactionContextMappingType
+    context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserTransaction
+
+
 class NodeTransaction(BaseModel):
     action: NodeTransactionInternalActions
-    context: NodeRegisterTransaction | NodeGenesisTransaction | NodeCertificateTransaction | NodeSyncTransaction | NodeConfirmMineConsensusTransaction | NodeMineConsensusSuccessProofTransaction | HashUUID
+    context: HashUUID | NodeCertificateTransaction | NodeConfirmMineConsensusTransaction | NodeGenesisTransaction | NodeMineConsensusSuccessProofTransaction | NodeRegisterTransaction | NodeSyncTransaction
 
 
 class TransactionSignatures(BaseModel):
@@ -235,7 +242,7 @@ class Transaction(BaseModel):
     action: TransactionActions
     from_address: AddressUUID
     to_address: AddressUUID | None
-    payload: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInitializer | NodeTransaction | OrganizationTransaction | AdditionalContextTransaction
+    payload: GroupTransaction | NodeTransaction
     signatures: TransactionSignatures
 
 
@@ -243,7 +250,7 @@ class HashableBlock(BaseModel):
     nonce: int | None
     validator: AddressUUID
     timestamp: datetime
-    transactions: list[Transaction] | None
+    transactions: list[Transaction]
 
 
 class BaseBlock(BaseModel):
