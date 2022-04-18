@@ -712,7 +712,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 and master_address_ref is not None
                 and isinstance(master_address_ref, str)
             ):
-                mined_block: Block | None = await self.miner_block_processor(
+                mined_block: Block | None = await self._miner_block_processor(
                     block=block, return_hashed=True
                 )
 
@@ -1257,10 +1257,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
         generated_block_w_genesis: Block | None = await self._create_block()
 
-        if generated_block_w_genesis is not None:
-            await self._mine_block()
+        if isinstance(generated_block_w_genesis, Block):
+            await self._miner_block_processor(
+                block=generated_block_w_genesis, return_hashed=False
+            )
         else:
-            logger.error("There was an error while generating a genesis block.")
+            logger.critical("There was an error while generating a genesis block.")
 
         return None
 
@@ -1487,7 +1489,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             nth += 1
 
-    async def miner_block_processor(
+    async def _miner_block_processor(
         self, *, block: Block, return_hashed: bool
     ) -> Block | None:
         block_mining_processor = await (
@@ -1497,13 +1499,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 block,
             )
         )
-
         logger.info(f"Block {block.id} has been mined.")
 
-        create_task(
-            self._append_block(context=await block_mining_processor),
-            name=f"block_{block.id}_miner_processor_{self.identity[0][-6:]}",
-        )
+        await self._append_block(context=await block_mining_processor)
 
         return await block_mining_processor if return_hashed else None
 
