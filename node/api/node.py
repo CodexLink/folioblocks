@@ -85,7 +85,7 @@ node_router = APIRouter(
 async def get_node_info() -> NodeInformation:
     blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
-    if blockchain_instance is not None:
+    if isinstance(blockchain_instance, BlockchainMechanism):
         node_state: NodeConsensusInformation = (
             blockchain_instance.get_blockchain_private_state()
         )
@@ -206,27 +206,32 @@ async def receive_block_to_mine(
     context_from_master: ConsensusFromMasterPayload,
 ) -> Response:
 
-    # - Record the Consensus Negotiation ID.
-    save_generated_consensus_negotiation_id_query: Insert = (
-        consensus_negotiation.insert().values(
-            block_no_ref=context_from_master.block.id,
-            consensus_negotiation_id=context_from_master.consensus_negotiation_id,
-            peer_address=context_from_master.master_address,
-            status=ConsensusNegotiationStatus.ON_PROGRESS,
+    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
+
+    if isinstance(blockchain_instance, BlockchainMechanism):
+        # - Record the Consensus Negotiation ID.
+        save_generated_consensus_negotiation_id_query: Insert = (
+            consensus_negotiation.insert().values(
+                block_no_ref=context_from_master.block.id,
+                consensus_negotiation_id=context_from_master.consensus_negotiation_id,
+                peer_address=context_from_master.master_address,
+                status=ConsensusNegotiationStatus.ON_PROGRESS,
+            )
         )
-    )
-    await get_database_instance().execute(save_generated_consensus_negotiation_id_query)
-    logger.info(
-        f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
-    )
+        await get_database_instance().execute(save_generated_consensus_negotiation_id_query)
+        logger.info(
+            f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
+        )
 
-    # - Enqueue the block from the local instance of blockchain.
-    await get_blockchain_instance().insert_mined_block(
-        block=context_from_master.block,
-        from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
-    )
+        # - Enqueue the block from the local instance of blockchain.
+        await blockchain_instance.insert_mined_block(
+            block=context_from_master.block,
+            from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+        )
 
-    return Response(status_code=HTTPStatus.ACCEPTED)
+        return Response(status_code=HTTPStatus.ACCEPTED)
+
+    return Response(status_code=HTTPStatus.SERVICE_UNAVAILABLE)
 
 
 @node_router.post(
@@ -360,7 +365,7 @@ async def acknowledge_as_response(
                         get_blockchain_instance()
                     )
 
-                    if blockchain_instance is not None:
+                    if isinstance(blockchain_instance, BlockchainMechanism):
                         await blockchain_instance._insert_internal_transaction(
                             action=TransactionActions.NODE_GENERAL_CONSENSUS_INIT,
                             data=NodeTransaction(
@@ -403,25 +408,31 @@ async def acknowledge_as_response(
     ],
 )
 async def request_blockchain_upstream() -> JSONResponse:
-    blockchain_instance: BlockchainMechanism = get_blockchain_instance()
+    blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
-    await blockchain_instance._insert_internal_transaction(
-        action=TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC,
-        data=NodeTransaction(
-            action=NodeTransactionInternalActions.SYNC,
-            context=NodeSyncTransaction(
-                requestor_address=AddressUUID(blockchain_instance.identity[0]),
-                timestamp=datetime.now(),
+    if isinstance(blockchain_instance, BlockchainMechanism):
+        await blockchain_instance._insert_internal_transaction(
+            action=TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC,
+            data=NodeTransaction(
+                action=NodeTransactionInternalActions.SYNC,
+                context=NodeSyncTransaction(
+                    requestor_address=AddressUUID(blockchain_instance.identity[0]),
+                    timestamp=datetime.now(),
+                ),
             ),
-        ),
-    )
+        )
 
-    return JSONResponse(
-        content={
-            "current_hash": await blockchain_instance.get_chain_hash(),
-            "content": await blockchain_instance.get_chain(),
-        },
-        status_code=HTTPStatus.OK,
+        return JSONResponse(
+            content={
+                "current_hash": await blockchain_instance.get_chain_hash(),
+                "content": await blockchain_instance.get_chain(),
+            },
+            status_code=HTTPStatus.OK,
+        )
+
+    raise HTTPException(
+        detail="Cannot request for upstream when the blockchain instance has not bee initialized or is not yet ready.",
+        status_code=HTTPStatus.NOT_ACCEPTABLE,
     )
 
 
@@ -446,7 +457,7 @@ async def verify_given_hash(
     blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
     is_hash_equal: bool = False
 
-    if blockchain_instance is not None:
+    if isinstance(blockchain_instance, BlockchainMechanism):
         is_hash_equal = await blockchain_instance.get_chain_hash() == x_hash
 
     return Response(

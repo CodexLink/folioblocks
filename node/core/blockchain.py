@@ -197,7 +197,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         else:
             if self.identity is not None:
-                existing_certificate = await self._get_own_certificate()
+                existing_certificate = await self._get_consensus_certificate()
 
                 if not existing_certificate:
                     logger.warning(
@@ -745,11 +745,11 @@ class BlockchainMechanism(ConsensusMechanism):
                 if recorded_consensus_negotiation is not None:
                     payload_to_master = await self.http_instance.enqueue_request(
                         url=URLAddress(
-                            f"{master_origin_source_host}:{master_origin_source_port}/receive_hashed_block"
+                            f"{master_origin_source_host}:{master_origin_source_port}/node/blockchain/receive_hashed_block"
                         ),
                         method=HTTPQueueMethods.POST,
                         headers={
-                            "x-certificate-token": await self._get_own_certificate(),
+                            "x-certificate-token": await self._get_consensus_certificate(),
                             "x-token": self.identity[1],
                         },
                         data={
@@ -969,6 +969,10 @@ class BlockchainMechanism(ConsensusMechanism):
             # @o As per the approach indicated from the `self._process_serialize_to_blockchain_file`. We are going to do this in descending form.
 
             if len(block_context["contents"]["transactions"]):
+
+                # # Iteration method is the same as from the method `self._process_deserialize_to_load_blockchain_in_memory'.
+                # @o I cannot DRY this one out due to its nature of the condition.
+                # @o Also to reduce the fatigue of going through method after method, I will retain this one since it is confusing to read, it needs the context as a whole or otherwise it will be disregarded.
                 for transaction_idx, transaction_data in enumerate(
                     block_context["contents"]["transactions"]
                 ):
@@ -1081,17 +1085,22 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 attempt_deliver_payload = await self.http_instance.enqueue_request(
                     url=URLAddress(
-                        f"{available_node_info.source_host}:{available_node_info.source_port}/blockchain/receive_raw_block"
+                        f"{available_node_info.source_host}:{available_node_info.source_port}/node/blockchain/receive_raw_block"
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     headers={
-                        "x-certificate-token": await self._get_own_certificate(),
+                        "x-certificate-token": await self._get_consensus_certificate(
+                            address_ref=available_node_info.miner_address
+                        ),
                         "x-hash": await self.get_chain_hash(),
                         "x-token": self.identity[1],
                     },
                     data={
-                        "block": generated_block.json(),
+                        # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
+                        "block": import_raw_json_to_dict(
+                            export_to_json(generated_block.dict())
+                        ),
                         "master_address": self.identity[0],
                         "consensus_negotiation": generated_consensus_negotiation_id,
                     },
@@ -1121,7 +1130,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         data=NodeTransaction(
                             action=NodeTransactionInternalActions.CONSENSUS,
                             context=NodeConfirmMineConsensusTransaction(
-                                candidate_no=available_node_info.candidate_no,
                                 consensus_negotiation_id=RandomUUID(
                                     generated_consensus_negotiation_id
                                 ),
@@ -1339,18 +1347,19 @@ class BlockchainMechanism(ConsensusMechanism):
 
         logger.warning("There's no block inside blockchain.")
 
-    async def _get_own_certificate(self) -> str | None:
-        if self.node_role is NodeType.ARCHIVAL_MINER_NODE:
-            find_existing_certificate_query = select(
-                [associated_nodes.c.certificate]
-            ).where(associated_nodes.c.user_address == self.identity[0])
+    async def _get_consensus_certificate(
+        self, *, address_ref: AddressUUID | None = None
+    ) -> str:
 
-            return await self.db_instance.fetch_val(find_existing_certificate_query)
-
-        logger.error(
-            f"You cannot fetch your own certificate as a {NodeType.MASTER_NODE.name}!"
+        resolved_address: AddressUUID = (
+            self.identity[0] if address_ref is None else address_ref
         )
-        return None
+
+        find_existing_certificate_query = select(
+            [associated_nodes.c.certificate]
+        ).where(associated_nodes.c.user_address == resolved_address)
+
+        return await self.db_instance.fetch_val(find_existing_certificate_query)
 
     def _get_sizeof(self, *, block: Block) -> int | None:
         return asizeof(block)
@@ -1589,6 +1598,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - Check if there's a transaction first.
                 if len(context["chain"][block_idx]["contents"]["transactions"]):
 
+                    # # Iteration method is the same as from the method `self._append_block'. Refer to that method for more information on why I can't DRY this.
                     for transaction_idx, each_transaction in enumerate(
                         block_data["contents"]["transactions"]
                     ):
@@ -1673,16 +1683,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 if genesis_transaction_identifier and required_genesis_blocks:
                     required_genesis_blocks -= 1
-
-            print(
-                "DEBUG SWITCH ON LOAD",
-                required_genesis_blocks,
-                self.node_role is NodeType.MASTER_NODE,
-                self.new_master_instance,
-                required_genesis_blocks
-                and self.node_role is NodeType.MASTER_NODE
-                and not self.new_master_instance,
-            )
 
             if (
                 required_genesis_blocks
@@ -1834,7 +1834,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         encrypter_payload: Fernet = Fernet(encrypter_key)
         logger.debug(
-            f"A key has been generated for the following action `{action}`. | Info: {encrypter_key.decode('utf-8')}"
+            f"A key has been generated for the following action `{action.name}`. | Info: {encrypter_key.decode('utf-8')}"
         )
 
         payload_to_encrypt: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | OrganizationTransaction | AdditionalContextTransaction | NodeTransaction = deepcopy(
@@ -1947,7 +1947,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 await_result_immediate=True,
                 headers={
                     "x-token": self.identity[1],
-                    "x-certificate-token": await self._get_own_certificate(),
+                    "x-certificate-token": await self._get_consensus_certificate(),
                     "x-hash": await self.get_chain_hash(),
                 },
                 do_not_retry=True,
@@ -1964,7 +1964,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     await_result_immediate=True,
                     headers={
                         "x-token": self.identity[1],
-                        "x-certificate-token": await self._get_own_certificate(),
+                        "x-certificate-token": await self._get_consensus_certificate(),
                     },
                     name="fetch_upstream_from_master_node",
                 )

@@ -260,7 +260,7 @@ async def terminate() -> None:
             should_destroy=True
         )  # * Shutdown the HTTP client module.
 
-    # if blockchain_instance is not None:
+    # if isinstance(blockchain_instance, BlockchainMechanism):
     #     await wait(
     #         {create_task(blockchain_instance.close())}
     #     )  # * Shutdown the blockchain instance. We really need to finish this off before doing anything else.
@@ -293,7 +293,9 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
             (tokens.c.state != TokenStatus.EXPIRED)
             & (tokens.c.expiration.isnot(None))  # type: ignore
         )
-        tokens_available: list[Mapping] = await get_database_instance().fetch_all(token_query)
+        tokens_available: list[Mapping] = await get_database_instance().fetch_all(
+            token_query
+        )
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")

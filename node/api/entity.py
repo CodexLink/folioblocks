@@ -172,7 +172,7 @@ async def register_entity(
             # - After that, record this transaction from the blockchain.
             # @o This callback in particular is not part of the consolidated internal transactions declared from the `dependencies.py` under < class 'EnsureAuthorized'>
             # ! That is due to its several previous variables were used.
-            if blockchain_instance is not None:
+            if isinstance(blockchain_instance, BlockchainMechanism):
                 if (
                     UserEntity(auth_token.account_type) is UserEntity.MASTER_NODE_USER
                     or UserEntity(auth_token.account_type)
