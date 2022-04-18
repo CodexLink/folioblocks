@@ -1146,7 +1146,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self, *, mining_duration: int | float, add_on: bool
     ) -> None:
 
-        if not self.is_blockchain_ready and not self.new_master_instance:
+        if not self.new_master_instance:
 
             if add_on:
                 self.mine_duration += timedelta(seconds=mining_duration)
@@ -1567,9 +1567,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Blockchain's file signature has been changed! | Current Hash: {new_blockchain_hash}"
                     )
                 else:
-                    logger.warning(
-                        "Bypass from the update method has been imposed. Attempting to insert data ..."
-                    )
+                    logger.warning("Bypass from the update method has been declared.")
                     await self._update_chain_hash(new_hash=context_from_update[0])
                     await content_buffer.write(context_from_update[1])
 
