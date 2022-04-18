@@ -594,15 +594,15 @@ def get_totp_instance() -> PasscodeTOTP | None:
                 interval=TOTP_PASSCODE_REFRESH_INTERVAL,
                 issuer=identity_tokens[0],
             )
+            return totp_instance
 
-    elif totp_instance is None:
+    elif totp_instance is None or identity is None:
         logger.error(
-            f"The environment key `AUTH_KEY` or `SECRET_KEY` is missing! Call this function when those fields exists from the `{AUTH_ENV_FILE_NAME}` file."
+            f"The environment file `{AUTH_ENV_FILE_NAME}` doesn't contain the following key `AUTH_KEY` or `SECRET_KEY`. Is the this node instance initializing? Please wait and try again."
         )
         return None
 
-    else:
-        return totp_instance
+    return totp_instance
 
 
 # # Passcode Generators — END

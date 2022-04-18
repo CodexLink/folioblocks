@@ -9,6 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 
+from asyncio import create_task
 from datetime import datetime
 from http import HTTPStatus
 from logging import Logger, getLogger
@@ -189,10 +190,6 @@ async def process_hashed_block(
                 status_code=HTTPStatus.NOT_ACCEPTABLE,
             )
 
-        await blockchain_current_instance._append_block(
-            context=context_from_archival_miner.block
-        )
-
         # - Update the Consensus Negotiation ID.
         update_consensus_negotiation_query: Update = (
             consensus_negotiation.update()
@@ -229,9 +226,8 @@ async def process_hashed_block(
             # ].action = TransactionActions(transaction_context.action)
 
         # - Insert the block.
-        await blockchain_current_instance.hashed_then_store_given_block(
-            block=context_from_archival_miner.block,
-            from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
+        await blockchain_current_instance._append_block(
+            context=context_from_archival_miner.block
         )
 
         # - Insert an internal transaction.
@@ -296,10 +292,13 @@ async def process_raw_block(
         )
 
         # - Enqueue the block from the local instance of blockchain.
-        await blockchain_instance.hashed_then_store_given_block(
-            block=context_from_master.block,
-            from_origin=SourceNodeOrigin.FROM_MASTER,
-            master_address_ref=context_from_master.master_address,
+        create_task(
+            blockchain_instance.hashed_then_store_given_block(
+                block=context_from_master.block,
+                from_origin=SourceNodeOrigin.FROM_MASTER,
+                master_address_ref=context_from_master.master_address,
+            ),
+            name=f"hash_given_block_from_master_{context_from_master.master_address[-6:]}",
         )
 
         return Response(status_code=HTTPStatus.ACCEPTED)
