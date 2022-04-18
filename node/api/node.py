@@ -292,13 +292,11 @@ async def process_raw_block(
         )
 
         # - Enqueue the block from the local instance of blockchain.
-        create_task(
-            blockchain_instance.hashed_then_store_given_block(
-                block=context_from_master.block,
-                from_origin=SourceNodeOrigin.FROM_MASTER,
-                master_address_ref=context_from_master.master_address,
-            ),
-            name=f"hash_given_block_from_master_{context_from_master.master_address[-6:]}",
+
+        await blockchain_instance.hashed_then_store_given_block(
+            block=context_from_master.block,
+            from_origin=SourceNodeOrigin.FROM_MASTER,
+            master_address_ref=context_from_master.master_address,
         )
 
         return Response(status_code=HTTPStatus.ACCEPTED)

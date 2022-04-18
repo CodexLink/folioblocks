@@ -968,7 +968,7 @@ class BlockchainMechanism(ConsensusMechanism):
             await self._process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
-            logger.info(f"Block {context.id} has been appended from the blockchain!")
+            logger.info(f"Block #{context.id} has been appended from the blockchain!")
 
         else:
             unconventional_terminate(

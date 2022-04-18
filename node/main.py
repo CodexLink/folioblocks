@@ -251,6 +251,7 @@ async def terminate() -> None:
                     f"{parsed_args.target_host}:{parsed_args.target_port}/entity/logout"
                 ),
                 method=HTTPQueueMethods.POST,
+                retry_attempts=5,
                 headers={"X-Token": JWTToken(identity_tokens[1])},
                 name=f"request_logout_node_as_{parsed_args.node_role.name.lower()}",
             )
