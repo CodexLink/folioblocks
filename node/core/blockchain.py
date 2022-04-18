@@ -707,27 +707,25 @@ class BlockchainMechanism(ConsensusMechanism):
         master_address_ref: AddressUUID | None = None,
     ) -> None:
         if from_origin in SourceNodeOrigin:
-            block_mining_processor = await (
-                get_event_loop().run_in_executor(
-                    None,
-                    self._mine_block,
-                    block,
-                )
-            )
-            mined_block: Block = await block_mining_processor
-
-            await self._append_block(context=mined_block)
-            logger.info(
-                f"Block {block.id} has been enqueued for appending from the the blockchain after mining."
-            )
-
-            print("CHECK PARAMETERS", block, from_origin, master_address_ref)
-
             if (
                 from_origin is SourceNodeOrigin.FROM_MASTER
                 and master_address_ref is not None
                 and isinstance(master_address_ref, str)
             ):
+                block_mining_processor = await (
+                    get_event_loop().run_in_executor(
+                        None,
+                        self._mine_block,
+                        block,
+                    )
+                )
+                mined_block: Block = await block_mining_processor
+
+                await self._append_block(context=mined_block)
+                logger.info(f"Block {block.id} has been mined.")
+
+                print("CHECK PARAMETERS", block, from_origin, master_address_ref)
+
                 logger.info(
                     f"Block {block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the {NodeType.MASTER_NODE.name}. Sending back the hashed/mined block."
                 )
@@ -794,7 +792,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             update_completed_consensus_negotiation_query
                         )
 
-                        logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED}!")  # type: ignore
+                        logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
 
                         # - Sum the mined_timer sleep phase + given random sleep timer.
                         self.mine_duration += timedelta(
@@ -827,17 +825,17 @@ class BlockchainMechanism(ConsensusMechanism):
                 for each_confirming_block in self.confirming_block_container:
 
                     logger.debug(
-                        f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {mined_block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {mined_block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {mined_block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {mined_block.contents.timestamp})"
+                        f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {block.contents.timestamp})"
                     )
 
                     if (
-                        each_confirming_block.id == mined_block.id
+                        each_confirming_block.id == block.id
                         and each_confirming_block.block_size_bytes
-                        == mined_block.block_size_bytes
+                        == block.block_size_bytes
                         and each_confirming_block.prev_hash_block
-                        == mined_block.prev_hash_block
+                        == block.prev_hash_block
                         and each_confirming_block.contents.timestamp
-                        == mined_block.contents.timestamp
+                        == block.contents.timestamp
                     ):
                         self.confirming_block_container.remove(
                             each_confirming_block
@@ -854,8 +852,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
             # * Regardless of who receives it, append it from their block.
             # - For MASTER_NODE, this may be a redundant check, but its fine.
-            if self.cached_block_id == mined_block.id:
-                await self._append_block(context=mined_block)
+            if self.cached_block_id == block.id:
+                await self._append_block(context=block)
 
                 return None
 
@@ -1911,7 +1909,7 @@ class BlockchainMechanism(ConsensusMechanism):
         # @o Append this and we are good to go!
         self.transaction_container.append(built_internal_transaction)
         logger.info(
-            f"Transaction `{built_internal_transaction.tx_hash}` has been created and is on-queue for block generation!"
+            f"Transaction `{built_internal_transaction.tx_hash}` has been created and is on-queue for new blocks!"
         )
 
         # - For user-based transactions, the method 'self.insert_external_transaction' waits for this method to finish for its transaction to get mapped from the blockchain. With that, let's return necessary contents.

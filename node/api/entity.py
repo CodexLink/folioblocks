@@ -185,7 +185,7 @@ async def register_entity(
                             action=NodeTransactionInternalActions.INIT,
                             context=NodeRegisterTransaction(
                                 acceptor_address=AddressUUID(
-                                    tokens[1]
+                                    tokens[0]
                                     if tokens is not None
                                     else check_auth_from_new_master_email
                                 ),
