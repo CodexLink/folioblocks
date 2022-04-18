@@ -177,7 +177,7 @@ async def process_hashed_block(
             # ].action = TransactionActions(transaction_context.action)
 
         # - Insert the block.
-        await blockchain_current_instance.insert_mined_block(
+        await blockchain_current_instance.mine_store_given_block(
             block=context_from_archival_miner.block,
             from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,
         )
@@ -244,7 +244,7 @@ async def process_raw_block(
         )
 
         # - Enqueue the block from the local instance of blockchain.
-        await blockchain_instance.insert_mined_block(
+        await blockchain_instance.mine_store_given_block(
             block=context_from_master.block,
             from_origin=SourceNodeOrigin.FROM_MASTER,
             master_address_ref=context_from_master.master_address,

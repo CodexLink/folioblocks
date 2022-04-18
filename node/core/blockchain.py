@@ -699,7 +699,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Attempt to recognize the action by referring to the instance of the data.
 
-    async def insert_mined_block(
+    async def mine_store_given_block(
         self,
         *,
         block: Block,
@@ -712,19 +712,15 @@ class BlockchainMechanism(ConsensusMechanism):
                 and master_address_ref is not None
                 and isinstance(master_address_ref, str)
             ):
-                block_mining_processor = await (
-                    get_event_loop().run_in_executor(
-                        None,
-                        self._mine_block,
-                        block,
-                    )
+                mined_block: Block | None = await self.miner_block_processor(
+                    block=block, return_hashed=True
                 )
-                mined_block: Block = await block_mining_processor
 
-                await self._append_block(context=mined_block)
-                logger.info(f"Block {block.id} has been mined.")
-
-                print("CHECK PARAMETERS", block, from_origin, master_address_ref)
+                if not isinstance(mined_block, Block):
+                    logger.info(
+                        f"Block given is {type(mined_block)} This should not occur as a {self.node_role.name}, please contact the developer regarding this issue."
+                    )
+                    return None
 
                 logger.info(
                     f"Block {block.id} is detected as a payload delivery for the consensus of being selected with the condition of sleep expiration. (Proof-of-Elapsed-Time) from the {NodeType.MASTER_NODE.name}. Sending back the hashed/mined block."
@@ -1262,10 +1258,7 @@ class BlockchainMechanism(ConsensusMechanism):
         generated_block_w_genesis: Block | None = await self._create_block()
 
         if generated_block_w_genesis is not None:
-            await self.insert_mined_block(
-                from_origin=SourceNodeOrigin.FROM_ARCHIVAL_MINER,  # * Fake it.
-                block=generated_block_w_genesis,
-            )
+            await self._mine_block()
         else:
             logger.error("There was an error while generating a genesis block.")
 
@@ -1493,6 +1486,26 @@ class BlockchainMechanism(ConsensusMechanism):
                 return block
 
             nth += 1
+
+    async def miner_block_processor(
+        self, *, block: Block, return_hashed: bool
+    ) -> Block | None:
+        block_mining_processor = await (
+            get_event_loop().run_in_executor(
+                None,
+                self._mine_block,
+                block,
+            )
+        )
+
+        logger.info(f"Block {block.id} has been mined.")
+
+        create_task(
+            self._append_block(context=await block_mining_processor),
+            name=f"block_{block.id}_miner_processor_{self.identity[0][-6:]}",
+        )
+
+        return await block_mining_processor if return_hashed else None
 
     async def _process_block_transactions(
         self,
