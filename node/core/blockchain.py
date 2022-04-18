@@ -826,9 +826,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
                     "miner_address": self.identity[0],
                     "block": import_raw_json_to_dict(
-                        export_to_json((mined_block.dict()))
+                        export_to_json(mined_block.dict())
                     ),
-                    "consensus_sleep_expiration": self.consensus_sleep_date_expiration,
+                    "consensus_sleep_expiration": self.consensus_sleep_date_expiration.isoformat(),
                 },
                 retry_attempts=100,
                 name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
