@@ -293,10 +293,13 @@ async def process_raw_block(
 
         # - Enqueue the block from the local instance of blockchain.
 
-        await blockchain_instance.hashed_then_store_given_block(
-            block=context_from_master.block,
-            from_origin=SourceNodeOrigin.FROM_MASTER,
-            master_address_ref=context_from_master.master_address,
+        create_task(
+            blockchain_instance.mine_and_store_given_block(
+                block=context_from_master.block,
+                from_origin=SourceNodeOrigin.FROM_MASTER,
+                master_address_ref=context_from_master.master_address,
+            ),
+            name=f"hash_given_block_from_master_{context_from_master.master_address[-6:]}",
         )
 
         return Response(status_code=HTTPStatus.ACCEPTED)
@@ -315,7 +318,7 @@ async def process_raw_block(
         )
     ],
 )
-async def recieve_action_from_dashboard() -> None:
+async def receive_action_from_dashboard() -> None:
     # - Identify the type of the transaction.
     # - If there's a file, process it under, files.
     # - Encrypt it via AES from the generated file. (Code should be derived from the existing Fernet() or should we create another one? [such as, AUTH (mid 16 characters) of master + sender ]) and make the filename as UUID with datetime with no extensions.

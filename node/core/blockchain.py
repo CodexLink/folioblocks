@@ -63,6 +63,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from blueprint.schemas import GroupTransaction
+from node.core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -131,19 +132,17 @@ class BlockchainMechanism(ConsensusMechanism):
         node_role: NodeType,
     ) -> None:
 
-        # # Required Variables for the Blockchain Operaetion.
-        self.node_role: NodeType = node_role
-        self.auth_token: IdentityTokens = auth_tokens
-
-        self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.mine_duration: timedelta = timedelta()
-        self.consensus_timer_expiration: datetime = datetime.now()
-
         # # Containers
         self.transaction_container: list[Transaction] = []
-        self.hashed_block_container: list[Block] = []
+        self.already_hashed_block_container: list[Block] = []
         self.confirming_block_container: list[Block] = []
         self.unsent_block_container: list[Block] = []
+
+        # # Counters
+        self.cached_block_id: int = (
+            1  # * The current ID of the block to be rendered from the blockchain.
+        )
+        self.cached_total_transactions: int = 0
 
         # # Instances
         self.db_instance: Final[Database] = get_database_instance()
@@ -151,14 +150,20 @@ class BlockchainMechanism(ConsensusMechanism):
         self.email_service: EmailService = get_email_instance()
         self.identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
+        # # Required Variables for the Blockchain Operaetion.
+        self.node_role: NodeType = node_role
+        self.auth_token: IdentityTokens = auth_tokens
+
+        # # Timer Containers
+        self.block_timer_seconds: Final[int] = block_timer_seconds
+        self.mine_duration: timedelta = timedelta()
+        self.consensus_timer_expiration: datetime = datetime.now()
+
         # # State and Variable References
         self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
-        self.cached_block_id: int = (
-            1  # * The current ID of the block to be rendered from the blockchain.
-        )
-        self.cached_total_transactions: int = 0
         self.new_master_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
         self.node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
+        self.mine_ready: bool = False  # * A bool propery that allows the `NodeType.ARCHIVAL_MINER_NODE` to mine the given block. This allows other methods to work at something before getting deadlocking the instance.
         self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
 
         super().__init__(role=node_role)
@@ -699,8 +704,62 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Attempt to recognize the action by referring to the instance of the data.
 
+    @ensure_blockchain_ready()
+    def get_blockchain_public_state(self) -> NodeMasterInformation | None:
+        if self.node_role is NodeType.MASTER_NODE:
+
+            # # This may not be okay.
+            return NodeMasterInformation(
+                chain_block_timer=self.block_timer_seconds,
+                total_blocks=len(self._chain["chain"])
+                if self._chain is not None
+                else 0,
+                total_transactions=self.cached_total_transactions,
+            )
+        logger.warning(
+            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
+        )
+        return None
+
+    @ensure_blockchain_ready()
+    def get_blockchain_private_state(self) -> NodeConsensusInformation:
+        last_block: Block | None = self._get_last_block()
+
+        return NodeConsensusInformation(
+            consensus_timer_expiration=self.consensus_timer_expiration,
+            is_mining=not self.is_blockchain_ready,
+            is_sleeping=self.is_node_ready,
+            last_mined_block=last_block.id if last_block is not None else 0,
+            node_role=self.role,
+            owner=self.auth_token[0],
+        )
+
+    async def get_chain_hash(self) -> HashUUID:
+        fetch_chain_hash_query = select([file_signatures.c.hash_signature]).where(
+            file_signatures.c.filename == BLOCKCHAIN_NAME
+        )
+
+        return HashUUID(await self.db_instance.fetch_val(fetch_chain_hash_query))
+
+    async def get_chain(self) -> str:
+        # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
+
+        # Adjust function for forcing to save new data when fetched.
+        async with aopen(BLOCKCHAIN_NAME, "r") as chain_reader:
+            data: str = await chain_reader.read()
+
+        return data
+
+    @property
+    def is_blockchain_ready(self) -> bool:
+        return self.blockchain_ready
+
+    @property
+    def is_node_ready(self) -> bool:
+        return self.node_ready and self.is_blockchain_ready
+
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
-    async def hashed_then_store_given_block(
+    async def mine_and_store_given_block(
         self,
         *,
         block: Block,
@@ -714,6 +773,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"The provided value for the parameters seem to be invalid. This is an implementation-error, please contact the administration regarding this issue."
             )
             return None
+
+        logger.warning(f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to consume all necessary requests from the {NodeType.MASTER_NODE} API-side before deadlocking-self to mine the block.")
+        await sleep(BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER)
 
         mined_block: Block | None = await self._miner_block_processor(
             block=block, return_hashed=True
@@ -816,60 +878,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"There were no recorded negotiation from the Block ID {block.id} with the peer address {master_address_ref}. This is a developer-issue regarding logic error. Please report to them as possible to fix."
             )
             return None
-
-    @ensure_blockchain_ready()
-    def get_blockchain_public_state(self) -> NodeMasterInformation | None:
-        if self.node_role is NodeType.MASTER_NODE:
-
-            # # This may not be okay.
-            return NodeMasterInformation(
-                chain_block_timer=self.block_timer_seconds,
-                total_blocks=len(self._chain["chain"])
-                if self._chain is not None
-                else 0,
-                total_transactions=self.cached_total_transactions,
-            )
-        logger.warning(
-            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
-        )
-        return None
-
-    @ensure_blockchain_ready()
-    def get_blockchain_private_state(self) -> NodeConsensusInformation:
-        last_block: Block | None = self._get_last_block()
-
-        return NodeConsensusInformation(
-            consensus_timer_expiration=self.consensus_timer_expiration,
-            is_mining=not self.is_blockchain_ready,
-            is_sleeping=self.is_node_ready,
-            last_mined_block=last_block.id if last_block is not None else 0,
-            node_role=self.role,
-            owner=self.auth_token[0],
-        )
-
-    async def get_chain_hash(self) -> HashUUID:
-        fetch_chain_hash_query = select([file_signatures.c.hash_signature]).where(
-            file_signatures.c.filename == BLOCKCHAIN_NAME
-        )
-
-        return HashUUID(await self.db_instance.fetch_val(fetch_chain_hash_query))
-
-    async def get_chain(self) -> str:
-        # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
-
-        # Adjust function for forcing to save new data when fetched.
-        async with aopen(BLOCKCHAIN_NAME, "r") as chain_reader:
-            data: str = await chain_reader.read()
-
-        return data
-
-    @property
-    def is_blockchain_ready(self) -> bool:
-        return self.blockchain_ready
-
-    @property
-    def is_node_ready(self) -> bool:
-        return self.node_ready and self.is_blockchain_ready
 
     @ensure_blockchain_ready()
     async def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
