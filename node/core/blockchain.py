@@ -1499,11 +1499,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 block,
             )
         )
+
+        mined_block: Block = await block_mining_processor
+
         logger.info(f"Block {block.id} has been mined.")
+        await self._append_block(context=mined_block)
 
-        await self._append_block(context=await block_mining_processor)
-
-        return await block_mining_processor if return_hashed else None
+        return mined_block if return_hashed else None
 
     async def _process_block_transactions(
         self,
