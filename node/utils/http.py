@@ -156,6 +156,7 @@ class HTTPClient:
             )
 
             request_iterator: int = retry_attempt  # @o Declare here so that, we can break from the inner-while loop (request re-attempt) after executing the outer-while loop (request fetching).
+            current_iterator: int = 1
             while True:
 
                 # - Wait for a millisecond to process the request.
@@ -166,7 +167,7 @@ class HTTPClient:
                 res_req_equiv = self.get_remaining_responses.get(name, None)
 
                 logger.debug(
-                    f"Attempt #{request_iterator} | Fetching response named as `{name}` ..."
+                    f"Attempt #{current_iterator} | Fetching response named as `{name}` ..."
                 )
 
                 if res_req_equiv is not None and request_iterator:
@@ -179,17 +180,18 @@ class HTTPClient:
 
                     if not do_not_retry:
                         logger.warning(
-                            f"Attempt #{request_iterator} | Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
+                            f"Attempt #{current_iterator} | Seems like the following request {wrapped_request.name} has failed or contains nothing. Retrying ... "
                         )
 
                         self._queue.append(wrapped_request)
                         request_iterator -= 1
+                        current_iterator += 1
                         await sleep(1.5)
                         continue
 
                 if request_iterator and not do_not_retry:
                     logger.error(
-                        f"Attempt #{request_iterator} | Response {name} doesn't exist, for now. Retrying..."
+                        f"Attempt #{current_iterator} | Response {name} doesn't exist, for now. Retrying..."
                     )
                     continue
 
@@ -236,7 +238,7 @@ class HTTPClient:
                 json=loaded_request.data,
             )
             logger.debug(
-                f"Unwrapped Request '{loaded_request.name}' (Method: {loaded_request.method.name}, with context: {loaded_request.data}) has been generated as a wrapper (to the raw request) to enqueue."
+                f"Unwrapped Request '{loaded_request.name}' (Method: {loaded_request.method.name}, with data: {loaded_request.data}, with headers: {loaded_request.headers}) has been generated as a wrapper (to the raw request) to enqueue."
             )
 
             self._response[loaded_request.name] = create_task(
