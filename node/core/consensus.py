@@ -13,6 +13,8 @@ from logging import Logger, getLogger
 from os import environ as env
 from typing import Any, Callable
 
+from aiohttp import ClientResponse
+
 from blueprint.models import associated_nodes
 from databases import Database
 from sqlalchemy.sql.expression import Insert
@@ -87,7 +89,7 @@ class ConsensusMechanism:
                 continue
             break
 
-        master_response = await self.http_instance.enqueue_request(
+        master_response: ClientResponse = await self.http_instance.enqueue_request(
             url=URLAddress(
                 f"{master_origin_address}:{master_origin_port}/node/establish/receive_echo"
             ),

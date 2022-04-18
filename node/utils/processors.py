@@ -24,6 +24,7 @@ from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
 from smtplib import SMTPAuthenticationError
+from aiohttp import ClientResponse
 
 from aiosmtplib import SMTPException
 from core.constants import (
@@ -736,7 +737,7 @@ async def contact_master_node(*, master_host: str, master_port: int) -> None:
         f"Attempting to contact the {NodeType.MASTER_NODE.name} at host {master_host} in port {master_port} ..."
     )
 
-    master_node_response = await get_http_client_instance().enqueue_request(
+    master_node_response: ClientResponse = await get_http_client_instance().enqueue_request(
         url=URLAddress(f"{master_host}:{master_port}/explorer/chain"),
         method=HTTPQueueMethods.GET,
         await_result_immediate=True,

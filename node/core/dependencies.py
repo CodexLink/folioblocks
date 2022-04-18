@@ -319,20 +319,22 @@ async def authenticate_node_client(
 
                 print(master_email_address)
 
-                register_node: Any = await get_http_client_instance().enqueue_request(
-                    url=URLAddress(
-                        f"{resolved_origin[0]}:{resolved_origin[1]}/entity/register"
-                    ),
-                    method=HTTPQueueMethods.POST,
-                    do_not_retry=True,
-                    await_result_immediate=True,
-                    data={
-                        "email": inputted_credentials[0]
-                        if role is NodeType.ARCHIVAL_MINER_NODE
-                        else master_email_address,
-                        **resolved_data,
-                    },
-                    name=f"register_node_{resolved_data['auth_code'][-4:]}",
+                register_node: ClientResponse = (
+                    await get_http_client_instance().enqueue_request(
+                        url=URLAddress(
+                            f"{resolved_origin[0]}:{resolved_origin[1]}/entity/register"
+                        ),
+                        method=HTTPQueueMethods.POST,
+                        do_not_retry=True,
+                        await_result_immediate=True,
+                        data={
+                            "email": inputted_credentials[0]
+                            if role is NodeType.ARCHIVAL_MINER_NODE
+                            else master_email_address,
+                            **resolved_data,
+                        },
+                        name=f"register_node_{resolved_data['auth_code'][-4:]}",
+                    )
                 )
 
                 if not register_node.ok:

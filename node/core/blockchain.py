@@ -14,6 +14,7 @@ from typing import Any, Final, Mapping
 from uuid import uuid4
 
 from aiofiles import open as aopen
+from aiohttp import ClientResponse
 from blueprint.models import (
     applications,
     associated_nodes,
@@ -749,7 +750,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 if recorded_consensus_negotiation is not None:
-                    payload_to_master = await self.http_instance.enqueue_request(
+                    payload_to_master: ClientResponse = await self.http_instance.enqueue_request(
                         url=URLAddress(
                             f"{master_origin_source_host}:{master_origin_source_port}/node/blockchain/receive_hashed_block"
                         ),
@@ -771,7 +772,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     if payload_to_master.ok:
                         payload_master_response_ref = ConsensusSuccessPayload(
-                            **payload_to_master
+                            **await payload_to_master.json()
                         )
                         # - Update the Consensus Negotiation ID.
                         update_completed_consensus_negotiation_query: Update = (
@@ -1090,7 +1091,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     BLOCKCHAIN_NEGOTIATION_ID_LENGTH
                 )
 
-                attempt_deliver_payload = await self.http_instance.enqueue_request(
+                attempt_deliver_payload: ClientResponse = await self.http_instance.enqueue_request(
                     url=URLAddress(
                         f"{available_node_info.source_host}:{available_node_info.source_port}/node/blockchain/receive_raw_block"
                     ),
@@ -1297,7 +1298,7 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.info(f"There are {len(available_nodes)} candidates available!")
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
-            candidate_response = await get_http_client_instance().enqueue_request(
+            candidate_response: ClientResponse = await self.http_instance.enqueue_request(
                 url=URLAddress(
                     f"{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
                 ),
@@ -1952,7 +1953,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             # - Fetch from the master first by checking the hash, let the endpoint compare it.
 
-            master_hash_valid_response = await self.http_instance.enqueue_request(
+            master_hash_valid_response: ClientResponse = await self.http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/verify_hash"  # type: ignore
                 ),
@@ -1969,7 +1970,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if not master_hash_valid_response.ok:
                 # - If that's the case then fetch the blockchain file.
-                blockchain_content = await self.http_instance.enqueue_request(
+                blockchain_content: ClientResponse = await self.http_instance.enqueue_request(
                     url=URLAddress(
                         f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
                     ),
