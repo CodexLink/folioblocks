@@ -4,7 +4,7 @@ from datetime import datetime
 from core.dependencies import PasscodeTOTP
 from time import sleep
 
-load_dotenv("backup/master/with_semail/node-env.vars")  # ! Adjust this as possible.
+load_dotenv("node-env.vars")  # ! Adjust this as possible.
 otp_interval: int = 15
 
 AUTH_KEY: str | None = env.get("AUTH_KEY", None)

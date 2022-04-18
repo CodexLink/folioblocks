@@ -816,6 +816,10 @@ class BlockchainMechanism(ConsensusMechanism):
 
             else:  # - Asserts to `NodeSourceOrigin.ARCHIVAL_MINER` with `master_address_ref` is None.
 
+                logger.debug(
+                    f"Confirming Block Container: {self.confirming_block_container}"
+                )
+
                 block_confirmed: bool = False
                 # - Validate the given block by checking its id and other fields that is outside from the context.
                 for each_confirming_block in self.confirming_block_container:
@@ -1142,7 +1146,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     logger.info(
-                        f"Block {generated_block.id} has been sent and is in process for mining! (By miner node: {available_node_info.miner_address})"
+                        f"Block {generated_block.id} has been sent and is in process for mining! (By Miner Node: {available_node_info.miner_address})"
                     )
                     continue
 
@@ -1800,8 +1804,6 @@ class BlockchainMechanism(ConsensusMechanism):
         to_address: AddressUUID | None,
         is_internal_payload: bool,  # @o Even though I can logically assume its a `Node-based transaction` when `to_address` is None, it is not possible since some `Node-based transactions` actually has a point to `address`.
     ) -> dict | bool:
-
-        logger.debug(f"{payload} | {type(payload)}")
 
         if not any(
             isinstance(payload, context_model_candidates)

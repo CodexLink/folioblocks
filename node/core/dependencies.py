@@ -582,7 +582,9 @@ totp_instance: PasscodeTOTP | None = None
 def get_totp_instance() -> PasscodeTOTP | None:
     global totp_instance
 
-    if totp_instance is None:
+    identity: IdentityTokens | None = get_identity_tokens()
+
+    if totp_instance is None and identity is not None:
         env_secret: str | None = env.get("AUTH_KEY", None)
         env_auth: str | None = env.get("SECRET_KEY", None)
 
@@ -590,15 +592,17 @@ def get_totp_instance() -> PasscodeTOTP | None:
             totp_instance = PasscodeTOTP(
                 base_code=[env_secret, env_auth],
                 interval=TOTP_PASSCODE_REFRESH_INTERVAL,
-                issuer=get_identity_tokens()[0],
+                issuer=identity_tokens[0],
             )
 
-    else:
+    elif totp_instance is None:
         logger.error(
             f"The environment key `AUTH_KEY` or `SECRET_KEY` is missing! Call this function when those fields exists from the `{AUTH_ENV_FILE_NAME}` file."
         )
+        return None
 
-    return totp_instance
+    else:
+        return totp_instance
 
 
 # # Passcode Generators — END
