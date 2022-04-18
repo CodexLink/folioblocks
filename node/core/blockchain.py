@@ -1071,6 +1071,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
+                continue
 
             # - Create a Consensus Negotiation ID out of `urlsafe_b64encode`.
             # @o Create a Consensus Negotiation ID for the nodes to remember that this happened.
