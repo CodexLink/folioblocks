@@ -83,7 +83,7 @@ users = Table(
     Column("username", String(24), nullable=False, unique=True),
     Column("password", String(64), nullable=False),
     Column("email", String(128), nullable=False, unique=True),
-    Column("type", SQLEnum(UserEntity), server_default=UserEntity.DASHBOARD_USER.name),
+    Column("type", SQLEnum(UserEntity), nullable=False, unique=False),
     Column(
         "activity",
         SQLEnum(UserActivityState),

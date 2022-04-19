@@ -74,7 +74,7 @@ class NewStudentOut(BaseModel):
 
 class GenerateAuthInput(BaseModel):
     email: EmailStr
-    role_to_infer: UserEntity
+    role: UserEntity
 
 
 """

@@ -104,7 +104,7 @@ BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
     int
 ] = 4  # NOTE: #  ! I'm not quite sure if this would be okay. As per checked, 2 to 3 more transactions takes more time. We might need to adjust block timer from this.
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
-BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 2
+BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 5
 BLOCKCHAIN_NEGOTIATION_ID_LENGTH: Final[int] = 8
 BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER: Final[int] = 2
@@ -302,7 +302,9 @@ class UserActivityState(IntEnum):
 class UserEntity(Enum):
     MASTER_NODE_USER = "Master Node User"
     ARCHIVAL_MINER_NODE_USER = "Archival Miner Node User"
-    DASHBOARD_USER = "Dashboard User"
+    APPLICANT_DASHBOARD_USER = "Applicant Dashboard User"
+    INSTITUTION_DASHBOARD_USER = "Institution Dashboard User"
+    ORGANIZATION_DASHBOARD_USER = "Company / Organization Dashboard User"
     ADMIN_USER = "Administrator"
 
 

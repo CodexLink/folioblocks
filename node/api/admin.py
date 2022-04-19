@@ -67,7 +67,7 @@ async def generate_auth_token_for_other_nodes(
             status_code=HTTPStatus.ACCEPTED,
         )
 
-    if payload.role_to_infer == UserEntity.MASTER_NODE_USER:
+    if payload.role is UserEntity.MASTER_NODE_USER:
         raise HTTPException(
             detail=(
                 f"Inferred role is not allowed! There should only be one {UserEntity.MASTER_NODE_USER}.",
@@ -88,7 +88,7 @@ async def generate_auth_token_for_other_nodes(
         try:
             insert_generated_token_query: Insert = auth_codes.insert().values(
                 code=generated_token,
-                account_type=payload.role_to_infer,
+                account_type=payload.role,
                 to_email=payload.email,
                 expiration=datetime.now() + timedelta(days=2),
             )

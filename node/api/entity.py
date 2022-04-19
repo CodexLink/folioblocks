@@ -130,13 +130,7 @@ async def register_entity(
             # Asserted that this entity must be NODE_USER.
             del dict_credentials["first_name"], dict_credentials["last_name"]
 
-        dict_credentials["type"] = (
-            auth_token[
-                3
-            ]  # @o 3th index represents the account type from the `auth_token` metadata table.
-            if auth_token.account_type in UserEntity
-            else UserEntity.DASHBOARD_USER
-        )  #  else SQLEntityUser.ADMIN_USER
+        dict_credentials["type"] = auth_token.account_type
 
         del (
             dict_credentials["password"],
@@ -268,7 +262,11 @@ async def login_entity(
 
             # - If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
-            if fetched_credential_data.type is UserEntity.DASHBOARD_USER:
+            if fetched_credential_data.type in [
+                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.INSTITUTION_DASHBOARD_USER,
+                UserEntity.ORGANIZATION_DASHBOARD_USER,
+            ]:
                 jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)
 
                 payload[

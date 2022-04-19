@@ -310,7 +310,6 @@ async def process_raw_block(
         )
 
         # - Enqueue the block from the local instance of blockchain.
-
         create_task(
             blockchain_instance.mine_and_store_given_block(
                 block=context_from_master.block,
@@ -332,7 +331,14 @@ async def process_raw_block(
     description=f"A special API endpoint that accepts payload from the dashboard. This requires special credentials and handling outside the scope of node.",
     dependencies=[
         Depends(
-            EnsureAuthorized(_as=UserEntity.DASHBOARD_USER, blockchain_related=True)
+            EnsureAuthorized(
+                _as=[
+                    UserEntity.APPLICANT_DASHBOARD_USER,
+                    UserEntity.INSTITUTION_DASHBOARD_USER,
+                    UserEntity.ORGANIZATION_DASHBOARD_USER,
+                ],
+                blockchain_related=True,
+            )
         )
     ],
 )
@@ -403,7 +409,7 @@ async def acknowledge_as_response(
         fetch_node_auth_query = select([auth_codes.c.id]).where(
             (auth_codes.c.code == x_acceptance)
             & (
-                auth_codes.c.to_email == validated_source_address.email
+                auth_codes.c.to_email == validated_source_address.email  # type: ignore
             )  # @o Equivalent to validated_source_address.email.
         )
 
@@ -412,7 +418,7 @@ async def acknowledge_as_response(
         if validated_auth_code is not None:
             fetch_node_token_query = select([tokens.c.id]).where(
                 (tokens.c.token == x_session)
-                & (tokens.c.from_user == validated_source_address.unique_address)
+                & (tokens.c.from_user == validated_source_address.unique_address)  # type: ignore
             )
 
             validated_node_token = await db.fetch_one(fetch_node_token_query)
@@ -442,7 +448,7 @@ async def acknowledge_as_response(
 
                     # @o As a `MASTER` node, store it for validation later.
                     store_authored_token_query: Insert = associated_nodes.insert().values(
-                        user_address=validated_source_address.unique_address,
+                        user_address=validated_source_address.unique_address,  # type: ignore
                         certificate=encrypted_authored_token.decode("utf-8"),
                         # # We need to ensure that the source address and port is right when this was deployed in external.
                         # source_address=request.client.host,
