@@ -17,6 +17,7 @@ from os import environ as env
 from typing import Any
 
 from databases import Database
+from pydantic import PydanticValueError
 
 from blueprint.models import (
     associated_nodes,
@@ -60,12 +61,24 @@ from core.dependencies import (
     get_identity_tokens,
 )
 from cryptography.fernet import Fernet
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Update
 
 from core.constants import AssociatedNodeStatus
+from node.blueprint.schemas import ApplicantLogTransaction, GroupTransaction
+from node.core.constants import ApplicantLogContentType, TransactionContextMappingType
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -341,15 +354,89 @@ async def process_raw_block(
             )
         )
     ],
+    status_code=HTTPStatus.ACCEPTED,
 )
-async def receive_action_from_dashboard() -> None:
+async def receive_action_from_dashboard(
+    blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
+) -> None:
     # - Identify the type of the transaction.
     # - If there's a file, process it under, files.
     # - Encrypt it via AES from the generated file. (Code should be derived from the existing Fernet() or should we create another one? [such as, AUTH (mid 16 characters) of master + sender ]) and make the filename as UUID with datetime with no extensions.
 
     # - Field of the file should be changed to a SHA256 with UUID as a base location from where it was located.
     #
+
+    # blockchain
     return
+
+
+@node_router.post(
+    "/blockchain/receive_context_with_file",
+    tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
+    summary="Receives a multiform content type specific to `ApplicationLogContentType`.",
+    description=f"A special API endpoint that is exclusive to a pyadantic model `ApplicantLogTransaction`, which accepts payload from the dashboard along with the file. Even without file, `ApplicantLogTransaction` is destined from this endpoint.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=[
+                    UserEntity.APPLICANT_DASHBOARD_USER,
+                    UserEntity.INSTITUTION_DASHBOARD_USER,
+                    UserEntity.ORGANIZATION_DASHBOARD_USER,
+                ],
+            )
+        )
+    ],
+    status_code=HTTPStatus.ACCEPTED,
+)
+async def receive_file_from_dashboard(
+    address_origin: AddressUUID = Form(...),
+    blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
+    content_type: ApplicantLogContentType = Form(...),
+    name: str = Form(...),
+    description: str = Form(...),
+    role: str = Form(...),
+    file: UploadFile | None = File(None),
+    duration_start: datetime = Form(...),
+    duration_end: datetime | None = Form(None),
+    validated_by: AddressUUID = Form(...),
+    timestamp: datetime = Form(...),
+) -> None:
+
+    try:
+        # - After receiving, wrap the payload.
+        wrapped_to_model: ApplicantLogTransaction = ApplicantLogTransaction(
+            **{
+                "address_origin": address_origin,
+                "type": content_type,
+                "name": name,
+                "description": description,
+                "role": role,
+                "file": file,
+                "duration_start": duration_start,
+                "duration_end": duration_end,
+                "validated_by": validated_by,
+                "timestamp": timestamp,
+            }
+        )
+
+        # - Then create a GroupTransaction.
+        transaction: GroupTransaction = GroupTransaction(
+            content_type=TransactionContextMappingType.APPLICANT_LOG,
+            context=wrapped_to_model,
+        )
+
+        await blockchain_instance.insert_external_transaction(
+            action=TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT,
+            from_address=AddressUUID(validated_by),
+            to_address=AddressUUID(address_origin),
+            data=transaction,
+        )
+
+    except PydanticValueError as e:
+        raise HTTPException(
+            detail=f"Cannot wrapped the payload to a respect model ({ApplicantLogTransaction}). | Info: {e}",
+            status_code=HTTPStatus.BAD_REQUEST,
+        )
 
 
 """

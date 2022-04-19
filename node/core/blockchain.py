@@ -301,7 +301,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | None = (
                     None
                 )
-                tx_content_type: TransactionContextMappingType | None = None
 
                 # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
                 # # [4]
@@ -361,7 +360,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                         return False
 
-                    tx_content_type = TransactionContextMappingType.APPLICANT_LOG
                     resolved_payload = data.context
 
                 # - For transactions that require generation of `user` under Organization or as an Applicant.
@@ -421,8 +419,6 @@ class BlockchainMechanism(ConsensusMechanism):
                                 "The associate address does not exists! Please refer to the right associate/organization or association to proceed the registration."
                             )
                             return False
-
-                        tx_content_type = TransactionContextMappingType.APPLICANT_BASE
 
                     # - For the case of registering with the associate/organization, sometimes user can register with associate/organization reference existing and otherwise. With that, we need to handle the part where if the associate/organization doesn't exist then create a new one. Otherwise, refer its self from that associate/organization and we are good to go.
 
@@ -494,10 +490,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             logger.error(
                                 f"Instances has condition unmet. Either the `association` contains nothing or the instance along with the `association` condition does not met. Please try again."
                             )
-
-                        tx_content_type = (
-                            TransactionContextMappingType.ORGANIZATION_BASE
-                        )
 
                     # @o When all of the checks are done, then create the user.
                     try:
@@ -606,7 +598,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
 
                         # - Do the following for all condition.
-                        tx_content_type = TransactionContextMappingType.APPLICANT_LOG
                         resolved_payload = data.context
 
                     else:
@@ -623,12 +614,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         validate_user_address(supplied_address=AddressUUID(to_address))
                         is True
                     ):
-                        tx_content_type = (
-                            TransactionContextMappingType.APPLICANT_ADDITIONAL
-                            if action
-                            is TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
-                            else TransactionContextMappingType.ORGANIZATION_ADDITIONAL
-                        )
                         resolved_payload = data.context
 
                 else:
@@ -657,7 +642,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             address_ref=to_address,
                             block_no_ref=self.cached_block_id,
                             tx_ref=transaction_context["tx_hash"],
-                            content_type=tx_content_type,
+                            content_type=data.content_type,
                             timestamp=datetime.now(),
                         )
                     )
@@ -679,10 +664,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     get_from_address_email_query
                 )
 
-                if from_address_email is not None and tx_content_type is not None:
+                if from_address_email is not None and data.content_type is not None:
                     create_task(
                         self.email_service.send(
-                            content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {tx_content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                            content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {data.content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                             subject="Error Transaction from Folioblock!",
                             to=EmailStr(from_address_email),
                         ),

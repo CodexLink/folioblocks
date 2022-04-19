@@ -90,7 +90,7 @@ class GenerateAuthInput(BaseModel):
 
 
 class AdditionalContextTransaction(BaseModel):
-    entity_address_ref: AddressUUID | None  # * This is resolved internally.
+    address_origin: AddressUUID
     title: str
     description: str
     inserted_by: AddressUUID
@@ -132,6 +132,7 @@ class AgnosticTransactionUserCredentials(
 
 
 class ApplicantLogTransaction(BaseModel):
+    address_origin: AddressUUID
     type: ApplicantLogContentType
     name: str
     description: str
