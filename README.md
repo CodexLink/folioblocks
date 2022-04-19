@@ -1,5 +1,6 @@
 # FolioBlocks `Node` and `Web` Repository
 
+[![wakatime](https://wakatime.com/badge/user/b3774db8-dd9f-4205-a646-ef6d27645187/project/dd222932-a056-4c3b-87e1-d845f3aa14ee.svg)](https://wakatime.com/badge/user/b3774db8-dd9f-4205-a646-ef6d27645187/project/dd222932-a056-4c3b-87e1-d845f3aa14ee)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
 [![Lines of Code](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=ncloc)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=CodexLink_folioblocks&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=CodexLink_folioblocks)
