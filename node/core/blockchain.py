@@ -227,7 +227,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self,
         action: TransactionActions,
         from_address: AddressUUID,
-        to_address: AddressUUID,
+        to_address: AddressUUID | None,
         data: GroupTransaction,
     ) -> bool:
         """
@@ -285,6 +285,16 @@ class BlockchainMechanism(ConsensusMechanism):
             ), await self.db_instance.fetch_one(
                 get_existing_to_address_query
             )
+
+            # - When creating a user, bypass it for now.
+            # * I know the idea of putting the functionality in API side but I want to conslidate the method into one so that its easy to navigate as they were isolated in one part.
+            if (
+                isinstance(
+                    data.context, ApplicantUserTransaction | OrganizationUserTransaction
+                )
+                and to_address is None
+            ):
+                is_existing_to_address = True
 
             # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
             # ! These addresses will either contain a `str` or a `None` (`NoneType`).
@@ -367,8 +377,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
                     TransactionActions.ORGANIZATION_USER_REGISTER,
                 ] and (
-                    isinstance(data.context, ApplicantUserTransaction)
-                    or isinstance(data.context, OrganizationUserTransaction)
+                    isinstance(
+                        data.context,
+                        ApplicantUserTransaction | OrganizationUserTransaction,
+                    )
                 ):
                     # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
                     # @d With that, we need to seperate this transaction with `Internal` and `External`.
@@ -609,12 +621,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
                     TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
                 ] and isinstance(data.context, AdditionalContextTransaction):
-                    # * Just validate if the specified entity address does exists.
-                    if (
-                        validate_user_address(supplied_address=AddressUUID(to_address))
-                        is True
-                    ):
-                        resolved_payload = data.context
+                    # * Do nothing, we don't want to be redundant.
+                    # ! Addresses were already checked.
+
+                    resolved_payload = data.context
 
                 else:
                     logger.error(
@@ -1418,9 +1428,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 None,
             )
 
-        elif isinstance(data.context, NodeSyncTransaction) or isinstance(
-            data.context, NodeCertificateTransaction
-        ):
+        elif isinstance(data.context, NodeCertificateTransaction | NodeSyncTransaction):
             resolved_from_address, resolved_to_address = (
                 self.identity[0],
                 data.context.requestor_address,
@@ -1606,7 +1614,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
         if isinstance(context, dict):
-
             if update:
                 self.cached_total_transactions = 0  # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
 

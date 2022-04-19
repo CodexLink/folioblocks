@@ -58,7 +58,6 @@ from core.constants import (
 from core.dependencies import (
     EnsureAuthorized,
     get_database_instance,
-    get_identity_tokens,
 )
 from cryptography.fernet import Fernet
 from fastapi import (
@@ -68,17 +67,24 @@ from fastapi import (
     Form,
     Header,
     HTTPException,
-    Request,
     Response,
     UploadFile,
 )
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from sqlalchemy.sql.expression import Insert, Update
+from sqlalchemy.sql.expression import Insert, Select, Update
 
 from core.constants import AssociatedNodeStatus
-from node.blueprint.schemas import ApplicantLogTransaction, GroupTransaction
-from node.core.constants import ApplicantLogContentType, TransactionContextMappingType
+from blueprint.schemas import (
+    AdditionalContextTransaction,
+    ApplicantLogTransaction,
+    ApplicantProcessTransaction,
+    ApplicantUserTransaction,
+    GroupTransaction,
+    OrganizationUserTransaction,
+)
+from core.constants import ApplicantLogContentType, TransactionContextMappingType
+from node.core.constants import EmploymentApplicationState
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -159,7 +165,6 @@ async def process_hashed_block(
 ) -> ConsensusSuccessPayload:
 
     if isinstance(blockchain_instance, BlockchainMechanism):
-
         block_confirmed: bool = False
         # - Validate the given block by checking its id and other fields that is outside from the context.
         for each_confirming_block in blockchain_instance.confirming_block_container:
@@ -251,12 +256,36 @@ async def process_hashed_block(
                 transaction_idx
             ].action = TransactionActions(transaction_context.action)
 
-            # - Resolve the `action` field from the payload.
+            # - Resolve the `action` field from the payload's action `NodeTransaction`.
+            if isinstance(
+                context_from_archival_miner.block.contents.transactions[
+                    transaction_idx
+                ].payload,
+                NodeTransaction,
+            ):
+                context_from_archival_miner.block.contents.transactions[
+                    transaction_idx
+                ].payload.action = NodeTransactionInternalActions(
+                    transaction_context.payload.action
+                )
 
-            # # - Resolve `status` field with `T`
-            # context_from_archival_miner.block.contents.transactions[
-            #     transaction_idx
-            # ].action = TransactionActions(transaction_context.action)
+            # - Resolve the `content_type` field from the payload's action `GroupTransaction`.
+            elif isinstance(
+                context_from_archival_miner.block.contents.transactions[
+                    transaction_idx
+                ].payload,
+                GroupTransaction,
+            ):
+                context_from_archival_miner.block.contents.transactions[
+                    transaction_idx
+                ].payload.content_type = TransactionContextMappingType(
+                    transaction_context.payload.content_type
+                )
+
+            else:
+                logger.warning(
+                    f"Transaction {context_from_archival_miner.block.contents.transactions[transaction_idx].tx_hash} payload cannot be casted with the following enumeration classes: {NodeTransaction} and {GroupTransaction}. This is going to be problematic on fetching data, but carry on. But please report this to the developer."
+                )
 
         # - Insert the block.
         await blockchain_instance._append_block(
@@ -357,17 +386,124 @@ async def process_raw_block(
     status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_action_from_dashboard(
+    payload: ApplicantLogTransaction
+    | ApplicantProcessTransaction
+    | ApplicantUserTransaction
+    | AdditionalContextTransaction
+    | OrganizationUserTransaction,
     blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
+    database_instance: Database = Depends(get_database_instance),
 ) -> None:
-    # - Identify the type of the transaction.
-    # - If there's a file, process it under, files.
-    # - Encrypt it via AES from the generated file. (Code should be derived from the existing Fernet() or should we create another one? [such as, AUTH (mid 16 characters) of master + sender ]) and make the filename as UUID with datetime with no extensions.
 
-    # - Field of the file should be changed to a SHA256 with UUID as a base location from where it was located.
-    #
+    # - Since the payload is automatically determined, we are going to keep resolve its parameter for the `from_address` and `to_address` when calling blockchain_instance.insert_external_transaction.
 
-    # blockchain
-    return
+    # @o Type-hints for now.
+    resolved_content_type: TransactionContextMappingType | None = None
+    resolved_from_address: AddressUUID | None = None
+    resolved_to_address: AddressUUID | None = None
+    resolved_action: TransactionActions | None = None
+
+    # - Compare via instance and assign necessary components.
+    #! Note that, `ApplicantLogTransaction` has been handled from `receive_file_from_dashboard` method.:
+
+    if isinstance(payload, ApplicantProcessTransaction):
+        if payload.state is EmploymentApplicationState.ACCEPTED:
+            resolved_action = TransactionActions.APPLICANT_APPLY_CONFIRMED
+
+        elif payload.state is EmploymentApplicationState.REJECTED:
+            resolved_action = TransactionActions.APPLICANT_APPLY_REJECTED
+
+        else:
+            resolved_action = TransactionActions.APPLICANT_APPLY
+
+        resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
+        resolved_from_address, resolved_to_address = payload.requestor, payload.receiver
+
+    elif isinstance(payload, ApplicantUserTransaction):
+        resolved_action = TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT
+        resolved_content_type = TransactionContextMappingType.APPLICANT_BASE
+
+        resolved_from_address, resolved_to_address = (
+            payload.institution_ref,
+            None,
+        )  # - `to_address` is resolved from the method.
+
+    elif isinstance(payload, AdditionalContextTransaction):
+        # - With the logic being too complicated, we should resolve this content_type here instead.
+        # - Inside method does nothing honestly.
+
+        # * We have no choice but to have the credential re-checked again from the entrypoint of the `insert_external_transactions`.
+        identify_user_type_query: Select = select([users.c.type]).where(
+            users.c.unique_address == payload.address_origin
+        )
+
+        identify_user_type = await database_instance.fetch_one(identify_user_type_query)
+
+        if identify_user_type.type is None:  # type: ignore
+            raise HTTPException(
+                detail="Cannot classify user's type. Have you provided the right enum value? Please refer to the manual for more information.",
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+
+        resolved_enum_member: UserEntity = UserEntity(identify_user_type.type)  # type: ignore
+
+        if resolved_enum_member is UserEntity.APPLICANT_DASHBOARD_USER:
+            resolved_action = (
+                TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
+            )
+            resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
+
+        elif (
+            resolved_enum_member is UserEntity.ORGANIZATION_DASHBOARD_USER
+            or resolved_enum_member is UserEntity.INSTITUTION_DASHBOARD_USER
+        ):
+            resolved_action = TransactionActions.ORGANIZATION_REFER_EXTRA_INFO
+            resolved_content_type = (
+                TransactionContextMappingType.ORGANIZATION_ADDITIONAL
+            )
+
+        else:
+            raise HTTPException(
+                detail="Cannot resolve this user's organization associate type. Have you provided the right enum value? Please refer to the manual for more information",
+                status_code=HTTPStatus.BAD_REQUEST,
+            )
+
+        resolved_from_address, resolved_to_address = (
+            payload.inserted_by,
+            payload.address_origin,
+        )
+
+    elif isinstance(payload, OrganizationUserTransaction):
+        resolved_action = TransactionActions.ORGANIZATION_USER_REGISTER
+        resolved_content_type = None
+        resolved_from_address, resolved_to_address = (
+            payload.association_address,
+            None,
+        )  # - `to_address` can be `None` since it's an organization.
+
+    else:
+        raise HTTPException(
+            detail="Payload is unidentified or is unhandled from this API entrypoint. Note that the endpoint with file handling is on another endpoint, not this one.",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    # - Create a `GroupTransaction`.
+    resolved_payload: GroupTransaction = GroupTransaction(
+        content_type=resolved_content_type, context=payload
+    )
+
+    if resolved_from_address is None:
+        raise HTTPException(
+            detail="Cannot proceed when content type is not resolved or `from_address` is None. Please properly indicate their values and try again.",
+            status_code=HTTPStatus.NOT_ACCEPTABLE,
+        )
+
+    await blockchain_instance.insert_external_transaction(
+        action=resolved_action,
+        from_address=resolved_from_address,
+        to_address=resolved_to_address,
+        data=resolved_payload,
+    )
 
 
 @node_router.post(
@@ -434,7 +570,7 @@ async def receive_file_from_dashboard(
 
     except PydanticValueError as e:
         raise HTTPException(
-            detail=f"Cannot wrapped the payload to a respect model ({ApplicantLogTransaction}). | Info: {e}",
+            detail=f"Cannot wrapped the payload to a respective model ({ApplicantLogTransaction}). | Info: {e}",
             status_code=HTTPStatus.BAD_REQUEST,
         )
 
