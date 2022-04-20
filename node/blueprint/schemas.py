@@ -111,7 +111,7 @@ class AgnosticCredentialValidator(BaseModel):
 
 
 class OrganizationIdentityValidator(BaseModel):
-    association_address: AddressUUID | None
+    association_address: str | None
     association_name: str | None
     association_group_type: OrganizationType | None
 
@@ -164,11 +164,12 @@ class ApplicantUserTransaction(
     pass
 
 
+# * For now, I can't think of any solution regarding this one since register_entity at entity.py uses it for the registration of the user.
 class OrganizationUserBaseTransaction(BaseModel):
-    institution_ref: str
-    org_type: OrganizationType
-    founded: int
-    description: str
+    institution_ref: str | None
+    org_type: OrganizationType | None
+    founded: int | None
+    description: str | None
     associations: list[AddressUUID] | None
     extra: AdditionalContextTransaction | None
 
@@ -221,7 +222,7 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
 
 class GroupTransaction(BaseModel):
     content_type: TransactionContextMappingType | None  # * Method `insert_external_transaction` handles this, so there's no way it will go without a context.
-    context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserTransaction
+    context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseTransaction
 
 
 class NodeTransaction(BaseModel):
@@ -358,10 +359,14 @@ class EntityRegisterCredentials(BaseModel):
         description="The type of the association, technically the type of the organization.",
     )  # ! In frontend, ensure this was a dropdown.
 
-    association_founded: int | None = Field(None, description="")
-    association_description: str | None = Field(None, description="")
+    association_founded: int | None = Field(
+        None, description="The time from where this oganization has been founded."
+    )
+    association_description: str | None = Field(
+        None, description="The description of your organization."
+    )
 
-    auth_code: str | bytes = Field(  # typevar: KeyContext
+    auth_code: str = Field(
         description="The authentication code that is used to authorize the registration.",
         min_length=AUTH_CODE_MIN_CONTEXT,
         max_length=AUTH_CODE_MAX_CONTEXT * 2,

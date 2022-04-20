@@ -61,8 +61,9 @@ from core.dependencies import (
 )
 from core.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import MetaData, false, select
+from sqlalchemy import false, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from core.dependencies import generate_uuid_user
 from utils.processors import hash_context, verify_hash_context
 from fastapi.responses import JSONResponse
 
@@ -87,7 +88,6 @@ async def register_entity(
     *,
     credentials: EntityRegisterCredentials,
     db: Any = Depends(get_database_instance),
-    tokens: IdentityTokens | None = Depends(get_identity_tokens),
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> EntityRegisterResult | JSONResponse | None:
 
@@ -95,17 +95,19 @@ async def register_entity(
     # * New instances doesn't have new credentials, check if there's an auth code for the NodeType.MASTER_NODE and it's not yet used.
 
     check_auth_from_new_master_query: Select = select(
-        [auth_codes.c.to_email, auth_codes.c.account_type]
+        [auth_codes.c.account_type]
     ).where(
-        (auth_codes.c.code == credentials.auth_code) & (auth_codes.c.is_used == false())
+        (auth_codes.c.code == credentials.auth_code)
+        & (auth_codes.c.is_used == false())
+        & (auth_codes.c.to_email == credentials.email)
     )
 
     new_user_auth_register = await db.fetch_one(check_auth_from_new_master_query)
 
-    if tokens is None and new_user_auth_register is None:
+    if new_user_auth_register is None:
         raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail="Identity tokens seem to be missing. This should not be possible! Please report this to the developer!",
+            detail="Provided `auth_token` is not found. Check your input and try again.",
+            status_code=HTTPStatus.NOT_FOUND,
         )
 
     if new_user_auth_register.account_type is UserEntity.ORGANIZATION_DASHBOARD_USER:
@@ -113,23 +115,27 @@ async def register_entity(
 
             if (
                 isinstance(credentials.association_name, str)
-                and isinstance(credentials.association_address, str)
+                and credentials.association_address is None
                 and isinstance(credentials.association_type, OrganizationType)
                 and isinstance(credentials.association_founded, int)
                 and isinstance(credentials.association_description, str)
+            ) or (
+                credentials.association_name is None
+                and isinstance(credentials.association_address, str)
+                and credentials.association_type is OrganizationType
+                and credentials.association_founded is None
+                and credentials.association_description is None
             ):
 
                 # @o When registering a user, there is a need of special handling, as things are recorded in the blockchain.
-                await blockchain_instance.insert_external_transaction(
+                new_user_insertion_response: HTTPException | None = await blockchain_instance.insert_external_transaction(
                     action=TransactionActions.ORGANIZATION_USER_REGISTER,
                     from_address=blockchain_instance.identity[0],
                     to_address=None,
                     data=GroupTransaction(
                         content_type=TransactionContextMappingType.ORGANIZATION_BASE,
                         context=OrganizationUserTransaction(
-                            association_address=AddressUUID(
-                                credentials.association_address
-                            ),
+                            association_address=credentials.association_address,
                             association_name=credentials.association_name,
                             association_group_type=credentials.association_type,
                             first_name=credentials.first_name,
@@ -137,9 +143,7 @@ async def register_entity(
                             email=credentials.email,
                             username=credentials.username,
                             password=credentials.password,
-                            institution_ref=AddressUUID(
-                                credentials.association_address
-                            ),
+                            institution_ref=credentials.association_address,
                             org_type=credentials.association_type,
                             founded=credentials.association_founded,
                             description=credentials.association_description,
@@ -149,11 +153,20 @@ async def register_entity(
                     ),
                 )
 
-                return JSONResponse(
-                    content={
-                        "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
-                    },
-                    status_code=HTTPStatus.ACCEPTED,
+                if isinstance(new_user_insertion_response, HTTPException):
+                    raise new_user_insertion_response
+
+                else:
+                    return JSONResponse(
+                        content={
+                            "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
+                        },
+                        status_code=HTTPStatus.ACCEPTED,
+                    )
+            else:
+                raise HTTPException(
+                    detail=f"You are assigned as {new_user_auth_register.account_type.value}, please provide the mandatory fields when: [1] You are new to the platform and your organization doesn't exist: `association_name` (str), `association_type` (int), `association_founded` (int), and `association_description` (str). And, [2] you are new to the platform and your organization exists: `association_address` (str). You shouldn't seeing this messages, if you are using API please refer to the given documentation regarding this API.",
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
                 )
         else:
             raise HTTPException(
@@ -167,9 +180,6 @@ async def register_entity(
             status_code=HTTPStatus.FORBIDDEN,
         )
     else:
-        unique_address_ref: AddressUUID = AddressUUID(
-            f"{ADDRESS_UUID_KEY_PREFIX}:{uuid4().hex}"
-        )
         dict_credentials: dict[str, Any] = credentials.dict()
 
         # - Our auth code should contain the information if that is applicable at certain role.
@@ -205,7 +215,7 @@ async def register_entity(
 
             data: Insert = users.insert().values(
                 **dict_credentials,
-                unique_address=unique_address_ref,
+                unique_address=generate_uuid_user(),
                 password=hash_context(pwd=RawData(credentials.password))
                 # association=, # I'm not sure on what to do with this one, as of now.
             )
@@ -214,6 +224,8 @@ async def register_entity(
                 .where(auth_codes.c.code == auth_token.code)
                 .values(is_used=True)
             )
+
+            user_new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
 
             try:
                 await gather(db.execute(dispose_auth_code), db.execute(data))
@@ -244,11 +256,9 @@ async def register_entity(
                                 action=NodeTransactionInternalActions.INIT,
                                 context=NodeRegisterTransaction(
                                     acceptor_address=AddressUUID(
-                                        tokens[0]
-                                        if tokens is not None
-                                        else new_user_auth_register
+                                        blockchain_instance.identity[0]
                                     ),
-                                    new_address=AddressUUID(unique_address_ref),
+                                    new_address=AddressUUID(user_new_uuid),
                                     role=auth_token.account_type,
                                     timestamp=datetime.now(),
                                 ),
@@ -262,7 +272,7 @@ async def register_entity(
                 )
 
             return EntityRegisterResult(
-                user_address=unique_address_ref,
+                user_address=user_new_uuid,
                 username=credentials.username,
                 date_registered=datetime.now(),
                 role=dict_credentials["type"],

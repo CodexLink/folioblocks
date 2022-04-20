@@ -22,6 +22,9 @@ from aiosmtplib import (
     SMTPAuthenticationError,
     SMTPConnectError,
     SMTPReadTimeoutError,
+    SMTPRecipientRefused,
+    SMTPRecipientsRefused,
+    SMTPResponseException,
     SMTPServerDisconnected,
 )
 from pydantic import EmailStr
@@ -165,11 +168,19 @@ class EmailService:
         message_context: MIMEText = MIMEText(content, "html", "utf-8")
 
         message_instance.attach(message_context)
-        await self._email_service.send_message(message_instance)
 
-        logger.info(
-            f"Message has been sent. (Subject: {subject} | From: {message_instance['From']} | To: {to[:5]} ...)"
-        )
+        try:
+            await self._email_service.send_message(message_instance)
+
+            logger.info(
+                f"Message has been sent. (Subject: {subject} | From: {message_instance['From']} | To: {to[:5]} ...)"
+            )
+        except (
+            SMTPRecipientRefused,
+            SMTPRecipientsRefused,
+            SMTPResponseException,
+        ) as e:
+            logger.critical(f"Cannot send email due to error in the process. Info: {e} | From: {message_instance['From']} | To: {to[:5]}")
 
     def close(self) -> None:
         return self._email_service.close()

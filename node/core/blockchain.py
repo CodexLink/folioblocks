@@ -60,18 +60,18 @@ from orjson import loads as import_raw_json_to_dict
 from pydantic import BaseModel, EmailStr
 from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from blueprint.schemas import GroupTransaction
 from core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
 from core.constants import UserEntity
+from core.dependencies import generate_uuid_user
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
     unconventional_terminate,
     validate_organization_existence,
     validate_transaction_mapping_exists,
-    validate_user_address,
     validate_user_existence,
 )
 
@@ -265,10 +265,7 @@ class BlockchainMechanism(ConsensusMechanism):
             and isinstance(to_address, str | None)
         ):
 
-            # @o Declared for type-hint. Initialized on some conditions.
-            resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | None = (
-                None
-            )
+            # @o Declared to gather meesage and status regarding potential exception.
             exception_message: str | None = None  # * Reflects to log while sending the detail message from the HTTPException.
             exception_status: HTTPStatus | None = None
 
@@ -323,7 +320,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
 
                         await self.db_instance.execute(application_process_query)
-                        resolved_payload = data.context
 
                     else:
                         exception_message = f"There is no content type ({TransactionContextMappingType.APPLICANT_BASE}) transaction mapping for {to_address}. Please create an applicant account and try again."
@@ -441,25 +437,34 @@ class BlockchainMechanism(ConsensusMechanism):
                                 detail=exception_message, status_code=exception_status
                             )
 
-                    # @o When all of the checks are done, then create the user.
+                    # # Note regarding multiple type: ignore comments.
+                    # @o The reason for this is to remove unnecessary errors regarding restructuring a model.
+                    # @o I can solve it by re-implementing the use resolve variables but the problem here is that, this is the only case (condition) where `<nothing>` appears. I can't burn more time for that.
+
+                    # - When all of the checks are done, then create the user.
                     try:
+                        new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
                         insert_user_query: Insert = users.insert().values(
-                            association=data.context.association_address,
-                            first_name=data.context.first_name,
-                            last_name=data.context.last_name,
+                            unique_address=new_uuid,
+                            association=data.context.association_address,  # type: ignore
+                            first_name=data.context.first_name,  # type: ignore
+                            last_name=data.context.last_name,  # type: ignore
                             type=UserEntity.ORGANIZATION_DASHBOARD_USER
                             if isinstance(data.context, OrganizationUserTransaction)
                             else UserEntity.APPLICANT_DASHBOARD_USER,
-                            email=data.context.email,
-                            username=data.context.username,
-                            password=hash_context(pwd=RawData(data.context.password)),
+                            email=data.context.email,  # type: ignore
+                            username=data.context.username,  # type: ignore
+                            password=hash_context(pwd=RawData(data.context.password)),  # type: ignore
                         )
+
+                        # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
+                        to_address = new_uuid
 
                         create_task(
                             self.email_service.send(
-                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{UserEntity.ORGANIZATION_DASHBOARD_USER if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b></i>! Remember, if you are a {UserEntity.APPLICANT_DASHBOARD_USER}, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one. For the {UserEntity.ORGANIZATION_DASHBOARD_USER} please be responsible as any data you insert cannot be modified as they are stored from blockchain. Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b></i>!<br><br>Remember, if you are a {UserEntity.APPLICANT_DASHBOARD_USER.value}, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br><br>For the {UserEntity.ORGANIZATION_DASHBOARD_USER} please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                                 subject="Hello from Folioblocks!",
-                                to=data.context.email,
+                                to=data.context.email,  # type: ignore
                             ),
                             name=f"{get_email_instance.__name__}_send_register_welcome_user",
                         )
@@ -471,7 +476,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         # ! Excluding fields via Model is not possible.
                         # ! https://github.com/samuelcolvin/pydantic/issues/1862.
-                        removed_credentials_context: dict = data.context.dict(
+                        removed_credentials_context: dict = data.context.dict(  # type: ignore
                             exclude={
                                 "association_address": True,
                                 "association_name": True,
@@ -484,7 +489,9 @@ class BlockchainMechanism(ConsensusMechanism):
                             }
                         )
 
-                        resolved_payload = (
+                        # - We need to resolve these models due to its contents containing more information regarding the user. We do not need those in the blockchain so we have deduce it by resolving it.
+                        # ! There is a note regarding replace an existing model with a new one, causing multiple type: ignore, please check the note for more information.
+                        data.context = (
                             ApplicantUserBaseTransaction(**removed_credentials_context)
                             if isinstance(data.context, ApplicantUserTransaction)
                             else OrganizationUserBaseTransaction(
@@ -568,33 +575,34 @@ class BlockchainMechanism(ConsensusMechanism):
                 TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
             ] and isinstance(data.context, AdditionalContextTransaction):
 
-                # * Do nothing, we don't want to be redundant.
-                # ! Addresses were already checked.
-
-                resolved_payload = data.context
+                # - Why?
+                # @o We only need to verify the addresses contents, there's nothing much going on from these `TransactionActions`.
+                logger.debug(
+                    f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO} or {TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO} by doing nothing due to there's nothing to process."
+                )
 
             else:
                 exception_message = "All of the condition specified did not hit. Are you sure your combination of data is right? Please check the declaration and try again."
                 exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
                 resolved_payload = None
 
-            if (
-                resolved_payload is not None
-                and not isinstance(exception_message, str)
-                and not isinstance(exception_status, HTTPStatus)
+            if not isinstance(exception_message, str) and not isinstance(
+                exception_status, HTTPStatus
             ):
-                transaction_context: dict | bool = (
+
+                # - To ensure that this method will be processed the same way as `NodeTransaction`, we need to create a `GroupTransaction` for this.
+                transaction_context: dict | HTTPException = (
                     await self._resolve_transaction_payload(
                         action=action,
                         from_address=from_address,
                         to_address=to_address,
-                        payload=resolved_payload,
+                        payload=data,
                         is_internal_payload=False,
                     )
                 )
 
                 # * Append the transaction mapping here.
-                if isinstance(transaction_context, dict):
+                if not isinstance(transaction_context, HTTPException):
                     insert_transaction_content_map_query: Insert = (
                         tx_content_mappings.insert().values(
                             address_ref=to_address,
@@ -610,8 +618,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     return None
 
                 else:
-                    exception_message = f"Received a `{transaction_context}` instead of a `{dict}`. This is not what I wanted. From this method, we should be receiving a `{dict}` instead. Please report this issue to the developer."
-                    exception_status = HTTPStatus.UNPROCESSABLE_ENTITY
+                    # - We cannot raise the `HTTPException` yet, store its contents and raise it later.
+                    exception_message = transaction_context.detail
+                    exception_status = HTTPStatus(transaction_context.status_code)
 
                 get_from_address_email_query: Select = select([users.c.email]).where(
                     users.c.unique_address == from_address
@@ -626,7 +635,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         self.email_service.send(
                             content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {data.content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                             subject="Error Transaction from Folioblock!",
-                            to=EmailStr(from_address_email),
+                            to=EmailStr(from_address_email.email),  # type: ignore
                         ),
                         name="send_email_invalid_address_notification",
                     )
@@ -1278,9 +1287,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     not resolved_candidate_state_info["is_mining"]
                     and NodeType(resolved_candidate_state_info["node_role"])
                     is NodeType.ARCHIVAL_MINER_NODE
-                    and (
-                        datetime.now() >= resolved_last_consensus_sleep_datetime  # type: ignore
-                    )
+                    and (datetime.now() >= resolved_last_consensus_sleep_datetime)
                 ):
                     return ArchivalMinerNodeInformation(
                         candidate_no=candidate_idx,
@@ -1749,16 +1756,15 @@ class BlockchainMechanism(ConsensusMechanism):
         self,
         *,
         action: TransactionActions,
-        payload: ApplicantLogTransaction
-        | ApplicantProcessTransaction
-        | ApplicantUserBaseTransaction
-        | OrganizationUserBaseTransaction
-        | AdditionalContextTransaction
-        | NodeTransaction,
+        payload: GroupTransaction | NodeTransaction,
         from_address: AddressUUID,
         to_address: AddressUUID | None,
         is_internal_payload: bool,  # @o Even though I can logically assume its a `Node-based transaction` when `to_address` is None, it is not possible since some `Node-based transactions` actually has a point to `address`.
-    ) -> dict | bool:
+    ) -> dict | HTTPException:
+
+        error_message: str | None = (
+            None  # * Just a variable that is used for returning error messages.
+        )
 
         if not any(
             isinstance(payload, context_model_candidates)
@@ -1771,10 +1777,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 NodeTransaction,
             ]
         ):
-            logger.error(
-                f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
+
+            error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
+
+            logger.error(error_message)
+            return HTTPException(
+                detail=error_message, status_code=HTTPStatus.UNPROCESSABLE_ENTITY
             )
-            return False
 
         # @o Declare type-hint from here
         encrypter_key: bytes
@@ -1802,38 +1811,45 @@ class BlockchainMechanism(ConsensusMechanism):
             # - a.strftime("%m%y%d%H%M%S") -> '042216205311'
             # - len(a) -> 12
 
+            resolved_slicer_to_address: int = (
+                11 if len(str(action.value)) == 2 else 12
+            )  # @o Enum shouldn't go past 99+ items.
+
             if to_address is not None:
                 constructed_context_to_key: bytes = (
-                    str(action.value) + from_address[:7] + to_address[-12:] + timestamp
+                    str(action.value)
+                    + from_address[:7]
+                    + to_address[-resolved_slicer_to_address:]
+                    + timestamp
                 ).encode("utf-8")
                 encrypter_key = urlsafe_b64encode(constructed_context_to_key)
 
             else:
-                logger.error(
-                    "Payload is not internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
+                error_message = "Payload is not internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
+
+                logger.error(error_message)
+                return HTTPException(
+                    detail=error_message, status_code=HTTPStatus.UNPROCESSABLE_ENTITY
                 )
-                return False
 
         encrypter_payload: Fernet = Fernet(encrypter_key)
         logger.debug(
             f"A key has been generated for the following action `{action.name}`. | Info: {encrypter_key.decode('utf-8')}"
         )
 
-        payload_to_encrypt: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | AdditionalContextTransaction | NodeTransaction = deepcopy(
-            payload
-        )
+        payload_to_encrypt: GroupTransaction | NodeTransaction = deepcopy(payload)
 
-        if isinstance(payload_to_encrypt, NodeTransaction):
-            if not isinstance(payload_to_encrypt.context, str):
-                payload_to_encrypt.context = HashUUID(
-                    (
-                        encrypter_payload.encrypt(
-                            export_to_json(
-                                payload_to_encrypt.context.dict(),
-                            )
+        # - Hash the content of the payload.
+        if not isinstance(payload_to_encrypt.context, str):
+            payload_to_encrypt.context = HashUUID(
+                (
+                    encrypter_payload.encrypt(
+                        export_to_json(
+                            payload_to_encrypt.context.dict(),
                         )
-                    ).decode("utf-8")
-                )
+                    )
+                ).decode("utf-8")
+            )
 
         # - Build the transaction
         try:
@@ -1859,8 +1875,12 @@ class BlockchainMechanism(ConsensusMechanism):
             print("DEBUG", built_internal_transaction)
 
         except PydanticValidationError as e:
-            logger.error(f"There was an error during payload transformation. Info: {e}")
-            return False
+            error_message = (
+                f"There was an error during payload transformation. Info: {e}"
+            )
+            return HTTPException(
+                detail=error_message, status_code=HTTPStatus.UNPROCESSABLE_ENTITY
+            )
 
         # @o Since we now have a copy of the 'premature' transaction, we calculate its hash for the `tx_hash`.
         premature_transaction_copy: dict = built_internal_transaction.dict()
@@ -1883,14 +1903,12 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         # - For user-based transactions, the method 'self.insert_external_transaction' waits for this method to finish for its transaction to get mapped from the blockchain. With that, let's return necessary contents.
-        if not isinstance(payload_to_encrypt, NodeTransaction):
-            return {
-                "tx_hash": built_internal_transaction.tx_hash,
-                "address_ref": to_address,
-                "timestamp": timestamp,
-            }
 
-        return True
+        return {
+            "tx_hash": built_internal_transaction.tx_hash,
+            "address_ref": to_address,
+            "timestamp": timestamp,
+        }
 
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         return

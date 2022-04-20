@@ -18,6 +18,7 @@ from os import environ as env
 from secrets import token_hex
 from sqlite3 import IntegrityError
 from typing import Any, Final, Mapping
+from uuid import uuid4
 
 from aiohttp import ClientError, ClientResponse
 from blueprint.models import auth_codes, tokens, users
@@ -28,6 +29,7 @@ from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import and_, false, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
+from core.constants import ADDRESS_UUID_KEY_PREFIX
 from utils.http import get_http_client_instance
 
 from core.constants import (
@@ -121,6 +123,10 @@ def generate_auth_token() -> str:
         f"Auth token generated with the following constraints: Min Length is {AUTH_CODE_MIN_CONTEXT}, Max Length is {AUTH_CODE_MAX_CONTEXT}. | Context: {generated}"
     )
     return generated
+
+
+def generate_uuid_user() -> AddressUUID:
+    return AddressUUID(f"{ADDRESS_UUID_KEY_PREFIX}:{uuid4().hex}")
 
 
 async def authenticate_node_client(

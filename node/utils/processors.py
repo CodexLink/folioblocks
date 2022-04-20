@@ -857,7 +857,7 @@ async def validate_user_address(
 async def validate_user_existence(
     *, user_identity: AgnosticCredentialValidator
 ) -> bool:
-    validate_existence_user_query: Select = select([func.now()]).where(
+    validate_existence_user_query: Select = select([func.count()]).where(
         (users.c.first_name == user_identity.first_name)
         & (users.c.last_name == user_identity.last_name)
         & (users.c.username == user_identity.username)
