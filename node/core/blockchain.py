@@ -462,7 +462,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         create_task(
                             self.email_service.send(
-                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b></i>!<br><br>Remember, if you are a {UserEntity.APPLICANT_DASHBOARD_USER.value}, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br><br>For the {UserEntity.ORGANIZATION_DASHBOARD_USER} please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the <b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i> please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                                 subject="Hello from Folioblocks!",
                                 to=data.context.email,  # type: ignore
                             ),
@@ -1766,17 +1766,7 @@ class BlockchainMechanism(ConsensusMechanism):
             None  # * Just a variable that is used for returning error messages.
         )
 
-        if not any(
-            isinstance(payload, context_model_candidates)
-            for context_model_candidates in [
-                ApplicantLogTransaction,
-                ApplicantProcessTransaction,
-                ApplicantUserBaseTransaction,
-                OrganizationUserBaseTransaction,
-                AdditionalContextTransaction,
-                NodeTransaction,
-            ]
-        ):
+        if not isinstance(payload, GroupTransaction | NodeTransaction):
 
             error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
 

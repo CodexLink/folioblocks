@@ -244,18 +244,15 @@ async def terminate() -> None:
 
     else:
         if identity_tokens is not None:
-
             # - Ignore this if this node wasn't logged on.
-            await shield(
-                http_instance.enqueue_request(
-                    url=URLAddress(
-                        f"{parsed_args.target_host}:{parsed_args.target_port}/entity/logout"
-                    ),
-                    method=HTTPQueueMethods.POST,
-                    do_not_retry=True,
-                    headers={"X-Token": JWTToken(identity_tokens[1])},
-                    name=f"request_logout_node_as_{parsed_args.node_role.name.lower()}",
-                )
+            await http_instance.enqueue_request(
+                url=URLAddress(
+                    f"{parsed_args.target_host}:{parsed_args.target_port}/entity/logout"
+                ),
+                method=HTTPQueueMethods.POST,
+                do_not_retry=True,
+                headers={"X-Token": JWTToken(identity_tokens[1])},
+                name=f"request_logout_node_as_{parsed_args.node_role.name.lower()}",
             )
 
     if http_instance is not None:

@@ -382,12 +382,6 @@ async def login_entity(
                         await db.fetch_one(logged_user_has_association_token_query)
                     )
 
-                    print(
-                        associated_token_from_logged_user,
-                        type(associated_token_from_logged_user),
-                        dir(associated_token_from_logged_user),
-                    )
-
                     if associated_token_from_logged_user is not None:
                         update_associate_node_state_query: Update = (
                             associated_nodes.update()
