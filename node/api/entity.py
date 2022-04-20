@@ -196,6 +196,11 @@ async def register_entity(
             del (
                 dict_credentials["password"],
                 dict_credentials["auth_code"],
+                dict_credentials["association_address"],
+                dict_credentials["association_type"],
+                dict_credentials["association_name"],
+                dict_credentials["association_founded"],
+                dict_credentials["association_description"],
             )  # Remove other fields so that we can do the double starred expression for unpacking.
 
             data: Insert = users.insert().values(

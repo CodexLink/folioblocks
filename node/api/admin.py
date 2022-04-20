@@ -70,41 +70,50 @@ async def generate_auth_token_for_other_nodes(
     if payload.role is UserEntity.MASTER_NODE_USER:
         raise HTTPException(
             detail=(
-                f"Rol not allowed! There should only be one {UserEntity.MASTER_NODE_USER}.",
-                [each_enum.value for each_enum in UserEntity],
+                f"Role not allowed! There should only be one {UserEntity.MASTER_NODE_USER.value}.",
             ),
             status_code=HTTPStatus.FORBIDDEN,
         )
 
-    if auth_instance.verify(x_passcode):
-        generated_token: str = generate_auth_token()
-
-        await email_instance.send(
-            content=f"<html><body><h1>Auth Code for the Folioblock's Archival Miner Node!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-            subject=f"Auth Code for Registration as {payload.role} @ Folioblocks",
-            to=payload.email,
+    elif payload.role is UserEntity.APPLICANT_DASHBOARD_USER:
+        raise HTTPException(
+            detail=(
+                f"Requesting an auth code through this role ({UserEntity.APPLICANT_DASHBOARD_USER.value}) is not allowed.",
+            ),
+            status_code=HTTPStatus.FORBIDDEN,
         )
 
-        try:
-            insert_generated_token_query: Insert = auth_codes.insert().values(
-                code=generated_token,
-                account_type=payload.role,
-                to_email=payload.email,
-                expiration=datetime.now() + timedelta(days=2),
+    else:
+        if auth_instance.verify(x_passcode):
+            generated_token: str = generate_auth_token()
+
+            await email_instance.send(
+                content=f"<html><body><h1>Auth Code for the Folioblock's Archival Miner Node!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                subject=f"Auth Code for Registration as {payload.role.value} @ Folioblocks",
+                to=payload.email,
             )
 
-            await db_instance.execute(insert_generated_token_query)
+            try:
+                insert_generated_token_query: Insert = auth_codes.insert().values(
+                    code=generated_token,
+                    account_type=payload.role,
+                    to_email=payload.email,
+                    expiration=datetime.now() + timedelta(days=2),
+                )
 
-        except IntegrityError as e:
+                await db_instance.execute(insert_generated_token_query)
+
+            except IntegrityError as e:
+                raise HTTPException(
+                    detail=f"The email you entered already has an `auth_token`! | Additional Info: {e}",
+                    status_code=HTTPStatus.FORBIDDEN,
+                )
+
+            return {
+                "detail": f"Invocation of the email for registration as a {payload.role.value} were successful."
+            }
+
+        else:
             raise HTTPException(
-                detail=f"The email you entered already has an `auth_token`! | Additional Info: {e}",
-                status_code=HTTPStatus.FORBIDDEN,
+                detail="Invalid TOTP passcode.", status_code=HTTPStatus.NOT_ACCEPTABLE
             )
-
-        return {
-            "detail": f"Invocation of the email for registration as a {payload.role} were successful."
-        }
-
-    raise HTTPException(
-        detail="Invalid TOTP passcode.", status_code=HTTPStatus.NOT_ACCEPTABLE
-    )
