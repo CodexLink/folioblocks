@@ -70,7 +70,7 @@ async def generate_auth_token_for_other_nodes(
     if payload.role is UserEntity.MASTER_NODE_USER:
         raise HTTPException(
             detail=(
-                f"Inferred role is not allowed! There should only be one {UserEntity.MASTER_NODE_USER}.",
+                f"Rol not allowed! There should only be one {UserEntity.MASTER_NODE_USER}.",
                 [each_enum.value for each_enum in UserEntity],
             ),
             status_code=HTTPStatus.FORBIDDEN,
@@ -80,8 +80,8 @@ async def generate_auth_token_for_other_nodes(
         generated_token: str = generate_auth_token()
 
         await email_instance.send(
-            content=f"<html><body><h1>Auth Code as Folioblock's Archival Miner Node!</h1><p>Thank you for taking interest! To continue, please enter the authentication code for the registration. <b>DO NOT SHARE THIS TO ANYONE.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-            subject="Register Auth Code for Archival Miner Node Registration @ Folioblocks",
+            content=f"<html><body><h1>Auth Code for the Folioblock's Archival Miner Node!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+            subject=f"Auth Code for Registration as {payload.role} @ Folioblocks",
             to=payload.email,
         )
 
@@ -97,12 +97,14 @@ async def generate_auth_token_for_other_nodes(
 
         except IntegrityError as e:
             raise HTTPException(
-                detail=f"The email you entered already has an `auth_token`! If you think this is a mistake, please contact the developers. | Additional Info: {e}",
+                detail=f"The email you entered already has an `auth_token`! | Additional Info: {e}",
                 status_code=HTTPStatus.FORBIDDEN,
             )
 
-        return {"detail": "Invocation of the email for registration were successful."}
+        return {
+            "detail": f"Invocation of the email for registration as a {payload.role} were successful."
+        }
 
     raise HTTPException(
-        detail="Invalid passcode.", status_code=HTTPStatus.NOT_ACCEPTABLE
+        detail="Invalid TOTP passcode.", status_code=HTTPStatus.NOT_ACCEPTABLE
     )

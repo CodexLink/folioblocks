@@ -85,7 +85,7 @@ for each_account in range(0, 3):  # - 1.
 
     if not each_account:
         org_account = account
-        account["type"] = UserEntity.INSTITUTION_DASHBOARD_USER
+        account["type"] = UserEntity.ORGANIZATION_DASHBOARD_USER
 
     elif each_account == 1:
         student_account = account

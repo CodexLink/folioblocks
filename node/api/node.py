@@ -383,7 +383,6 @@ async def receive_action_from_dashboard(
         EnsureAuthorized(
             _as=[
                 UserEntity.APPLICANT_DASHBOARD_USER,
-                UserEntity.INSTITUTION_DASHBOARD_USER,
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
             ],
             blockchain_related=True,
@@ -452,10 +451,7 @@ async def receive_action_from_dashboard(
             )
             resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
 
-        elif (
-            resolved_enum_member is UserEntity.ORGANIZATION_DASHBOARD_USER
-            or resolved_enum_member is UserEntity.INSTITUTION_DASHBOARD_USER
-        ):
+        elif resolved_enum_member is UserEntity.ORGANIZATION_DASHBOARD_USER:
             resolved_action = TransactionActions.ORGANIZATION_REFER_EXTRA_INFO
             resolved_content_type = (
                 TransactionContextMappingType.ORGANIZATION_ADDITIONAL
@@ -566,7 +562,6 @@ async def receive_action_from_dashboard(
             EnsureAuthorized(
                 _as=[
                     UserEntity.APPLICANT_DASHBOARD_USER,
-                    UserEntity.INSTITUTION_DASHBOARD_USER,
                     UserEntity.ORGANIZATION_DASHBOARD_USER,
                 ],
             )

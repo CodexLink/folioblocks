@@ -16,7 +16,7 @@ from core.constants import (
     UUID_KEY_LENGTH,
     AddressUUID,
     ApplicantLogContentType,
-    AssociationGroupType,
+    OrganizationType,
     CredentialContext,
     EmploymentApplicationState,
     HashUUID,
@@ -113,7 +113,7 @@ class AgnosticCredentialValidator(BaseModel):
 class OrganizationIdentityValidator(BaseModel):
     association_address: AddressUUID | None
     association_name: str | None
-    association_group_type: AssociationGroupType | None
+    association_group_type: OrganizationType | None
 
 
 # # Generalized Validator — END
@@ -124,10 +124,6 @@ class OrganizationIdentityValidator(BaseModel):
 class AgnosticTransactionUserCredentials(
     AgnosticCredentialValidator, OrganizationIdentityValidator, BaseModel
 ):
-    first_name: str
-    last_name: str
-    email: EmailStr
-    username: str
     password: str
 
 
@@ -224,7 +220,7 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
 
 
 class GroupTransaction(BaseModel):
-    content_type: TransactionContextMappingType | None # * Method `insert_external_transaction` handles this, so there's no way it will go without a context.
+    content_type: TransactionContextMappingType | None  # * Method `insert_external_transaction` handles this, so there's no way it will go without a context.
     context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserTransaction
 
 
@@ -348,6 +344,22 @@ class EntityRegisterCredentials(BaseModel):
         description="The last name of the entity, completing their identity.",
         max_length=32,
     )
+
+    association_name: str | None = Field(
+        None,
+        description="The name of the association. Specify this if the association doens't exist.",
+    )
+    association_address: str | None = Field(
+        None,
+        description="The address of the assocation. Specify if that association does exist.",
+    )
+    association_type: OrganizationType | None = Field(
+        None,
+        description="The type of the association, technically the type of the organization.",
+    )  # ! In frontend, ensure this was a dropdown.
+
+    association_founded: int | None = Field(None, description="")
+    association_description: str | None = Field(None, description="")
 
     auth_code: str | bytes = Field(  # typevar: KeyContext
         description="The authentication code that is used to authorize the registration.",

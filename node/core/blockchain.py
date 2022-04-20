@@ -64,6 +64,7 @@ from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from blueprint.schemas import GroupTransaction
 from core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
+from core.constants import UserEntity
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -246,6 +247,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 * For `NodeTransactions`, it was already handled from the method `self._insert_transaction`. It doesn't need extra parameters since those contains internal actions that doesn't need extra handling as they were displayed on Explorer API.
         """
 
+        # @o I don't know how to type this one.
         supported_models: Final[list[Any]] = [
             ApplicantLogTransaction,
             ApplicantProcessTransaction,
@@ -445,9 +447,21 @@ class BlockchainMechanism(ConsensusMechanism):
                             association=data.context.association_address,
                             first_name=data.context.first_name,
                             last_name=data.context.last_name,
+                            type=UserEntity.ORGANIZATION_DASHBOARD_USER
+                            if isinstance(data.context, OrganizationUserTransaction)
+                            else UserEntity.APPLICANT_DASHBOARD_USER,
                             email=data.context.email,
                             username=data.context.username,
                             password=hash_context(pwd=RawData(data.context.password)),
+                        )
+
+                        create_task(
+                            self.email_service.send(
+                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{UserEntity.ORGANIZATION_DASHBOARD_USER if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b></i>! Remember, if you are a {UserEntity.APPLICANT_DASHBOARD_USER}, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one. For the {UserEntity.ORGANIZATION_DASHBOARD_USER} please be responsible as any data you insert cannot be modified as they are stored from blockchain. Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                subject="Hello from Folioblocks!",
+                                to=data.context.email,
+                            ),
+                            name=f"{get_email_instance.__name__}_send_register_welcome_user",
                         )
 
                         await self.db_instance.execute(insert_user_query)
@@ -608,7 +622,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 if from_address_email is not None and data.content_type is not None:
-                    create_task(``
+                    create_task(
                         self.email_service.send(
                             content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {data.content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                             subject="Error Transaction from Folioblock!",

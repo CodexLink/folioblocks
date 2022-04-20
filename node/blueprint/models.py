@@ -14,7 +14,7 @@ from typing import Final
 
 from core.constants import (
     AssociatedNodeStatus,
-    AssociationGroupType,
+    OrganizationType,
     ConsensusNegotiationStatus,
     EmploymentApplicationState,
     TokenStatus,
@@ -49,8 +49,8 @@ associations = Table(
     Column("name", String(64), nullable=False),
     Column(
         "group",
-        SQLEnum(AssociationGroupType),
-        server_default=AssociationGroupType.ORGANIZATION.name,
+        SQLEnum(OrganizationType),
+        server_default=OrganizationType.ORGANIZATION.name,
         nullable=False,
     ),
     Column("date_added", DateTime, default=func.now()),

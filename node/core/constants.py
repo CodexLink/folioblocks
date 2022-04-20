@@ -256,7 +256,7 @@ class AssociatedNodeStatus(IntEnum):
     CURRENTLY_SLEEPING = auto()
 
 
-class AssociationGroupType(IntEnum):
+class OrganizationType(IntEnum):
     COMPANY = auto()
     INSTITUTION = auto()
     ORGANIZATION = auto()
@@ -303,9 +303,7 @@ class UserEntity(Enum):
     MASTER_NODE_USER = "Master Node User"
     ARCHIVAL_MINER_NODE_USER = "Archival Miner Node User"
     APPLICANT_DASHBOARD_USER = "Applicant Dashboard User"
-    INSTITUTION_DASHBOARD_USER = "Institution Dashboard User"
-    ORGANIZATION_DASHBOARD_USER = "Company / Organization Dashboard User"
-    ADMIN_USER = "Administrator"
+    ORGANIZATION_DASHBOARD_USER = "Company / Institution / Organization Dashboard User"
 
 
 # # Enums, Generic
@@ -352,12 +350,6 @@ class ApplicantLogContentType(IntEnum):
     ACTIVITY = auto()
     PROMOTION = auto()
     EMPLOYMENT = auto()
-
-
-class OrganizationType(IntEnum):
-    COMPANY = auto()
-    LITERAL = auto()
-    SCHOOL = auto()
 
 
 class EmploymentActivityType(IntEnum):
