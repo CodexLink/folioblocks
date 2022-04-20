@@ -14,7 +14,8 @@ from pydantic import EmailStr
 
 from core.constants import HTTPQueueMethods, URLAddress
 from core.constants import UserEntity
-from core.dependencies import PasscodeTOTP, get_totp_instance
+from core.dependencies import PasscodeTOTP
+from blueprint.schemas import ApplicantUserTransaction
 from utils.http import get_http_client_instance
 from faker import Faker
 
@@ -72,11 +73,6 @@ for each_account in range(0, 3):  # - 1.
         "last_name": faker.last_name(),
         "username": faker.user_name(),
         "password": faker.password(),
-        "type": UserEntity.INSTITUTION_DASHBOARD_USER
-        if not each_account
-        else UserEntity.APPLICANT_DASHBOARD_USER
-        if each_account == 1
-        else UserEntity.ORGANIZATION_DASHBOARD_USER,
     }  # type: ignore
 
     email_address: EmailStr = EmailStr(
@@ -89,10 +85,15 @@ for each_account in range(0, 3):  # - 1.
 
     if not each_account:
         org_account = account
+        account["type"] = UserEntity.INSTITUTION_DASHBOARD_USER
+
     elif each_account == 1:
         student_account = account
+        account["type"] = UserEntity.APPLICANT_DASHBOARD_USER
+
     else:
         institution_account = account
+        account["type"] = UserEntity.ORGANIZATION_DASHBOARD_USER
 
 
 async def main() -> None:
@@ -186,11 +187,25 @@ async def main() -> None:
 
             if login_institution.ok:
                 print(
-                    f"Institution sign in as {institution_account['username']} or {institution_account['email']}! Ready to insert some student."
+                    f"Institution sign in as {institution_account['username']} or {institution_account['email']}! Ready to insert some applicants."
                 )
 
-            # ! Create 2 applicants/students here.
+            # ! Create an applicant here.
+            # get_organization_address
+            # student_credential_model: ApplicantUserTransaction = ApplicantUserTransaction(
+            #     association_address=,
+            #     association_group_type=,
+            #     association_group_type=,
 
+            # )
+            create_student_entry = await http.enqueue_request(
+                url=URLAddress(f"{path_to_master}/blockchain/receive_context"),
+                method=HTTPQueueMethods.POST,
+                data={},
+                headers={},
+                await_result_immediate=True,
+                retry_attempts=99,
+            )
             # ! Insert documents from these applicants. (Activities and stuff)
 
             # ! Add extra information from these applicants.
@@ -208,6 +223,10 @@ async def main() -> None:
             input()
 
             # ! Attempt to decode these.
+
+            # # Extra: Create a user of an existing user.
+
+            # # Extra: Create an organization of an existing user.
 
 
 asyncio_run(main())

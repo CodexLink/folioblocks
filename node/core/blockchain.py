@@ -53,7 +53,7 @@ from blueprint.schemas import (
 )
 from cryptography.fernet import Fernet
 from databases import Database
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
@@ -229,21 +229,21 @@ class BlockchainMechanism(ConsensusMechanism):
         from_address: AddressUUID,
         to_address: AddressUUID | None,
         data: GroupTransaction,
-    ) -> bool:
+    ) -> HTTPException | None:
         """
         @o A method that is callable outside scope that can create a transaction as well as the entity from the database, if possible. It handles the content to render from the transaction as this will be used for content viewing later from the frontend.
 
         ### Args:
-            * action (TransactionActions): An enum that describes the cause of instantiation of this transaction.
-            * from_address (AddressUUID): A unique identifier that instantiated this transaction.
-            * to_address (AddressUUID): A unique identifier that is being referred from the content of this transaction.
-            * data (ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInternal | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
+                * action (TransactionActions): An enum that describes the cause of instantiation of this transaction.
+                * from_address (AddressUUID): A unique identifier that instantiated this transaction.
+                * to_address (AddressUUID): A unique identifier that is being referred from the content of this transaction.
+                * data (ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInternal | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
 
         ### Returns:
-            * bool: Returns `True` or `False` depending whether this function success or fails on execution of resolving the transaction for block minin.
+                * bool: Returns `True` or `False` depending whether this function success or fails on execution of resolving the transaction for block minin.
 
         ### Note:
-            * For `NodeTransactions`, it was already handled from the method `self._insert_transaction`. It doesn't need extra parameters since those contains internal actions that doesn't need extra handling as they were displayed on Explorer API.
+                * For `NodeTransactions`, it was already handled from the method `self._insert_transaction`. It doesn't need extra parameters since those contains internal actions that doesn't need extra handling as they were displayed on Explorer API.
         """
 
         supported_models: Final[list[Any]] = [
@@ -260,204 +260,142 @@ class BlockchainMechanism(ConsensusMechanism):
             any(isinstance(data.context, each_model) for each_model in supported_models)
             and action in TransactionActions
             and isinstance(from_address, str)
-            and isinstance(to_address, str)
+            and isinstance(to_address, str | None)
         ):
 
-            # - [1] Ensure that the `from_address` is existing.
-            # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
-            # ! I will be dividing those into two statements.
-
-            get_existing_from_address_query, get_existing_to_address_query = select(
-                [func.count()]
-            ).where(users.c.unique_address == from_address), select(
-                [func.count()]
-            ).where(
-                users.c.unique_address == to_address
+            # @o Declared for type-hint. Initialized on some conditions.
+            resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | None = (
+                None
             )
+            exception_message: str | None = None  # * Reflects to log while sending the detail message from the HTTPException.
+            exception_status: HTTPStatus | None = None
 
-            # * Get it, by we will not be using it.
-            # * I don't know how to use count
-            (
-                is_existing_from_address,
-                is_existing_to_address,
-            ) = await self.db_instance.fetch_one(
-                get_existing_from_address_query
-            ), await self.db_instance.fetch_one(
-                get_existing_to_address_query
-            )
+            # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
+            # # [4]
 
-            # - When creating a user, bypass it for now.
-            # * I know the idea of putting the functionality in API side but I want to conslidate the method into one so that its easy to navigate as they were isolated in one part.
+            # - For the applicant application attempt actions.
             if (
-                isinstance(
-                    data.context, ApplicantUserTransaction | OrganizationUserTransaction
-                )
-                and to_address is None
-            ):
-                is_existing_to_address = True
-
-            # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
-            # ! These addresses will either contain a `str` or a `None` (`NoneType`).
-            # ! If one of them contains `None` or `NoneType` this statement will result to false.
-            if all(
-                fetched_address
-                for fetched_address in [
-                    is_existing_to_address,
-                    is_existing_from_address,
-                ]
-            ):
-
-                # @o Declared for type-hint. Initialized on some conditions.
-                resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | OrganizationUserBaseTransaction | None = (
-                    None
-                )
-
-                # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
-                # # [4]
-
-                # - For the applicant application attempt actions.
-                if action in [
+                action
+                in [
                     TransactionActions.APPLICANT_APPLY,
                     TransactionActions.APPLICANT_APPLY_CONFIRMED,
                     TransactionActions.APPLICANT_APPLY_REJECTED,
-                ] and isinstance(data.context, ApplicantProcessTransaction):
+                ]
+                and isinstance(data.context, ApplicantProcessTransaction)
+                and isinstance(to_address, str)
+            ):
 
-                    # - Since this was a new entry, we need to do some handling for the database entry.
-                    try:
-                        # @o It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
-                        if (
-                            await validate_transaction_mapping_exists(
-                                reference_address=AddressUUID(to_address),
-                                content_type=TransactionContextMappingType.APPLICANT_BASE,
-                            )
-                            is True
-                        ):
-                            # @o Type-hint.
-                            application_process_query: Insert | Update
-
-                            if action is TransactionActions.APPLICANT_APPLY:
-                                application_process_query = (
-                                    applications.insert().values(
-                                        process_id=RandomUUID(token_urlsafe(16)),
-                                        requestor=data.context.requestor,
-                                        to=data.context.receiver,
-                                        state=EmploymentApplicationState.REQUESTED,
-                                    )
-                                )
-                            else:
-                                application_process_query = (
-                                    applications.update()
-                                    .where(
-                                        applications.c.process_uuid
-                                        == data.context.process_id
-                                    )
-                                    .values(
-                                        state=EmploymentApplicationState.ACCEPTED
-                                        if action
-                                        is TransactionActions.APPLICANT_APPLY_CONFIRMED
-                                        else EmploymentApplicationState.REJECTED
-                                    )
-                                )
-
-                            await self.db_instance.execute(application_process_query)
-
-                        else:
-                            return False
-
-                    except IntegrityError as e:
-                        logger.error(
-                            f"There was an error regarding application process entry to database. | Info: {e}"
+                # - Since this was a new entry, we need to do some handling for the database entry.
+                try:
+                    # @o It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
+                    if (
+                        await validate_transaction_mapping_exists(
+                            reference_address=AddressUUID(to_address),
+                            content_type=TransactionContextMappingType.APPLICANT_BASE,
                         )
-                        return False
+                        is True
+                    ):
+                        # @o Type-hint.
+                        application_process_query: Insert | Update
 
-                    resolved_payload = data.context
+                        if action is TransactionActions.APPLICANT_APPLY:
+                            application_process_query = applications.insert().values(
+                                process_id=RandomUUID(token_urlsafe(16)),
+                                requestor=data.context.requestor,
+                                to=data.context.receiver,
+                                state=EmploymentApplicationState.REQUESTED,
+                            )
+                        else:
+                            application_process_query = (
+                                applications.update()
+                                .where(
+                                    applications.c.process_uuid
+                                    == data.context.process_id
+                                )
+                                .values(
+                                    state=EmploymentApplicationState.ACCEPTED
+                                    if action
+                                    is TransactionActions.APPLICANT_APPLY_CONFIRMED
+                                    else EmploymentApplicationState.REJECTED
+                                )
+                            )
 
-                # - For transactions that require generation of `user` under Organization or as an Applicant.
-                elif action in [
-                    TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
-                    TransactionActions.ORGANIZATION_USER_REGISTER,
-                ] and (
-                    isinstance(
-                        data.context,
-                        ApplicantUserTransaction | OrganizationUserTransaction,
+                        await self.db_instance.execute(application_process_query)
+                        resolved_payload = data.context
+
+                    else:
+                        exception_message = f"There is no content type ({TransactionContextMappingType.APPLICANT_BASE}) transaction mapping for {to_address}. Please create an applicant account and try again."
+                        exception_status = HTTPStatus.NOT_FOUND
+
+                except IntegrityError as e:
+                    exception_message = f"There was an error regarding application process entry to database. | Info: {e}"
+                    exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
+
+            # - For transactions that require generation of `user` under Organization or as an Applicant.
+            elif action in [
+                TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
+                TransactionActions.ORGANIZATION_USER_REGISTER,
+            ] and (
+                isinstance(
+                    data.context,
+                    ApplicantUserTransaction | OrganizationUserTransaction,
+                )
+            ):
+                # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
+                # @d With that, we need to seperate this transaction with `Internal` and `External`.
+
+                # ! Where,
+                # @o XXXInternal -> Contains fields that is classified as credentials.
+                # @o XXXExternal -> Contains fields that does not contain anything sensitive as it only describes something out of context.
+
+                # @o Since `XXXInternal` subclasses `XXXExternal`, we only need `Internal` and break down until we get to the `XXXExternal`.
+
+                # #  ADD CONDITION FOR TRANSACTION MAPPING.
+
+                # - Validate conditions before user generation.
+                # - Validate if there's an existing association/organzization for the new applicant to refer.
+
+                # @d Type-hints.
+                validate_user: bool
+                existing_association: Mapping | None
+
+                # - Validate the existence of the user based on the sensitive information.
+                validate_user = await validate_user_existence(
+                    user_identity=AgnosticCredentialValidator(
+                        first_name=data.context.first_name,
+                        last_name=data.context.last_name,
+                        username=data.context.username,
+                        email=data.context.email,
                     )
-                ):
-                    # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
-                    # @d With that, we need to seperate this transaction with `Internal` and `External`.
+                )
 
-                    # ! Where,
-                    # @o XXXInternal -> Contains fields that is classified as credentials.
-                    # @o XXXExternal -> Contains fields that does not contain anything sensitive as it only describes something out of context.
+                if validate_user:
+                    exception_message = "There was an existing user from the credentials given! Please try with another credentials. Or contact your administration regarding your credentails."
+                    exception_status = HTTPStatus.CONFLICT
 
-                    # @o Since `XXXInternal` subclasses `XXXExternal`, we only need `Internal` and break down until we get to the `XXXExternal`.
-
-                    # #  ADD CONDITION FOR TRANSACTION MAPPING.
-
-                    # - Validate conditions before user generation.
-                    # - Validate if there's an existing association/organzization for the new applicant to refer.
-
-                    # @d Type-hints.
-                    validate_user: bool
-                    existing_association: Mapping | None
+                else:
+                    # - Validate the existence of an associate/organization.
+                    existing_association = await validate_organization_existence(
+                        org_identity=OrganizationIdentityValidator(
+                            association_address=data.context.association_address,
+                            association_name=data.context.association_name,
+                            association_group_type=data.context.association_group_type,
+                        ),
+                        is_org_scope=False,
+                    )
 
                     if (
                         isinstance(data.context, ApplicantUserTransaction)
                         and data.context.association_address is not None
                     ):
 
-                        validate_user = await validate_user_existence(
-                            user_identity=AgnosticCredentialValidator(
-                                first_name=data.context.first_name,
-                                last_name=data.context.last_name,
-                                username=data.context.username,
-                                email=data.context.email,
-                            )
-                        )
-
-                        if validate_user:
-                            return False
-
-                        existing_association = await validate_organization_existence(
-                            org_identity=OrganizationIdentityValidator(
-                                association_address=data.context.association_address,
-                                association_name=data.context.association_name,
-                                association_group_type=data.context.association_group_type,
-                            ),
-                            is_org_scope=False,
-                        )
-
                         if existing_association is None:
-                            logger.error(
-                                "The associate address does not exists! Please refer to the right associate/organization or association to proceed the registration."
-                            )
-                            return False
+                            exception_message = "The associate address does not exists! Please refer to the right associate/organization or association to proceed the registration."
+                            exception_status = HTTPStatus.NOT_FOUND
 
                     # - For the case of registering with the associate/organization, sometimes user can register with associate/organization reference existing and otherwise. With that, we need to handle the part where if the associate/organization doesn't exist then create a new one. Otherwise, refer its self from that associate/organization and we are good to go.
 
                     elif isinstance(data.context, OrganizationUserTransaction):
-                        # - Validate the existence of the user based on the sensitive information.
-                        validate_user = await validate_user_existence(
-                            user_identity=AgnosticCredentialValidator(
-                                first_name=data.context.first_name,
-                                last_name=data.context.last_name,
-                                username=data.context.username,
-                                email=data.context.email,
-                            )
-                        )
-
-                        if validate_user:
-                            return False
-
-                        # - Validate the existence of an associate/organization.
-                        existing_association = await validate_organization_existence(
-                            org_identity=OrganizationIdentityValidator(
-                                association_address=data.context.association_address,
-                                association_name=data.context.association_name,
-                                association_group_type=data.context.association_group_type,
-                            ),
-                            is_org_scope=True,
-                        )
-
                         # - Condition for creating a new associate/organization wherein there's no referrable address.
                         if (
                             data.context.association_address is None
@@ -492,15 +430,13 @@ class BlockchainMechanism(ConsensusMechanism):
                         ):
                             data.context.association_address = existing_association.address  # type: ignore
 
-                            if existing_association is not None:
-                                logger.error(
-                                    "The supplied parameter for the `association` address reference does not exist! This is a developer-issue, please contact as possible."
-                                )
-                            return False
-
                         else:
-                            logger.error(
-                                f"Instances has condition unmet. Either the `association` contains nothing or the instance along with the `association` condition does not met. Please try again."
+                            exception_message = "The supplied parameter for the `association` address reference does not exist!"
+                            exception_status = HTTPStatus.NOT_FOUND
+
+                            # ! To avoid complexity, just return here instead of going outer scope which is difficult.
+                            return HTTPException(
+                                detail=exception_message, status_code=exception_status
                             )
 
                     # @o When all of the checks are done, then create the user.
@@ -516,125 +452,123 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         await self.db_instance.execute(insert_user_query)
 
+                        # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
+                        # - After all that, its time to resolve those context for the `External` model. (For the blockchain to record).
+
+                        # ! Excluding fields via Model is not possible.
+                        # ! https://github.com/samuelcolvin/pydantic/issues/1862.
+                        removed_credentials_context: dict = data.context.dict(
+                            exclude={
+                                "association_address": True,
+                                "association_name": True,
+                                "association_group_type": True,
+                                "first_name": True,
+                                "last_name": True,
+                                "email": True,
+                                "username": True,
+                                "password": True,
+                            }
+                        )
+
+                        resolved_payload = (
+                            ApplicantUserBaseTransaction(**removed_credentials_context)
+                            if isinstance(data.context, ApplicantUserTransaction)
+                            else OrganizationUserBaseTransaction(
+                                **removed_credentials_context
+                            )
+                        )
+
                     except IntegrityError as e:
-                        logger.error(
-                            f"There was an error during account generation. This may likely be a cause of duplication or unique-ness issue. Please check your credentials and try again. | Info: {e}"
-                        )
-                        return False
+                        exception_message = f"There was an error during account generation. This may likely be a cause of duplication or unique-ness issue. Please check your credentials and try again. | Info: {e}"
+                        exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
 
-                    # - After all that, its time to resolve those context for the `External` model. (For the blockchain to record).
-
-                    # ! Excluding fields via Model is not possible.
-                    # ! https://github.com/samuelcolvin/pydantic/issues/1862.
-
-                    # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
-                    removed_credentials_context: dict = data.context.dict(
-                        exclude={
-                            "association_address": True,
-                            "association_name": True,
-                            "association_group_type": True,
-                            "first_name": True,
-                            "last_name": True,
-                            "email": True,
-                            "username": True,
-                            "password": True,
-                        }
+            # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
+            # @o This needs special handling due to the fact that it may contain an actual file.
+            # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `ApplicantLogTransaction`.
+            elif (
+                action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
+                and isinstance(data.context, ApplicantLogTransaction)
+                and isinstance(to_address, str)
+            ):
+                if (
+                    await validate_transaction_mapping_exists(
+                        reference_address=AddressUUID(to_address),
+                        content_type=TransactionContextMappingType.APPLICANT_BASE,
                     )
-
-                    resolved_payload = (
-                        ApplicantUserBaseTransaction(**removed_credentials_context)
-                        if isinstance(data.context, ApplicantUserTransaction)
-                        else OrganizationUserBaseTransaction(
-                            **removed_credentials_context
-                        )
-                    )
-
-                # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
-                # @o This needs special handling due to the fact that it may contain an actual file.
-                # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `ApplicantLogTransaction`.
-                elif (
-                    action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
-                    and isinstance(data.context, ApplicantLogTransaction)
+                    is True
                 ):
-                    if (
-                        await validate_transaction_mapping_exists(
-                            reference_address=AddressUUID(to_address),
-                            content_type=TransactionContextMappingType.APPLICANT_BASE,
+
+                    if isinstance(data.context.file, UploadFile):
+                        # @o We combine the current time under isoformat string + given filename + referred user address in full length.
+
+                        # ! We need to create our own key because we are going to access these files.
+                        # * Since this project is under repository, we will keep it this way.
+                        # * In actual real world, we ain't gonna be doing this.
+
+                        # @o Create the key based from the user address (`target` or `to`), truncated from the first 12 character + datetime in custom format, please see the variable `current_date` below.
+                        # # Documentation regarding custom format: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
+
+                        timestamp: datetime = datetime.now()
+                        current_date: str = timestamp.strftime(
+                            "%y%m%d%H%M%S"
+                        )  # @o datetime.now() produces "datetime.datetime(2022, 4, 16, 19, 45, 36, 724779)" and when called with datetime.now().isoformat() produces "2022-04-16T19:45:36.724779'", when we used datetime.now().strftime() with parameters "%y%m%d%H%M%S", will produce "'220416194536'"
+
+                        encrypter_key: bytes = f"{to_address}{current_date}".encode(
+                            "utf-8"
                         )
-                        is True
-                    ):
+                        file_encrypter: Fernet = Fernet(encrypter_key)
 
-                        if isinstance(data.context.file, UploadFile):
-                            # @o We combine the current time under isoformat string + given filename + referred user address in full length.
-
-                            # ! We need to create our own key because we are going to access these files.
-                            # * Since this project is under repository, we will keep it this way.
-                            # * In actual real world, we ain't gonna be doing this.
-
-                            # @o Create the key based from the user address (`target` or `to`), truncated from the first 12 character + datetime in custom format, please see the variable `current_date` below.
-                            # # Documentation regarding custom format: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
-
-                            timestamp: datetime = datetime.now()
-                            current_date: str = timestamp.strftime(
-                                "%y%m%d%H%M%S"
-                            )  # @o datetime.now() produces "datetime.datetime(2022, 4, 16, 19, 45, 36, 724779)" and when called with datetime.now().isoformat() produces "2022-04-16T19:45:36.724779'", when we used datetime.now().strftime() with parameters "%y%m%d%H%M%S", will produce "'220416194536'"
-
-                            encrypter_key: bytes = f"{to_address}{current_date}".encode(
-                                "utf-8"
-                            )
-                            file_encrypter: Fernet = Fernet(encrypter_key)
-
-                            async with aopen(
-                                f"../userfiles/{timestamp.isoformat()}{data.context.file.filename}{to_address}",
-                                "wb",
-                            ) as file_writer:
-                                raw_context: bytes | str = (
-                                    await data.context.file.read()
-                                )
-                                encrypted_context: bytes = file_encrypter.encrypt(
-                                    raw_context.encode("utf-8")
-                                    if isinstance(raw_context, str)
-                                    else raw_context
-                                )
-
-                                await file_writer.write(encrypted_context)
-
-                            # - Since we got the file and encrypted it, get the SHA256 of the payload.
-                            # - And replace it on the field of the `data.context.file` so that we will get a reference when we refer from it.
-                            data.context.file = HashUUID(
-                                sha256(
-                                    raw_context.encode("utf-8")
-                                    if isinstance(raw_context, str)
-                                    else raw_context
-                                ).hexdigest()
+                        async with aopen(
+                            f"../userfiles/{timestamp.isoformat()}{data.context.file.filename}{to_address}",
+                            "wb",
+                        ) as file_writer:
+                            raw_context: bytes | str = await data.context.file.read()
+                            encrypted_context: bytes = file_encrypter.encrypt(
+                                raw_context.encode("utf-8")
+                                if isinstance(raw_context, str)
+                                else raw_context
                             )
 
-                        # - Do the following for all condition.
-                        resolved_payload = data.context
+                            await file_writer.write(encrypted_context)
 
-                    else:
-                        return False
+                        # - Since we got the file and encrypted it, get the SHA256 of the payload.
+                        # - And replace it on the field of the `data.context.file` so that we will get a reference when we refer from it.
+                        data.context.file = HashUUID(
+                            sha256(
+                                raw_context.encode("utf-8")
+                                if isinstance(raw_context, str)
+                                else raw_context
+                            ).hexdigest()
+                        )
 
-                # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
-                # # [2]
-                elif action in [
-                    TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
-                    TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
-                ] and isinstance(data.context, AdditionalContextTransaction):
-                    # * Do nothing, we don't want to be redundant.
-                    # ! Addresses were already checked.
-
+                    # - Do the following for all condition.
                     resolved_payload = data.context
 
                 else:
-                    logger.error(
-                        "There was an error during conditional check. Are you sure this combination is right? Please check the declaration and try again."
-                    )
-                    return False
+                    exception_message = f"Cannot find transaction map for the address {to_address} with the content type {TransactionContextMappingType.APPLICANT_BASE}."
 
-                if resolved_payload is None:
-                    return False  # * There was already a log so there's no need to output something from here.
+            # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
+            # # [2]
+            elif action in [
+                TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
+                TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
+            ] and isinstance(data.context, AdditionalContextTransaction):
 
+                # * Do nothing, we don't want to be redundant.
+                # ! Addresses were already checked.
+
+                resolved_payload = data.context
+
+            else:
+                exception_message = "All of the condition specified did not hit. Are you sure your combination of data is right? Please check the declaration and try again."
+                exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
+                resolved_payload = None
+
+            if (
+                resolved_payload is not None
+                and not isinstance(exception_message, str)
+                and not isinstance(exception_status, HTTPStatus)
+            ):
                 transaction_context: dict | bool = (
                     await self._resolve_transaction_payload(
                         action=action,
@@ -659,12 +593,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     await self.db_instance.execute(insert_transaction_content_map_query)
 
-                    return True
+                    return None
 
                 else:
-                    logger.error(
-                        f"Received a `{transaction_context}` instead of a `{dict}`. This is not what I wanted. From this method, we should be receiving a `{dict}` instead. Please report this issue to the developer."
-                    )
+                    exception_message = f"Received a `{transaction_context}` instead of a `{dict}`. This is not what I wanted. From this method, we should be receiving a `{dict}` instead. Please report this issue to the developer."
+                    exception_status = HTTPStatus.UNPROCESSABLE_ENTITY
 
                 get_from_address_email_query: Select = select([users.c.email]).where(
                     users.c.unique_address == from_address
@@ -675,7 +608,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 if from_address_email is not None and data.content_type is not None:
-                    create_task(
+                    create_task(``
                         self.email_service.send(
                             content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {data.content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                             subject="Error Transaction from Folioblock!",
@@ -683,21 +616,28 @@ class BlockchainMechanism(ConsensusMechanism):
                         ),
                         name="send_email_invalid_address_notification",
                     )
+                    exception_message = "There was an error on processing this request. `from_address` exists which was able to be contacted through."
+                    exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
                 else:
-                    logger.error("Failed to send an email regarding the error.")
-                return False
+                    exception_message = "There was an error on processing this request. `from_address` exists but fails to contact them via email."
+                    exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
 
-            logger.error(
-                f"{'Sender' if from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be disregarded."
-            )
-            return False
+            else:
+                return HTTPException(
+                    detail=exception_message,
+                    status_code=exception_status
+                    if isinstance(exception_status, HTTPStatus)
+                    else HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
 
-        logger.error(
-            f"There was a missing or invalid value inserted from  the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `{TransactionActions}`, `from_address` should contain a valid {str} and `data` should be wrapped in a pydantic model ({BaseModel})! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
-        )
-        return False
+            logger.critical(exception_message)
+            return HTTPException(detail=exception_message, status_code=exception_status)
 
-        # - Attempt to recognize the action by referring to the instance of the data.
+        else:
+            exception_message = f"{'Sender' if from_address is None else 'Receiver'} address seem to be invalid. Please check your input and try again. This transaction will be disregarded. also, there was a missing or invalid value inserted from the following parameters: `action`, `from_address` and `data`. `action` requires to have a value of an Enum `{TransactionActions}`, `from_address` should contain a valid {str} and `data` should be wrapped in a pydantic model ({BaseModel})! Please encapsulate your `data` to one of the following pydantic models: {[each_model.__name__ for each_model in supported_models]}."
+            exception_status = HTTPStatus.UNPROCESSABLE_ENTITY
+
+        return HTTPException(detail=exception_message, status_code=exception_status)
 
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
@@ -918,8 +858,8 @@ class BlockchainMechanism(ConsensusMechanism):
         A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
 
         Args:
-            context (Block | Transaction): The context of the block as is.
-            auth_context (IdentityTokens): Authentication attribute, not sure what to do on this one yet.
+                context (Block | Transaction): The context of the block as is.
+                auth_context (IdentityTokens): Authentication attribute, not sure what to do on this one yet.
 
         TODO
         * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
@@ -1594,10 +1534,10 @@ class BlockchainMechanism(ConsensusMechanism):
         A method that deserializes the universally readable (JSON) format from the blockchain file into an immutable dictionary (frozendict) containing a series of pydantic objects.
 
         Args:
-            context (dict[str, Any]): The consumable data (type-compatible) that is loaded by the orjson.
+                context (dict[str, Any]): The consumable data (type-compatible) that is loaded by the orjson.
 
         Returns:
-            frozendict: Returns the immutable version of the given `context`.
+                frozendict: Returns the immutable version of the given `context`.
         """
 
         # - Check if there's a context inside of the JSON. If there's none then create a n of genesis blocks.
@@ -1744,13 +1684,13 @@ class BlockchainMechanism(ConsensusMechanism):
         A method that serializes the python objects to a much more universally-readable JSON format to the blockchain file.
 
         Args:
-            o (frozendict): The whole chain, wrapped in frozendict.
+                o (frozendict): The whole chain, wrapped in frozendict.
 
         Raises:
-            TypeError: Cast TypeError when the constraint from the `o` is not followed.
+                TypeError: Cast TypeError when the constraint from the `o` is not followed.
 
         Returns:
-            dict[str, Any]: Returns the JSON form of the blockchain that is in-memory.
+                dict[str, Any]: Returns the JSON form of the blockchain that is in-memory.
 
         Note:
         TODO By this point, I still haven't consider for scalability and its impact from processing such data.
@@ -1955,8 +1895,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # Notes:
         - This should only be called from the following conditions:
-            @o Negotiating with the master to update its current chain.
-            @o On initilization of the instance.
+                @o Negotiating with the master to update its current chain.
+                @o On initilization of the instance.
 
         """
         # Before attempting to do that, check for the hash first.

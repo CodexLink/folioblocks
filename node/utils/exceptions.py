@@ -33,7 +33,7 @@ class ConversionUnequalLength(AssertionError):
             % (f"| Additional Info: {context}" if context else "")
         )
 
-        logger.exception(message)
+        logger.critical(message)
         super().__init__()
 
 
@@ -47,7 +47,7 @@ class NoKeySupplied(ValueError):
 
         message: str = f"This function / context {fn_ref.__name__} requires a value. | Additional Info: {extra_info}"
 
-        logger.exception(message)
+        logger.critical(message)
         super().__init__()
 
 
@@ -56,5 +56,5 @@ class UnsatisfiedClassType(ValueError):
 
         message: str = f"The type assertion is unsatisfied. Argument contains {type(has)} when it should be {expected}. This is a development issue, please contact the developer."
 
-        logger.exception(message)
+        logger.critical(message)
         super().__init__()

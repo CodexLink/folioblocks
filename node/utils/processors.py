@@ -774,11 +774,11 @@ def unconventional_terminate(*, message: str, early: bool = False) -> None:
     """A method that terminates the runtime process unconventionally via calling signal or `exit()`.
 
     Args:
-        message (str): The message to display under `logging.exception(<context>).`
+        message (str): The message to display under `logging.critical(<context>).`
         early (bool): Indicates that this method were running BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
     """
 
-    logger.exception(message)
+    logger.critical(message)
     if early:
         supress_exceptions_and_warnings()
         exit(-1)
@@ -869,9 +869,6 @@ async def validate_user_existence(
     )
 
     if existing_user:
-        logger.error(
-            "There was an existing user from the credentials given! Please try with another credentials. Or contact your administration regarding your credentails."
-        )
         return False
 
     return True
@@ -893,9 +890,6 @@ async def validate_transaction_mapping_exists(
 
         return True if found_tx_mapping else False
 
-    logger.error(
-        f"Cannot find transaction map for the address {reference_address} with the content type {content_type}."
-    )
     return False
 
 

@@ -71,7 +71,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 
 from core.constants import AssociatedNodeStatus
@@ -84,7 +84,7 @@ from blueprint.schemas import (
     OrganizationUserTransaction,
 )
 from core.constants import ApplicantLogContentType, TransactionContextMappingType
-from node.core.constants import EmploymentApplicationState
+from core.constants import EmploymentApplicationState
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -371,18 +371,6 @@ async def process_raw_block(
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary="Receives data that serves as an action of the user from the dashboard.",
     description=f"A special API endpoint that accepts payload from the dashboard. This requires special credentials and handling outside the scope of node.",
-    dependencies=[
-        Depends(
-            EnsureAuthorized(
-                _as=[
-                    UserEntity.APPLICANT_DASHBOARD_USER,
-                    UserEntity.INSTITUTION_DASHBOARD_USER,
-                    UserEntity.ORGANIZATION_DASHBOARD_USER,
-                ],
-                blockchain_related=True,
-            )
-        )
-    ],
     status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_action_from_dashboard(
@@ -391,11 +379,21 @@ async def receive_action_from_dashboard(
     | ApplicantUserTransaction
     | AdditionalContextTransaction
     | OrganizationUserTransaction,
+    auth_validator=Depends(
+        EnsureAuthorized(
+            _as=[
+                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.INSTITUTION_DASHBOARD_USER,
+                UserEntity.ORGANIZATION_DASHBOARD_USER,
+            ],
+            blockchain_related=True,
+        )
+    ),
     blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
     database_instance: Database = Depends(get_database_instance),
 ) -> None:
 
-    # - Since the payload is automatically determined, we are going to keep resolve its parameter for the `from_address` and `to_address` when calling blockchain_instance.insert_external_transaction.
+    # - Since the payload is automatically determined, we are going to keep resolve its parameter for the `from_address` and `to_address` when calling `blockchain_instance.insert_external_transaction`.
 
     # @o Type-hints for now.
     resolved_content_type: TransactionContextMappingType | None = None
@@ -404,6 +402,7 @@ async def receive_action_from_dashboard(
     resolved_action: TransactionActions | None = None
 
     # - Compare via instance and assign necessary components.
+    # - As well compare the token payload from the
     #! Note that, `ApplicantLogTransaction` has been handled from `receive_file_from_dashboard` method.:
 
     if isinstance(payload, ApplicantProcessTransaction):
@@ -429,8 +428,8 @@ async def receive_action_from_dashboard(
         )  # - `to_address` is resolved from the method.
 
     elif isinstance(payload, AdditionalContextTransaction):
-        # - With the logic being too complicated, we should resolve this content_type here instead.
-        # - Inside method does nothing honestly.
+        # - With the logic being too complicated, we should resolve this `content_type` here instead.
+        # - Inside method (the handler from this context) does nothing honestly.
 
         # * We have no choice but to have the credential re-checked again from the entrypoint of the `insert_external_transactions`.
         identify_user_type_query: Select = select([users.c.type]).where(
@@ -487,23 +486,74 @@ async def receive_action_from_dashboard(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
-    # - Create a `GroupTransaction`.
-    resolved_payload: GroupTransaction = GroupTransaction(
-        content_type=resolved_content_type, context=payload
+    # - [1] Ensure that the `from_address` is existing.
+    # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
+    # ! I will be dividing those into two statements.
+
+    get_existing_from_address_query, get_existing_to_address_query = select(
+        [func.count()]
+    ).where(users.c.unique_address == resolved_from_address), select(
+        [func.count()]
+    ).where(
+        users.c.unique_address == resolved_to_address
     )
 
-    if resolved_from_address is None:
-        raise HTTPException(
-            detail="Cannot proceed when content type is not resolved or `from_address` is None. Please properly indicate their values and try again.",
-            status_code=HTTPStatus.NOT_ACCEPTABLE,
+    # * Get it, by we will not be using it.
+    # * I don't know how to use count
+    (
+        is_existing_from_address,
+        is_existing_to_address,
+    ) = await database_instance.fetch_one(
+        get_existing_from_address_query
+    ), await database_instance.fetch_one(
+        get_existing_to_address_query
+    )
+
+    # - When creating a user, bypass it for now.
+    # * I know the idea of putting the functionality in API side but I want to conslidate the method into one so that its easy to navigate as they were isolated in one part.
+    if (
+        isinstance(payload, ApplicantUserTransaction | OrganizationUserTransaction)
+        and resolved_to_address is None
+    ):
+        is_existing_to_address = True
+
+    # # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
+    # # ! These addresses will either contain a `str` or a `None` (`NoneType`).
+    # # ! If one of them contains `None` or `NoneType` this statement will result to false.
+    if all(
+        fetched_address
+        for fetched_address in [
+            is_existing_to_address,
+            is_existing_from_address,
+        ]
+    ):
+
+        # - Create a `GroupTransaction`.
+        resolved_payload: GroupTransaction = GroupTransaction(
+            content_type=resolved_content_type, context=payload
         )
 
-    await blockchain_instance.insert_external_transaction(
-        action=resolved_action,
-        from_address=resolved_from_address,
-        to_address=resolved_to_address,
-        data=resolved_payload,
-    )
+        if resolved_from_address is None:
+            raise HTTPException(
+                detail="Cannot proceed when content type is not resolved or `from_address` is None. Please properly indicate their values and try again.",
+                status_code=HTTPStatus.NOT_ACCEPTABLE,
+            )
+
+        extern_insertion_result = await blockchain_instance.insert_external_transaction(
+            action=resolved_action,
+            from_address=resolved_from_address,
+            to_address=resolved_to_address,
+            data=resolved_payload,
+        )
+
+        if isinstance(extern_insertion_result, HTTPException):
+            raise extern_insertion_result
+
+    else:
+        raise HTTPException(
+            detail="Source and destination user addresses does not exists!",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
 
 
 @node_router.post(
