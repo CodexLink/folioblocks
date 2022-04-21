@@ -13,7 +13,6 @@ from typing import Callable, Final
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    MAX_JWT_HOLD_TOKEN,
     AddressUUID,
     CredentialContext,
     Expects,

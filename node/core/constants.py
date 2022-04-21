@@ -303,7 +303,7 @@ class UserEntity(Enum):
     MASTER_NODE_USER = "Master Node User"
     ARCHIVAL_MINER_NODE_USER = "Archival Miner Node User"
     APPLICANT_DASHBOARD_USER = "Applicant Dashboard User"
-    ORGANIZATION_DASHBOARD_USER = "Company / Institution / Organization Dashboard User"
+    ORGANIZATION_DASHBOARD_USER = "Organization Dashboard User"
 
 
 # # Enums, Generic

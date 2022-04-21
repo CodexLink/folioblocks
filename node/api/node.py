@@ -263,10 +263,10 @@ async def process_hashed_block(
                 ].payload,
                 NodeTransaction,
             ):
-                context_from_archival_miner.block.contents.transactions[
+                context_from_archival_miner.block.contents.transactions[  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
                     transaction_idx
                 ].payload.action = NodeTransactionInternalActions(
-                    transaction_context.payload.action
+                    transaction_context.payload.action  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
                 )
 
             # - Resolve the `content_type` field from the payload's action `GroupTransaction`.
@@ -276,10 +276,10 @@ async def process_hashed_block(
                 ].payload,
                 GroupTransaction,
             ):
-                context_from_archival_miner.block.contents.transactions[
+                context_from_archival_miner.block.contents.transactions[  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
                     transaction_idx
                 ].payload.content_type = TransactionContextMappingType(
-                    transaction_context.payload.content_type
+                    transaction_context.payload.content_type  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
                 )
 
             else:
@@ -392,7 +392,7 @@ async def receive_action_from_dashboard(
     database_instance: Database = Depends(get_database_instance),
 ) -> None:
 
-    # - Since the payload is automatically determined, we are going to keep resolve its parameter for the `from_address` and `to_address` when calling `blockchain_instance.insert_external_transaction`.
+    # - Since the payload is automatically determined, we are going to resolve its parameter for the `from_address` and `to_address` when calling `blockchain_instance.insert_external_transaction`.
 
     # @o Type-hints for now.
     resolved_content_type: TransactionContextMappingType | None = None
@@ -402,7 +402,8 @@ async def receive_action_from_dashboard(
 
     # - Compare via instance and assign necessary components.
     # - As well compare the token payload from the
-    #! Note that, `ApplicantLogTransaction` has been handled from `receive_file_from_dashboard` method.:
+
+    #! Note that, `ApplicantLogTransaction` has been handled from `receive_file_from_dashboard` method.
 
     if isinstance(payload, ApplicantProcessTransaction):
         if payload.state is EmploymentApplicationState.ACCEPTED:
@@ -443,15 +444,13 @@ async def receive_action_from_dashboard(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 
-        resolved_enum_member: UserEntity = UserEntity(identify_user_type.type)  # type: ignore
-
-        if resolved_enum_member is UserEntity.APPLICANT_DASHBOARD_USER:
+        if identify_user_type.type is UserEntity.APPLICANT_DASHBOARD_USER:  # type: ignore
             resolved_action = (
                 TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
             )
             resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
 
-        elif resolved_enum_member is UserEntity.ORGANIZATION_DASHBOARD_USER:
+        elif identify_user_type.type is UserEntity.ORGANIZATION_DASHBOARD_USER:  # type: ignore
             resolved_action = TransactionActions.ORGANIZATION_REFER_EXTRA_INFO
             resolved_content_type = (
                 TransactionContextMappingType.ORGANIZATION_ADDITIONAL
@@ -459,7 +458,7 @@ async def receive_action_from_dashboard(
 
         else:
             raise HTTPException(
-                detail="Cannot resolve this user's organization associate type. Have you provided the right enum value? Please refer to the manual for more information",
+                detail="Cannot resolve this user's organization `associate` type.",
                 status_code=HTTPStatus.BAD_REQUEST,
             )
 
@@ -472,13 +471,13 @@ async def receive_action_from_dashboard(
         resolved_action = TransactionActions.ORGANIZATION_USER_REGISTER
         resolved_content_type = None
         resolved_from_address, resolved_to_address = (
-            payload.association_address,
+            payload.identity,
             None,
         )  # - `to_address` can be `None` since it's an organization.
 
     else:
         raise HTTPException(
-            detail="Payload is unidentified or is unhandled from this API entrypoint. Note that the endpoint with file handling is on another endpoint, not this one.",
+            detail="Payload is unidentified or is unhandled from this API entrypoint.",
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
@@ -506,7 +505,7 @@ async def receive_action_from_dashboard(
     )
 
     # - When creating a user, bypass it for now.
-    # * I know the idea of putting the functionality in API side but I want to conslidate the method into one so that its easy to navigate as they were isolated in one part.
+    # * I know the idea of putting the functionality in API side but I want to consolidate the method into one so that its easy to navigate as they were isolated in one part.
     if (
         isinstance(payload, ApplicantUserTransaction | OrganizationUserTransaction)
         and resolved_to_address is None
@@ -531,7 +530,7 @@ async def receive_action_from_dashboard(
 
         if resolved_from_address is None:
             raise HTTPException(
-                detail="Cannot proceed when content type is not resolved or `from_address` is None. Please properly indicate their values and try again.",
+                detail="Cannot find user reference when the provided content-type or the parameter `from_address` is invalid.",
                 status_code=HTTPStatus.NOT_ACCEPTABLE,
             )
 

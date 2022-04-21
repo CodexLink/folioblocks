@@ -357,6 +357,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 validate_user: bool
                 existing_association: Mapping | None
 
+                # * Before proceeding ensure that these fields (`log` and `extra` were None.)
+                data_inserted_on_init: bool = (
+                    (data.context.log is not None or data.context.extra is not None)
+                    if isinstance(data.context, ApplicantUserTransaction)
+                    else data.context.extra is not None
+                )
+
                 # - Validate the existence of the user based on the sensitive information.
                 validate_user = await validate_user_existence(
                     user_identity=AgnosticCredentialValidator(
@@ -371,6 +378,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     exception_message = "There was an existing user from the credentials given! Please try with another credentials. Or contact your administration regarding your credentails."
                     exception_status = HTTPStatus.CONFLICT
 
+                elif data_inserted_on_init:
+                    exception_message = "Providing data from `extra` and `log` is not allowed. Please process the applicant first before adding data to them."
+                    exception_status = HTTPStatus.PRECONDITION_FAILED
+
                 else:
                     # - Validate the existence of an associate/organization.
                     existing_association = await validate_organization_existence(
@@ -378,8 +389,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             association_address=data.context.association_address,
                             association_name=data.context.association_name,
                             association_group_type=data.context.association_group_type,
-                        ),
-                        is_org_scope=False,
+                        )
                     )
 
                     if (
@@ -429,7 +439,14 @@ class BlockchainMechanism(ConsensusMechanism):
                             data.context.association_address = existing_association.address  # type: ignore
 
                         else:
-                            exception_message = "The supplied parameter for the `association` address reference does not exist!"
+                            print(
+                                "DEBUG",
+                                data.context.association_address,
+                                data.context.association_group_type,
+                                data.context.association_name,
+                                existing_association,
+                            )
+                            exception_message = "The supplied parameter for the `association` address reference does not exist or the payload contains a certain fields that shouldn't exist based on condition."
                             exception_status = HTTPStatus.NOT_FOUND
 
                             # ! To avoid complexity, just return here instead of going outer scope which is difficult.
@@ -458,18 +475,20 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
 
                         # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
+                        await self.db_instance.execute(insert_user_query)
+
+                        # * Resolve fields with missing data.
                         to_address = new_uuid
+                        data.context.identity = new_uuid  # type: ignore
 
                         create_task(
                             self.email_service.send(
-                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the <b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i> please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Your Address: {new_uuid}, Association Address: {data.context.association_address}<br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the <b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i> please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                 subject="Hello from Folioblocks!",
                                 to=data.context.email,  # type: ignore
                             ),
                             name=f"{get_email_instance.__name__}_send_register_welcome_user",
                         )
-
-                        await self.db_instance.execute(insert_user_query)
 
                         # @o Therefore, we need to manually declare those fields from the `AgnosticTransactionUserCredentials`.
                         # - After all that, its time to resolve those context for the `External` model. (For the blockchain to record).
@@ -688,7 +707,7 @@ class BlockchainMechanism(ConsensusMechanism):
             is_mining=not self.is_blockchain_ready,
             is_sleeping=self.is_node_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
-            node_role=self.role,
+            node_role=self.role.name,
             owner=self.auth_token[0],
         )
 
@@ -843,8 +862,9 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
+    # # This method may be modified for the development of Explorer API.
     @ensure_blockchain_ready()
-    async def overview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
+    async def preview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
         if self._chain is not None:
             candidate_blocks: list[BlockOverview] = deepcopy(
                 self._chain["chain"][len(self._chain["chain"]) - limit_to :]
@@ -871,6 +891,12 @@ class BlockchainMechanism(ConsensusMechanism):
             return resolved_candidate_blocks
 
         return None
+
+    # # This method may be modified for the development of Explorer API.
+    @ensure_blockchain_ready()
+    async def preview_transactions(self, limit_to: int) -> list[Transaction] | None:
+        if self._chain is not None:
+            pass
 
     async def _append_block(
         self,

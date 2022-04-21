@@ -87,7 +87,7 @@ entity_router = APIRouter(
 async def register_entity(
     *,
     credentials: EntityRegisterCredentials,
-    db: Any = Depends(get_database_instance),
+    database_instance: Any = Depends(get_database_instance),
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> EntityRegisterResult | JSONResponse | None:
 
@@ -95,36 +95,43 @@ async def register_entity(
     # * New instances doesn't have new credentials, check if there's an auth code for the NodeType.MASTER_NODE and it's not yet used.
 
     check_auth_from_new_master_query: Select = select(
-        [auth_codes.c.account_type]
+        [auth_codes.c.account_type, auth_codes.c.code]
     ).where(
         (auth_codes.c.code == credentials.auth_code)
         & (auth_codes.c.is_used == false())
         & (auth_codes.c.to_email == credentials.email)
     )
 
-    new_user_auth_register = await db.fetch_one(check_auth_from_new_master_query)
+    new_user_auth_register = await database_instance.fetch_one(
+        check_auth_from_new_master_query
+    )
 
     if new_user_auth_register is None:
         raise HTTPException(
-            detail="Provided `auth_token` is not found. Check your input and try again.",
+            detail="Provided `auth_token` is not found.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
     if new_user_auth_register.account_type is UserEntity.ORGANIZATION_DASHBOARD_USER:
         if isinstance(blockchain_instance, BlockchainMechanism):
-
             if (
-                isinstance(credentials.association_name, str)
-                and credentials.association_address is None
-                and isinstance(credentials.association_type, OrganizationType)
-                and isinstance(credentials.association_founded, int)
-                and isinstance(credentials.association_description, str)
-            ) or (
-                credentials.association_name is None
-                and isinstance(credentials.association_address, str)
-                and credentials.association_type is OrganizationType
-                and credentials.association_founded is None
-                and credentials.association_description is None
+                isinstance(credentials.first_name, str)
+                and isinstance(credentials.last_name, str)
+            ) and (
+                (
+                    isinstance(credentials.association_name, str)
+                    and credentials.association_address is None
+                    and isinstance(credentials.association_type, OrganizationType)
+                    and isinstance(credentials.association_founded, datetime)
+                    and isinstance(credentials.association_description, str)
+                )
+                or (
+                    credentials.association_name is None
+                    and isinstance(credentials.association_address, str)
+                    and credentials.association_type is None
+                    and credentials.association_founded is None
+                    and credentials.association_description is None
+                )
             ):
 
                 # @o When registering a user, there is a need of special handling, as things are recorded in the blockchain.
@@ -143,10 +150,10 @@ async def register_entity(
                             email=credentials.email,
                             username=credentials.username,
                             password=credentials.password,
-                            institution_ref=credentials.association_address,
                             org_type=credentials.association_type,
                             founded=credentials.association_founded,
                             description=credentials.association_description,
+                            identity=None,
                             associations=None,
                             extra=None,
                         ),
@@ -157,6 +164,14 @@ async def register_entity(
                     raise new_user_insertion_response
 
                 else:
+                    dispose_auth_code_for_org: Update = (
+                        auth_codes.update()
+                        .where(auth_codes.c.code == new_user_auth_register.code)
+                        .values(is_used=True)
+                    )
+
+                    await database_instance.execute(dispose_auth_code_for_org)
+
                     return JSONResponse(
                         content={
                             "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
@@ -165,7 +180,7 @@ async def register_entity(
                     )
             else:
                 raise HTTPException(
-                    detail=f"You are assigned as {new_user_auth_register.account_type.value}, please provide the mandatory fields when: [1] You are new to the platform and your organization doesn't exist: `association_name` (str), `association_type` (int), `association_founded` (int), and `association_description` (str). And, [2] you are new to the platform and your organization exists: `association_address` (str). You shouldn't seeing this messages, if you are using API please refer to the given documentation regarding this API.",
+                    detail=f"Your role is `{new_user_auth_register.account_type.value}` and fields given were insufficient.",
                     status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
                 )
         else:
@@ -185,102 +200,87 @@ async def register_entity(
         # - Our auth code should contain the information if that is applicable at certain role.
         # - Aside from the auth_code role assertion, fields-based on role checking is still asserted here.
 
-        get_auth_token_query: Select = auth_codes.select().where(
-            (auth_codes.c.code == credentials.auth_code)
-            & (auth_codes.c.to_email == credentials.email)
-            & (
-                auth_codes.c.is_used == false()
-            )  # ! Not sure why, but I have to arbitrary convert this bool to str, I guess there's no resolve.
-            & (auth_codes.c.expiration >= datetime.now())
+        if not credentials.first_name or not credentials.last_name:
+            # Asserted that this entity must be NODE_USER.
+            del dict_credentials["first_name"], dict_credentials["last_name"]
+
+        dict_credentials["type"] = new_user_auth_register.account_type
+
+        del (
+            dict_credentials["password"],
+            dict_credentials["auth_code"],
+            dict_credentials["association_address"],
+            dict_credentials["association_type"],
+            dict_credentials["association_name"],
+            dict_credentials["association_founded"],
+            dict_credentials["association_description"],
+        )  # Remove other fields so that we can do the double starred expression for unpacking.
+
+        data: Insert = users.insert().values(
+            **dict_credentials,
+            unique_address=generate_uuid_user(),
+            password=hash_context(pwd=RawData(credentials.password))
+            # association=, # I'm not sure on what to do with this one, as of now.
+        )
+        dispose_auth_code: Update = (
+            auth_codes.update()
+            .where(auth_codes.c.code == new_user_auth_register.code)
+            .values(is_used=True)
         )
 
-        auth_token = await db.fetch_one(get_auth_token_query)
+        user_new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
 
-        if auth_token is not None:
-            if not credentials.first_name or not credentials.last_name:
-                # Asserted that this entity must be NODE_USER.
-                del dict_credentials["first_name"], dict_credentials["last_name"]
-
-            dict_credentials["type"] = auth_token.account_type
-
-            del (
-                dict_credentials["password"],
-                dict_credentials["auth_code"],
-                dict_credentials["association_address"],
-                dict_credentials["association_type"],
-                dict_credentials["association_name"],
-                dict_credentials["association_founded"],
-                dict_credentials["association_description"],
-            )  # Remove other fields so that we can do the double starred expression for unpacking.
-
-            data: Insert = users.insert().values(
-                **dict_credentials,
-                unique_address=generate_uuid_user(),
-                password=hash_context(pwd=RawData(credentials.password))
-                # association=, # I'm not sure on what to do with this one, as of now.
-            )
-            dispose_auth_code: Update = (
-                auth_codes.update()
-                .where(auth_codes.c.code == auth_token.code)
-                .values(is_used=True)
+        try:
+            await gather(
+                database_instance.execute(dispose_auth_code),
+                database_instance.execute(data),
             )
 
-            user_new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
+            create_task(
+                get_email_instance().send(
+                    content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject="Hello from Folioblocks Technicals!",
+                    to=credentials.email,
+                ),
+                name=f"{get_email_instance.__name__}_send_register_welcome_node",
+            )
 
-            try:
-                await gather(db.execute(dispose_auth_code), db.execute(data))
-
-                create_task(
-                    get_email_instance().send(
-                        content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                        subject="Hello from Folioblocks Technicals!",
-                        to=credentials.email,
-                    ),
-                    name=f"{get_email_instance.__name__}_send_register_welcome_node",
-                )
-
-                # - After that, record this transaction from the blockchain.
-                # @o This callback in particular is not part of the consolidated internal transactions declared from the `dependencies.py` under < class 'EnsureAuthorized'>
-                # ! That is due to its several previous variables were used.
-                if isinstance(blockchain_instance, BlockchainMechanism):
-                    if (
-                        UserEntity(auth_token.account_type)
-                        is UserEntity.MASTER_NODE_USER
-                        or UserEntity(auth_token.account_type)
-                        is UserEntity.ARCHIVAL_MINER_NODE_USER
-                        and blockchain_instance.node_role is NodeType.MASTER_NODE
-                    ):
-                        await blockchain_instance._insert_internal_transaction(
-                            action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
-                            data=NodeTransaction(
-                                action=NodeTransactionInternalActions.INIT,
-                                context=NodeRegisterTransaction(
-                                    acceptor_address=AddressUUID(
-                                        blockchain_instance.identity[0]
-                                    ),
-                                    new_address=AddressUUID(user_new_uuid),
-                                    role=auth_token.account_type,
-                                    timestamp=datetime.now(),
+            # - After that, record this transaction from the blockchain.
+            # @o This callback in particular is not part of the consolidated internal transactions declared from the `dependencies.py` under < class 'EnsureAuthorized'>
+            # ! That is due to its several previous variables were used.
+            if isinstance(blockchain_instance, BlockchainMechanism):
+                if (
+                    new_user_auth_register.account_type is UserEntity.MASTER_NODE_USER
+                    or new_user_auth_register.account_type
+                    is UserEntity.ARCHIVAL_MINER_NODE_USER
+                    and blockchain_instance.node_role is NodeType.MASTER_NODE
+                ):
+                    await blockchain_instance._insert_internal_transaction(
+                        action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
+                        data=NodeTransaction(
+                            action=NodeTransactionInternalActions.INIT,
+                            context=NodeRegisterTransaction(
+                                acceptor_address=AddressUUID(
+                                    blockchain_instance.identity[0]
                                 ),
+                                new_address=AddressUUID(user_new_uuid),
+                                role=new_user_auth_register.account_type,
+                                timestamp=datetime.now(),
                             ),
-                        )
+                        ),
+                    )
 
-            except IntegrityError:
-                raise HTTPException(
-                    status_code=HTTPStatus.CONFLICT,
-                    detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
-                )
-
-            return EntityRegisterResult(
-                user_address=user_new_uuid,
-                username=credentials.username,
-                date_registered=datetime.now(),
-                role=dict_credentials["type"],
+        except IntegrityError:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT,
+                detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
             )
 
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_ACCEPTABLE,
-            detail="The `auth code` you entered is not valid! Please check your input and try again. If persists, you may not be using the email that the code was sent on, or the code has expired.",
+        return EntityRegisterResult(
+            user_address=user_new_uuid,
+            username=credentials.username,
+            date_registered=datetime.now(),
+            role=dict_credentials["type"],
         )
 
 
@@ -331,7 +331,7 @@ async def login_entity(
             # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
                 raise HTTPException(
-                    detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username}` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}.",
+                    detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username}` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}. Please logout other requests.",
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
 
@@ -416,6 +416,11 @@ async def login_entity(
                     detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Additional Info: {e}",
                 )
 
+        raise HTTPException(
+            detail="Your credentials are incorrect.",
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
+
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND,
         detail="User is not found. Please check your credentials and try again.",
@@ -494,5 +499,5 @@ async def logout_entity(
 
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND,
-        detail="The inferred token does not exist or is already labeled as expired!",
+        detail="The inferred token does not exist or is already labelled as expired!",
     )

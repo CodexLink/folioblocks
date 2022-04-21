@@ -804,20 +804,18 @@ def mask(data: bytes | int | str) -> str:
 
 # # Blockchain DRY Handlers — START
 async def validate_organization_existence(
-    *, org_identity: OrganizationIdentityValidator, is_org_scope: bool
+    *, org_identity: OrganizationIdentityValidator
 ) -> Mapping | None:
 
     validate_association_existence_query: Select
 
-    if is_org_scope:
-        validate_association_existence_query = select([associations.c.address]).where(
+    validate_association_existence_query = select([associations.c.address]).where(
+        (associations.c.address == org_identity.association_address)
+        | (
             (associations.c.name == org_identity.association_name)
             & (associations.c.group == org_identity.association_group_type)
         )
-    else:
-        validate_association_existence_query = select([associations.c.address]).where(
-            associations.c.address == org_identity.association_address
-        )
+    )
 
     existing_association: Mapping | None = await get_database_instance().fetch_one(
         validate_association_existence_query

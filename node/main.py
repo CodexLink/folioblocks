@@ -10,7 +10,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 import logging
 from argparse import Namespace
-from asyncio import create_task, shield, sleep
+from asyncio import create_task, sleep
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
 from logging.config import dictConfig
@@ -22,7 +22,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
-from sqlalchemy.sql.expression import Insert, Select, Update
+from sqlalchemy.sql.expression import Select, Update
 
 from api.admin import admin_router
 from api.dashboard import dashboard_router
@@ -174,7 +174,7 @@ async def pre_initialize() -> None:
 async def post_initialize() -> None:
     """
     - An extension of the initialize() startup function without blocking the instance of uvicorn.
-    - By continously awaiting tasks from tbe initialize() function, we can't do anything unless we left out of it or do asyncio.create_task() to get out-of-scope with initialize().
+    - By continously awaiting tasks from the initialize() function, we can't do anything unless we left out of it or do asyncio.create_task() to get out-of-scope with initialize().
     - Tasks moved from the initialize() function may adjust to concurrently run the instance while doing other several checks.
     """
 

@@ -105,7 +105,7 @@ async def generate_auth_token_for_other_nodes(
 
             except IntegrityError as e:
                 raise HTTPException(
-                    detail=f"The email you entered already has an `auth_token`! | Additional Info: {e}",
+                    detail=f"Cannot provide anymore `auth_token`.",
                     status_code=HTTPStatus.FORBIDDEN,
                 )
 

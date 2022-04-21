@@ -71,7 +71,7 @@ async def get_blockchain() -> Blockchain:
     if isinstance(blockchain_instance, BlockchainMechanism):
         blockchain_blocks: list[
             BlockOverview
-        ] | None = await blockchain_instance.overview_blocks(limit_to=5)
+        ] | None = await blockchain_instance.preview_blocks(limit_to=5)
 
         blockchain_state: NodeMasterInformation | None = (
             blockchain_instance.get_blockchain_public_state()

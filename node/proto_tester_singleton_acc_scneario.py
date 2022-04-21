@@ -33,7 +33,6 @@ target_port: int = 6001
 * [3] At this point, a particular company seem to be too fishy on this one particular transaction where its credentials seem to be uneven, with that they contacted the administrator to validate the integrity if the content given is real and the origin is from someone inside of the institution. By comparing the signature of the raw and processed hash, we can validate it and ensure that the content displayed is right.
 
 # # Scenario Constraints
-
 * There 3 objectives in the paper, and each objective requires 20 tests.
 * Therefore, 3 objectives * 20 tests = 60 tests overall.
 * Each scenario must have two entities wherein each entity must do the 10 tests as well as the other one.
@@ -52,7 +51,7 @@ target_port: int = 6001
 """
 
 institution_account: dict[str, Any] = {}
-org_account: dict[str, Any] = {}
+company_account: dict[str, Any] = {}
 student_account: dict[str, Any] = {}
 
 available_courses: Final[list[str]] = [  # # Not sure how much but, 5 courses is enough.
@@ -84,7 +83,7 @@ for each_account in range(0, 3):  # - 1.
     account["email"] = email_address
 
     if not each_account:
-        org_account = account
+        company_account = account
         account["type"] = UserEntity.ORGANIZATION_DASHBOARD_USER
 
     elif each_account == 1:
@@ -167,13 +166,28 @@ async def main() -> None:
             retry_attempts=99,
         )
 
-        if register_institution_acc.ok:
+        # - Then register the company.
+        register_company_acc = await http.enqueue_request(
+            url=URLAddress(f"{path_to_master}/entity/register"),
+            method=HTTPQueueMethods.POST,
+            data={
+                "username": company_account["username"],
+                "password": company_account["password"],
+                "email": company_account["email"],
+                "first_name": company_account["first_name"],
+                "last_name": company_account["last_name"],
+                "auth_code": auth_code_from_email_institution,
+            },
+            await_result_immediate=True,
+            retry_attempts=99,
+        )
+
+        if register_institution_acc.ok and register_company_acc.ok:
             print(
                 f"Registration of {institution_account['email']} ({institution_account['type']}) went okay!"
             )
 
             # - Login institution user.
-
             login_institution = await http.enqueue_request(
                 url=URLAddress(f"{path_to_master}/entity/login"),
                 method=HTTPQueueMethods.POST,

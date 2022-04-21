@@ -149,10 +149,10 @@ class ApplicantProcessTransaction(BaseModel):
 
 
 class ApplicantUserBaseTransaction(BaseModel):
-    identity: AddressUUID
+    identity: AddressUUID | None  # * This is going to be resolved during process.
     institution_ref: AddressUUID
     course: str
-    year: int
+    year_level: int
     prefer_role: str
     log: ApplicantLogTransaction | None
     extra: AdditionalContextTransaction | None
@@ -166,9 +166,9 @@ class ApplicantUserTransaction(
 
 # * For now, I can't think of any solution regarding this one since register_entity at entity.py uses it for the registration of the user.
 class OrganizationUserBaseTransaction(BaseModel):
-    institution_ref: str | None
+    identity: AddressUUID | None  # * Will be resolved during creation process.
     org_type: OrganizationType | None
-    founded: int | None
+    founded: datetime | None
     description: str | None
     associations: list[AddressUUID] | None
     extra: AdditionalContextTransaction | None
@@ -300,7 +300,7 @@ class NodeConsensusInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
     is_mining: bool
-    node_role: NodeType
+    node_role: str
     consensus_timer_expiration: datetime
     last_mined_block: int
 
@@ -345,6 +345,11 @@ class EntityRegisterCredentials(BaseModel):
         description="The last name of the entity, completing their identity.",
         max_length=32,
     )
+    auth_code: str = Field(
+        description="The authentication code that is used to authorize the registration.",
+        min_length=AUTH_CODE_MIN_CONTEXT,
+        max_length=AUTH_CODE_MAX_CONTEXT * 2,
+    )
 
     association_name: str | None = Field(
         None,
@@ -359,17 +364,11 @@ class EntityRegisterCredentials(BaseModel):
         description="The type of the association, technically the type of the organization.",
     )  # ! In frontend, ensure this was a dropdown.
 
-    association_founded: int | None = Field(
+    association_founded: datetime | None = Field(
         None, description="The time from where this oganization has been founded."
     )
     association_description: str | None = Field(
         None, description="The description of your organization."
-    )
-
-    auth_code: str = Field(
-        description="The authentication code that is used to authorize the registration.",
-        min_length=AUTH_CODE_MIN_CONTEXT,
-        max_length=AUTH_CODE_MAX_CONTEXT * 2,
     )
 
 
