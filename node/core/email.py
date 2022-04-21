@@ -21,18 +21,20 @@ from aiosmtplib import (
     SMTP,
     SMTPAuthenticationError,
     SMTPConnectError,
+    SMTPConnectTimeoutError,
     SMTPReadTimeoutError,
     SMTPRecipientRefused,
     SMTPRecipientsRefused,
     SMTPResponseException,
     SMTPServerDisconnected,
+    SMTPTimeoutError,
 )
 from pydantic import EmailStr
 
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AUTH_ENV_FILE_NAME,
-    DEFAULT_SMTP_CONNECT_MAX_RETRIES,
+    DEFAULT_SMTP_ATTEMPT_MAX_RETRIES,
     DEFAULT_SMTP_PORT,
     DEFAULT_SMTP_TIMEOUT_CONNECTION,
     DEFAULT_SMTP_URL,
@@ -54,7 +56,7 @@ class EmailService:
         port: IPPort,
         username: CredentialContext | None,
         password: CredentialContext | None,
-        max_retries: int = DEFAULT_SMTP_CONNECT_MAX_RETRIES,
+        max_retries: int = DEFAULT_SMTP_ATTEMPT_MAX_RETRIES,
     ) -> None:
 
         # - Validate if there's crdentials.
@@ -152,35 +154,52 @@ class EmailService:
         subject: str,
         to: EmailStr,
     ) -> None:
-        if not self._email_service.is_connected:
-            logger.warning(
-                "Connection to the email service is not available or the connetion is dead, re-connecting ..."
-            )
+        # @o There should be an extra argument, but I will keep it this way, for now.
+        for _ in range(0, self.max_retries):
+            if not self._email_service.is_connected:
+                logger.warning(
+                    "Connection to the email service is not available or the connetion is dead, re-connecting ..."
+                )
 
-            await self.connect()
+                await self.connect()
 
-        message_instance = MIMEMultipart("alternative")
+            message_instance = MIMEMultipart("alternative")
 
-        message_instance["From"] = env.get("EMAIL_SERVER_ADDRESS")
-        message_instance["To"] = to
-        message_instance["Subject"] = subject
+            message_instance["From"] = env.get("EMAIL_SERVER_ADDRESS")
+            message_instance["To"] = to
+            message_instance["Subject"] = subject
 
-        message_context: MIMEText = MIMEText(content, "html", "utf-8")
+            message_context: MIMEText = MIMEText(content, "html", "utf-8")
 
-        message_instance.attach(message_context)
+            message_instance.attach(message_context)
 
-        try:
-            await self._email_service.send_message(message_instance)
+            try:
+                await self._email_service.send_message(message_instance)
 
-            logger.info(
-                f"Message has been sent. (Subject: {subject} | From: {message_instance['From']} | To: {to[:5]} ...)"
-            )
-        except (
-            SMTPRecipientRefused,
-            SMTPRecipientsRefused,
-            SMTPResponseException,
-        ) as e:
-            logger.critical(f"Cannot send email due to error in the process. Info: {e} | From: {message_instance['From']} | To: {to[:5]}")
+                logger.info(
+                    f"Message has been sent. (Subject: {subject} | From: {message_instance['From']} | To: {to[:5]} ...)"
+                )
+                break
+
+            except (
+                SMTPRecipientRefused,
+                SMTPRecipientsRefused,
+                SMTPResponseException,
+            ) as e:
+                logger.critical(
+                    f"Cannot send email due to error in the process. Info: {e} | From: {message_instance['From']} | To: {to[:5]}"
+                )
+                break
+
+            except (
+                SMTPTimeoutError,
+                SMTPReadTimeoutError,
+                SMTPConnectTimeoutError,
+            ) as e:
+                logger.warning(
+                    f"Cannot send email due to disruption of service. Re-attempting... | Info: {e}"
+                )
+                continue
 
     def close(self) -> None:
         return self._email_service.close()
@@ -215,6 +234,7 @@ def get_email_instance() -> EmailService:
             port=IPPort(DEFAULT_SMTP_PORT),
             username=CredentialContext(env.get("EMAIL_SERVER_ADDRESS", "")),
             password=CredentialContext(env.get("EMAIL_SERVER_PWD", "")),
+            max_retries=DEFAULT_SMTP_ATTEMPT_MAX_RETRIES,
         )
 
     return email_service

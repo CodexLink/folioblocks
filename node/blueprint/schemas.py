@@ -121,9 +121,7 @@ class OrganizationIdentityValidator(BaseModel):
 # # Organization-based Transactions — START
 
 
-class AgnosticTransactionUserCredentials(
-    AgnosticCredentialValidator, OrganizationIdentityValidator, BaseModel
-):
+class AgnosticTransactionUserCredentials(AgnosticCredentialValidator, BaseModel):
     password: str
 
 
@@ -175,7 +173,9 @@ class OrganizationUserBaseTransaction(BaseModel):
 
 
 class OrganizationUserTransaction(
-    AgnosticTransactionUserCredentials, OrganizationUserBaseTransaction
+    AgnosticTransactionUserCredentials,
+    OrganizationIdentityValidator,
+    OrganizationUserBaseTransaction,
 ):
     pass
 

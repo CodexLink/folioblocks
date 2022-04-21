@@ -43,6 +43,8 @@ from blueprint.schemas import (
 from core.constants import TransactionContextMappingType
 from sqlalchemy.sql.expression import Select
 
+from core.constants import OrganizationType
+
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
 else:
@@ -804,16 +806,30 @@ def mask(data: bytes | int | str) -> str:
 
 # # Blockchain DRY Handlers — START
 async def validate_organization_existence(
-    *, org_identity: OrganizationIdentityValidator
+    *, org_identity: OrganizationIdentityValidator, scoped_to_education_group: bool
 ) -> Mapping | None:
 
     validate_association_existence_query: Select
 
+    # - Specific instances of whether the organization is classified as non-educational or otherwise, each cases of it requires a different parameter or query to validate the existence of the association/organization.
+    # @o For the instance of `OrganizationUserTransaction` it checks the `association_address` if given (in the scenario that the association/organiaztion does exists), or it was checked by `association_name` and `association_group_type.` (in the scenario where the association/organization does not exists and requires a new one)
+    # ! Therefore, the way its variables are declared is when the organization does not exists or not.
+
+    # @d The switch `scoped_to_education_group` forces to query along both types along with the address. This is useful if we want to assert the type of the organization address that we refer. There's no way that there's an applicant enrolled in the company right? Confusing, take note that `hired` and `enrolled` is different.
+
     validate_association_existence_query = select([associations.c.address]).where(
-        (associations.c.address == org_identity.association_address)
-        | (
-            (associations.c.name == org_identity.association_name)
-            & (associations.c.group == org_identity.association_group_type)
+        (
+            (associations.c.address == org_identity.association_address)
+            if not scoped_to_education_group
+            else (
+                (associations.c.address == org_identity.association_address)
+                & (associations.c.group == OrganizationType.INSTITUTION)
+                | (associations.c.group == OrganizationType.ORGANIZATION)
+            )
+            | (
+                (associations.c.name == org_identity.association_name)
+                & (associations.c.group == org_identity.association_group_type)
+            )
         )
     )
 

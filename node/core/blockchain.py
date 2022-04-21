@@ -66,6 +66,7 @@ from blueprint.schemas import GroupTransaction
 from core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
 from core.constants import UserEntity
 from core.dependencies import generate_uuid_user
+from core.constants import OrganizationType
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -384,22 +385,38 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 else:
                     # - Validate the existence of an associate/organization.
+                    # @o Observe there's a multiple `isinstance`.
+                    # @o For the `OrganizationUserTransacion`, we need both of the arguments.
+                    # @o However, in the case of ApplicantUserTransaction`, we only need the institution reference.
                     existing_association = await validate_organization_existence(
                         org_identity=OrganizationIdentityValidator(
-                            association_address=data.context.association_address,
-                            association_name=data.context.association_name,
-                            association_group_type=data.context.association_group_type,
-                        )
+                            association_address=data.context.association_address
+                            if isinstance(data.context, OrganizationUserTransaction)
+                            else data.context.institution_ref,
+                            association_name=data.context.association_name
+                            if isinstance(data.context, OrganizationUserTransaction)
+                            else None,
+                            association_group_type=data.context.association_group_type
+                            if isinstance(data.context, OrganizationUserTransaction)
+                            else None,
+                        ),
+                        scoped_to_education_group=True
+                        if isinstance(data.context, ApplicantUserTransaction)
+                        else False,
                     )
 
                     if (
                         isinstance(data.context, ApplicantUserTransaction)
-                        and data.context.association_address is not None
+                        and data.context.institution_ref is not None
                     ):
 
                         if existing_association is None:
-                            exception_message = "The associate address does not exists! Please refer to the right associate/organization or association to proceed the registration."
+                            exception_message = "The associate organization address does not exists or was not under the scope of the educational groups."
                             exception_status = HTTPStatus.NOT_FOUND
+
+                            raise HTTPException(
+                                detail=exception_message, status_code=exception_status
+                            )
 
                     # - For the case of registering with the associate/organization, sometimes user can register with associate/organization reference existing and otherwise. With that, we need to handle the part where if the associate/organization doesn't exist then create a new one. Otherwise, refer its self from that associate/organization and we are good to go.
 
@@ -439,13 +456,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             data.context.association_address = existing_association.address  # type: ignore
 
                         else:
-                            print(
-                                "DEBUG",
-                                data.context.association_address,
-                                data.context.association_group_type,
-                                data.context.association_name,
-                                existing_association,
-                            )
                             exception_message = "The supplied parameter for the `association` address reference does not exist or the payload contains a certain fields that shouldn't exist based on condition."
                             exception_status = HTTPStatus.NOT_FOUND
 
@@ -463,7 +473,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
                         insert_user_query: Insert = users.insert().values(
                             unique_address=new_uuid,
-                            association=data.context.association_address,  # type: ignore
+                            association=data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution_ref,  # type: ignore
                             first_name=data.context.first_name,  # type: ignore
                             last_name=data.context.last_name,  # type: ignore
                             type=UserEntity.ORGANIZATION_DASHBOARD_USER
@@ -483,7 +493,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         create_task(
                             self.email_service.send(
-                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Your Address: {new_uuid}, Association Address: {data.context.association_address}<br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the <b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i> please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
+                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Your Address: {new_uuid}, Association Address: {data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution_ref}<br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the <b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i> please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                 subject="Hello from Folioblocks!",
                                 to=data.context.email,  # type: ignore
                             ),
@@ -495,6 +505,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         # ! Excluding fields via Model is not possible.
                         # ! https://github.com/samuelcolvin/pydantic/issues/1862.
+
                         removed_credentials_context: dict = data.context.dict(  # type: ignore
                             exclude={
                                 "association_address": True,
@@ -581,9 +592,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             ).hexdigest()
                         )
 
-                    # - Do the following for all condition.
-                    resolved_payload = data.context
-
                 else:
                     exception_message = f"Cannot find transaction map for the address {to_address} with the content type {TransactionContextMappingType.APPLICANT_BASE}."
 
@@ -603,7 +611,6 @@ class BlockchainMechanism(ConsensusMechanism):
             else:
                 exception_message = "All of the condition specified did not hit. Are you sure your combination of data is right? Please check the declaration and try again."
                 exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
-                resolved_payload = None
 
             if not isinstance(exception_message, str) and not isinstance(
                 exception_status, HTTPStatus
@@ -1827,11 +1834,11 @@ class BlockchainMechanism(ConsensusMechanism):
             # - a.strftime("%m%y%d%H%M%S") -> '042216205311'
             # - len(a) -> 12
 
-            resolved_slicer_to_address: int = (
-                11 if len(str(action.value)) == 2 else 12
-            )  # @o Enum shouldn't go past 99+ items.
-
             if to_address is not None:
+                resolved_slicer_to_address: int = (
+                    11 if len(str(action.value)) == 2 else 12
+                )  # @o Enum shouldn't go past 99+ items.
+
                 constructed_context_to_key: bytes = (
                     str(action.value)
                     + from_address[:7]

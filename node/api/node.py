@@ -390,7 +390,7 @@ async def receive_action_from_dashboard(
     ),
     blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
     database_instance: Database = Depends(get_database_instance),
-) -> None:
+) -> JSONResponse:
 
     # - Since the payload is automatically determined, we are going to resolve its parameter for the `from_address` and `to_address` when calling `blockchain_instance.insert_external_transaction`.
 
@@ -510,7 +510,7 @@ async def receive_action_from_dashboard(
         isinstance(payload, ApplicantUserTransaction | OrganizationUserTransaction)
         and resolved_to_address is None
     ):
-        is_existing_to_address = True
+        is_existing_to_address = True  # type: ignore # ! Force override from `Mapping` to `bool`, sorry xd.
 
     # # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
     # # ! These addresses will either contain a `str` or a `None` (`NoneType`).
@@ -543,6 +543,14 @@ async def receive_action_from_dashboard(
 
         if isinstance(extern_insertion_result, HTTPException):
             raise extern_insertion_result
+        else:
+
+            return JSONResponse(
+                content={
+                    "detail": f"An action `{resolved_action.name}` with a content-type of `{resolved_content_type.name}`, given by {resolved_from_address} to {resolved_to_address if resolved_to_address is not None else '<unknown, determined via process>'} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
+                },
+                status_code=HTTPStatus.OK,
+            )
 
     else:
         raise HTTPException(
