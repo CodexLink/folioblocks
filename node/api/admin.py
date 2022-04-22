@@ -103,7 +103,7 @@ async def generate_auth_token_for_other_nodes(
 
                 await db_instance.execute(insert_generated_token_query)
 
-            except IntegrityError as e:
+            except IntegrityError:
                 raise HTTPException(
                     detail=f"Cannot provide anymore `auth_token`.",
                     status_code=HTTPStatus.FORBIDDEN,

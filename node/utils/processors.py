@@ -811,78 +811,124 @@ def mask(data: bytes | int | str) -> str:
 async def validate_source_and_origin_associates(
     database_instance_ref: Database,
     source_session_token: JWTToken,
-    target_address: AddressUUID,
+    target_address: AddressUUID | None,
+    skip_validation_on_target: bool,  #
     return_resolved_source_address: bool,
 ) -> AddressUUID | None:
 
-    # - Validate the hash of the one who sent this transaction.
-    check_sender_source_via_token_query: Select = select([tokens.c.from_user]).where(
+    # - Validate the hash of the one who sent this transaction and receive the address.
+    get_sender_address_via_token_query: Select = select([tokens.c.from_user]).where(
         (tokens.c.token == source_session_token)
         & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
     )
-    resolved_sender_address = await database_instance_ref.fetch_one(
-        check_sender_source_via_token_query
+    resolved_source_address = await database_instance_ref.fetch_one(
+        get_sender_address_via_token_query
     )
 
-    check_target_address_query: Select = select([tokens.c.from_user]).where(
-        (tokens.c.token == target_address)
-        & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
+    # - Validate the provided target address by fetching the association reference.
+    validate_target_address_query: Select = select([users.c.association]).where(
+        (users.c.unique_address == target_address)
     )
-    resolved_to_address = await database_instance_ref.fetch_one(
-        check_target_address_query
+    resolved_target_address = await database_instance_ref.fetch_one(
+        validate_target_address_query
     )
 
-    # - Once done, check if this user contains a role and has a transaction mapping.
-    if resolved_sender_address is None:
+    # - Once done, check if the database returns something.
+    if resolved_source_address is None:
         raise HTTPException(
             detail="The user may be impossibly alive due to the token's state of being inactive or labelled as expired or does not exists.",
             status_code=HTTPStatus.UNAUTHORIZED,
         )
 
-    if resolved_to_address is None:
+    if (
+        resolved_target_address is None
+        and not skip_validation_on_target
+        and not isinstance(target_address, str)
+    ):
         raise HTTPException(
             detail="The target address does not exists.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
-    check_source_user_type_query: Select = select([users.c.association]).where(
-        (users.c.unique_address == resolved_sender_address.from_user) & (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)  # type: ignore
+    # - Since the target address contains the association, then get the source address.
+    get_source_address_association: Select = select([users.c.association]).where(
+        (users.c.unique_address == resolved_source_address.from_user) & (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)  # type: ignore
     )
 
-    checked_user_validity_type = await database_instance_ref.fetch_one(
-        check_source_user_type_query
+    source_address_association = await database_instance_ref.fetch_one(
+        get_source_address_association
     )
 
-    if checked_user_validity_type is None:
+    if source_address_association is None:
         raise HTTPException(
             detail=f"Given token resolving to user (either both `source` and `target` users / addresses) fails to be resolved or the given type of an existing user is not allowed.",
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         )
 
-    # - Last check, ensure that these users are connected from any of the association.
-    check_source_user_associate_query: Select = select([func.count()]).where(
-        associations.c.address == checked_user_validity_type.association  # type: ignore
+    # - Ensure that these users are connected from any of the association.
+    check_source_address_associate_query: Select = select([func.count()]).where(
+        associations.c.address == source_address_association.association  # type: ignore
     )
 
     source_user_validity = await database_instance_ref.fetch_one(
-        check_source_user_associate_query
+        check_source_address_associate_query
     )
 
     check_target_user_associate_query: Select = select([func.count()]).where(
-        associations.c.address == checked_user_validity_type.association  # type: ignore
+        associations.c.address == source_address_association.association  # type: ignore
     )
 
     target_user_validity = await database_instance_ref.fetch_one(
         check_target_user_associate_query
     )
 
-    if source_user_validity is None or target_user_validity is None:
+    if source_user_validity is None or (
+        target_user_validity is None
+        and not skip_validation_on_target
+        and not isinstance(target_address, str)
+    ):
         raise HTTPException(
             detail=f"The source or the target (address) user is not associated from any of the associations / organizations!",
             status_code=HTTPStatus.NOT_ACCEPTABLE,
         )
 
-    return AddressUUID(resolved_sender_address.from_user) if return_resolved_source_address else None  # type: ignore
+    # - Last check, ensure that these targets contains transaction mapping that states that they have a content from the blockchain.
+
+    check_source_address_tx_map: Select = select([func.count()]).where(
+        (tx_content_mappings.c.address_ref == resolved_source_address)
+        & (
+            tx_content_mappings.c.content_type
+            == TransactionContextMappingType.ORGANIZATION_BASE
+        )
+    )
+
+    check_target_address_tx_map: Select = select([func.count()]).where(
+        (tx_content_mappings.c.address_ref == resolved_target_address)
+        & (
+            tx_content_mappings.c.content_type
+            == TransactionContextMappingType.APPLICANT_BASE
+        )
+    )
+
+    source_address_tx_map = await database_instance_ref.fetch_one(
+        check_source_address_tx_map
+    )
+
+    target_address_tx_map = await database_instance_ref.fetch_one(
+        check_target_address_tx_map
+    )
+
+    if source_address_tx_map is None or (
+        target_address_tx_map is None
+        and not skip_validation_on_target
+        and not isinstance(target_address, str)
+    ):
+        raise HTTPException(
+            detail="The source or the target address doesn't have a transaction mapping from the blockchain, this is illegal!",
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    return AddressUUID(resolved_source_address.from_user) if return_resolved_source_address else None  # type: ignore
 
 
 # # API DRY Handler — END

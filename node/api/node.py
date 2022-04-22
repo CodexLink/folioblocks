@@ -489,56 +489,16 @@ async def receive_action_from_dashboard(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
-    # - [1] Ensure that the `from_address` is existing.
-    # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
-    # ! I will be dividing those into two statements.
-
-    if not isinstance(
-        payload, ApplicantUserTransaction | OrganizationUserTransaction
-    ) and any(
-        isinstance(payload, each_supported_model)
-        for each_supported_model in supported_models  # * This is redundant, but we wanna make sure that the supported models would be the stricted instances of `payload`.
-    ):
-
-        get_existing_from_address_query, get_existing_to_address_query = select(
-            [func.count()]
-        ).where(users.c.unique_address == resolved_from_address), select(
-            [func.count()]
-        ).where(
-            users.c.unique_address == resolved_to_address
-        )
-
-        # * Get it, by we will not be using it.
-        (
-            is_existing_from_address,
-            is_existing_to_address,
-        ) = await database_instance.fetch_one(
-            get_existing_from_address_query
-        ), await database_instance.fetch_one(
-            get_existing_to_address_query
-        )
-
-        # - When creating a user, bypass it for now.
-        # * I know the idea of putting the functionality in API side but I want to consolidate the method into one so that its easy to navigate as they were isolated in one part.
-        if resolved_to_address is None:
-            is_existing_to_address = True  # type: ignore # ! Force override from `Mapping` to `bool`, sorry xd.
-
-        # # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
-        # # ! These addresses will either contain a `str` or a `None` (`NoneType`).
-        # # ! If one of them contains `None` or `NoneType` this statement will result to false.
-        if not all(
-            fetched_address
-            for fetched_address in [
-                is_existing_to_address,
-                is_existing_from_address,
-            ]
-        ):
-            raise HTTPException(detail="", status_code=HTTPStatus.NOT_FOUND)
-
-    else:
-        resolved_from_address = await validate_source_and_origin_associates(
-            database_instance_ref=database_instance, source_session_token=auth_instance, target_address=resolved_from_address, return_resolved_source_address=True  # type: ignore # * `resolved_from_address` is already resolved on the top, where it validates the payload's instance.
-        )
+    # - Resolve the `from_address` but skip validation for the `to_address` due to the generative models being unable to provide uuids on non-existent properity.
+    resolved_from_address = await validate_source_and_origin_associates(
+        database_instance_ref=database_instance,
+        source_session_token=auth_instance,
+        target_address=resolved_from_address,
+        skip_validation_on_target=isinstance(
+            payload, ApplicantUserTransaction | OrganizationUserTransaction
+        ),
+        return_resolved_source_address=True,  # type: ignore # * `resolved_from_address` is already resolved on the top, where it validates the payload's instance.
+    )
 
     # - Create a `GroupTransaction`.
     resolved_payload: GroupTransaction = GroupTransaction(
@@ -599,11 +559,21 @@ async def receive_file_from_dashboard(
 ) -> None:
 
     try:
-        resolved_source_address = await validate_source_and_origin_associates(
-            database_instance_ref=database_instance,
-            source_session_token=auth_instance,
-            target_address=address_origin,
-            return_resolved_source_address=True,
+        # ! Logic Conditon Checking
+        if isinstance(duration_end, datetime) and duration_start > duration_end:
+            raise HTTPException(
+                detail="The specified time for the duration start is higher than the end of duration. This is not possible.",
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+
+        resolved_source_address: AddressUUID | None = (
+            await validate_source_and_origin_associates(
+                database_instance_ref=database_instance,
+                source_session_token=auth_instance,
+                target_address=address_origin,
+                skip_validation_on_target=False,
+                return_resolved_source_address=True,
+            )
         )
 
         # - After receiving, wrap the payload.
