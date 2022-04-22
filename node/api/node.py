@@ -85,6 +85,8 @@ from blueprint.schemas import (
 )
 from core.constants import ApplicantLogContentType, TransactionContextMappingType
 from core.constants import EmploymentApplicationState
+from core.dependencies import generate_auth_token
+from utils.processors import validate_source_and_origin_associates
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -374,23 +376,22 @@ async def process_raw_block(
     status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_action_from_dashboard(
-    payload: ApplicantLogTransaction
-    | ApplicantProcessTransaction
+    payload: ApplicantProcessTransaction
     | ApplicantUserTransaction
     | AdditionalContextTransaction
     | OrganizationUserTransaction,
-    auth_validator=Depends(
+    auth_instance=Depends(
         EnsureAuthorized(
             _as=[
                 UserEntity.APPLICANT_DASHBOARD_USER,
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
             ],
-            blockchain_related=True,
+            return_token=True,
         )
     ),
     blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
     database_instance: Database = Depends(get_database_instance),
-) -> JSONResponse:
+) -> JSONResponse | None:
 
     # - Since the payload is automatically determined, we are going to resolve its parameter for the `from_address` and `to_address` when calling `blockchain_instance.insert_external_transaction`.
 
@@ -399,6 +400,13 @@ async def receive_action_from_dashboard(
     resolved_from_address: AddressUUID | None = None
     resolved_to_address: AddressUUID | None = None
     resolved_action: TransactionActions | None = None
+
+    supported_models: list[Any] = [
+        ApplicantProcessTransaction,
+        ApplicantUserTransaction,
+        AdditionalContextTransaction,
+        OrganizationUserTransaction,
+    ]
 
     # - Compare via instance and assign necessary components.
     # - As well compare the token payload from the
@@ -440,7 +448,7 @@ async def receive_action_from_dashboard(
 
         if identify_user_type.type is None:  # type: ignore
             raise HTTPException(
-                detail="Cannot classify user's type. Have you provided the right enum value? Please refer to the manual for more information.",
+                detail="Cannot classify user's additional context `type`.",
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 
@@ -458,7 +466,7 @@ async def receive_action_from_dashboard(
 
         else:
             raise HTTPException(
-                detail="Cannot resolve this user's organization `associate` type.",
+                detail="Cannot resolve user organization's `associate` type.",
                 status_code=HTTPStatus.BAD_REQUEST,
             )
 
@@ -485,77 +493,80 @@ async def receive_action_from_dashboard(
     # ! For the sake of complexity and due to my knowledge upon using JOIN statement.
     # ! I will be dividing those into two statements.
 
-    get_existing_from_address_query, get_existing_to_address_query = select(
-        [func.count()]
-    ).where(users.c.unique_address == resolved_from_address), select(
-        [func.count()]
-    ).where(
-        users.c.unique_address == resolved_to_address
-    )
-
-    # * Get it, by we will not be using it.
-    # * I don't know how to use count
-    (
-        is_existing_from_address,
-        is_existing_to_address,
-    ) = await database_instance.fetch_one(
-        get_existing_from_address_query
-    ), await database_instance.fetch_one(
-        get_existing_to_address_query
-    )
-
-    # - When creating a user, bypass it for now.
-    # * I know the idea of putting the functionality in API side but I want to consolidate the method into one so that its easy to navigate as they were isolated in one part.
-    if (
-        isinstance(payload, ApplicantUserTransaction | OrganizationUserTransaction)
-        and resolved_to_address is None
+    if not isinstance(
+        payload, ApplicantUserTransaction | OrganizationUserTransaction
+    ) and any(
+        isinstance(payload, each_supported_model)
+        for each_supported_model in supported_models  # * This is redundant, but we wanna make sure that the supported models would be the stricted instances of `payload`.
     ):
-        is_existing_to_address = True  # type: ignore # ! Force override from `Mapping` to `bool`, sorry xd.
 
-    # # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
-    # # ! These addresses will either contain a `str` or a `None` (`NoneType`).
-    # # ! If one of them contains `None` or `NoneType` this statement will result to false.
-    if all(
-        fetched_address
-        for fetched_address in [
-            is_existing_to_address,
+        get_existing_from_address_query, get_existing_to_address_query = select(
+            [func.count()]
+        ).where(users.c.unique_address == resolved_from_address), select(
+            [func.count()]
+        ).where(
+            users.c.unique_address == resolved_to_address
+        )
+
+        # * Get it, by we will not be using it.
+        (
             is_existing_from_address,
-        ]
-    ):
-
-        # - Create a `GroupTransaction`.
-        resolved_payload: GroupTransaction = GroupTransaction(
-            content_type=resolved_content_type, context=payload
+            is_existing_to_address,
+        ) = await database_instance.fetch_one(
+            get_existing_from_address_query
+        ), await database_instance.fetch_one(
+            get_existing_to_address_query
         )
 
-        if resolved_from_address is None:
-            raise HTTPException(
-                detail="Cannot find user reference when the provided content-type or the parameter `from_address` is invalid.",
-                status_code=HTTPStatus.NOT_ACCEPTABLE,
-            )
+        # - When creating a user, bypass it for now.
+        # * I know the idea of putting the functionality in API side but I want to consolidate the method into one so that its easy to navigate as they were isolated in one part.
+        if resolved_to_address is None:
+            is_existing_to_address = True  # type: ignore # ! Force override from `Mapping` to `bool`, sorry xd.
 
-        extern_insertion_result = await blockchain_instance.insert_external_transaction(
-            action=resolved_action,
-            from_address=resolved_from_address,
-            to_address=resolved_to_address,
-            data=resolved_payload,
-        )
-
-        if isinstance(extern_insertion_result, HTTPException):
-            raise extern_insertion_result
-        else:
-
-            return JSONResponse(
-                content={
-                    "detail": f"An action `{resolved_action.name}` with a content-type of `{resolved_content_type.name}`, given by {resolved_from_address} to {resolved_to_address if resolved_to_address is not None else '<unknown, determined via process>'} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
-                },
-                status_code=HTTPStatus.OK,
-            )
+        # # @o If all fetched addresses has a count of 1 (means they are existing), proceed.
+        # # ! These addresses will either contain a `str` or a `None` (`NoneType`).
+        # # ! If one of them contains `None` or `NoneType` this statement will result to false.
+        if not all(
+            fetched_address
+            for fetched_address in [
+                is_existing_to_address,
+                is_existing_from_address,
+            ]
+        ):
+            raise HTTPException(detail="", status_code=HTTPStatus.NOT_FOUND)
 
     else:
+        resolved_from_address = await validate_source_and_origin_associates(
+            database_instance_ref=database_instance, source_session_token=auth_instance, target_address=resolved_from_address, return_resolved_source_address=True  # type: ignore # * `resolved_from_address` is already resolved on the top, where it validates the payload's instance.
+        )
+
+    # - Create a `GroupTransaction`.
+    resolved_payload: GroupTransaction = GroupTransaction(
+        content_type=resolved_content_type, context=payload
+    )
+
+    if resolved_from_address is None:
         raise HTTPException(
-            detail="Source and destination user addresses does not exists!",
-            status_code=HTTPStatus.NOT_FOUND,
+            detail="Cannot find user reference when the provided `content-type` or the parameter `from_address` is invalid.",
+            status_code=HTTPStatus.NOT_ACCEPTABLE,
+        )
+
+    extern_insertion_result = await blockchain_instance.insert_external_transaction(
+        action=resolved_action,
+        from_address=resolved_from_address,
+        to_address=resolved_to_address,
+        data=resolved_payload,
+    )
+
+    if isinstance(extern_insertion_result, HTTPException):
+        raise extern_insertion_result
+
+    else:
+        return JSONResponse(
+            content={
+                "detail": f"An action `{resolved_action.name}` with a content-type of `{resolved_content_type.name}`, given by {resolved_from_address} to {resolved_to_address if resolved_to_address is not None else '<unknown, determined via process>'} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
+            },
+            status_code=HTTPStatus.OK,
         )
 
 
@@ -564,17 +575,6 @@ async def receive_action_from_dashboard(
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary="Receives a multiform content type specific to `ApplicationLogContentType`.",
     description=f"A special API endpoint that is exclusive to a pyadantic model `ApplicantLogTransaction`, which accepts payload from the dashboard along with the file. Even without file, `ApplicantLogTransaction` is destined from this endpoint.",
-    dependencies=[
-        Depends(
-            EnsureAuthorized(
-                _as=[
-                    UserEntity.APPLICANT_DASHBOARD_USER,
-                    UserEntity.ORGANIZATION_DASHBOARD_USER,
-                ],
-            )
-        )
-    ],
-    status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_file_from_dashboard(
     address_origin: AddressUUID = Form(...),
@@ -586,11 +586,26 @@ async def receive_file_from_dashboard(
     file: UploadFile | None = File(None),
     duration_start: datetime = Form(...),
     duration_end: datetime | None = Form(None),
-    validated_by: AddressUUID = Form(...),
-    timestamp: datetime = Form(...),
+    auth_instance: JWTToken = Depends(
+        EnsureAuthorized(
+            _as=[
+                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.ORGANIZATION_DASHBOARD_USER,
+            ],
+            return_token=True,
+        )
+    ),
+    database_instance: Database = Depends(generate_auth_token),
 ) -> None:
 
     try:
+        resolved_source_address = await validate_source_and_origin_associates(
+            database_instance_ref=database_instance,
+            source_session_token=auth_instance,
+            target_address=address_origin,
+            return_resolved_source_address=True,
+        )
+
         # - After receiving, wrap the payload.
         wrapped_to_model: ApplicantLogTransaction = ApplicantLogTransaction(
             **{
@@ -602,8 +617,8 @@ async def receive_file_from_dashboard(
                 "file": file,
                 "duration_start": duration_start,
                 "duration_end": duration_end,
-                "validated_by": validated_by,
-                "timestamp": timestamp,
+                "validated_by": resolved_source_address,  # type: ignore
+                "timestamp": datetime.now(),
             }
         )
 
@@ -615,7 +630,7 @@ async def receive_file_from_dashboard(
 
         await blockchain_instance.insert_external_transaction(
             action=TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT,
-            from_address=AddressUUID(validated_by),
+            from_address=AddressUUID(resolved_source_address),  # type: ignore
             to_address=AddressUUID(address_origin),
             data=transaction,
         )

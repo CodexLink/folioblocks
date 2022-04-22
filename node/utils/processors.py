@@ -11,6 +11,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from http import HTTPStatus
 import sys
 from asyncio import create_task, gather, get_event_loop, wait
 from getpass import getpass
@@ -23,10 +24,11 @@ from os import getpid
 from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
-from smtplib import SMTPAuthenticationError
 from aiohttp import ClientResponse
 
 from aiosmtplib import SMTPException
+from fastapi import HTTPException
+from blueprint.models import tokens
 from core.constants import (
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
@@ -44,6 +46,7 @@ from core.constants import TransactionContextMappingType
 from sqlalchemy.sql.expression import Select
 
 from core.constants import OrganizationType
+from core.constants import JWTToken, TokenStatus
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -803,6 +806,86 @@ def mask(data: bytes | int | str) -> str:
 
 
 # # Output Filters — END
+
+# # API DRY Handler — START
+async def validate_source_and_origin_associates(
+    database_instance_ref: Database,
+    source_session_token: JWTToken,
+    target_address: AddressUUID,
+    return_resolved_source_address: bool,
+) -> AddressUUID | None:
+
+    # - Validate the hash of the one who sent this transaction.
+    check_sender_source_via_token_query: Select = select([tokens.c.from_user]).where(
+        (tokens.c.token == source_session_token)
+        & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
+    )
+    resolved_sender_address = await database_instance_ref.fetch_one(
+        check_sender_source_via_token_query
+    )
+
+    check_target_address_query: Select = select([tokens.c.from_user]).where(
+        (tokens.c.token == target_address)
+        & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
+    )
+    resolved_to_address = await database_instance_ref.fetch_one(
+        check_target_address_query
+    )
+
+    # - Once done, check if this user contains a role and has a transaction mapping.
+    if resolved_sender_address is None:
+        raise HTTPException(
+            detail="The user may be impossibly alive due to the token's state of being inactive or labelled as expired or does not exists.",
+            status_code=HTTPStatus.UNAUTHORIZED,
+        )
+
+    if resolved_to_address is None:
+        raise HTTPException(
+            detail="The target address does not exists.",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
+
+    check_source_user_type_query: Select = select([users.c.association]).where(
+        (users.c.unique_address == resolved_sender_address.from_user) & (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)  # type: ignore
+    )
+
+    checked_user_validity_type = await database_instance_ref.fetch_one(
+        check_source_user_type_query
+    )
+
+    if checked_user_validity_type is None:
+        raise HTTPException(
+            detail=f"Given token resolving to user (either both `source` and `target` users / addresses) fails to be resolved or the given type of an existing user is not allowed.",
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
+
+    # - Last check, ensure that these users are connected from any of the association.
+    check_source_user_associate_query: Select = select([func.count()]).where(
+        associations.c.address == checked_user_validity_type.association  # type: ignore
+    )
+
+    source_user_validity = await database_instance_ref.fetch_one(
+        check_source_user_associate_query
+    )
+
+    check_target_user_associate_query: Select = select([func.count()]).where(
+        associations.c.address == checked_user_validity_type.association  # type: ignore
+    )
+
+    target_user_validity = await database_instance_ref.fetch_one(
+        check_target_user_associate_query
+    )
+
+    if source_user_validity is None or target_user_validity is None:
+        raise HTTPException(
+            detail=f"The source or the target (address) user is not associated from any of the associations / organizations!",
+            status_code=HTTPStatus.NOT_ACCEPTABLE,
+        )
+
+    return AddressUUID(resolved_sender_address.from_user) if return_resolved_source_address else None  # type: ignore
+
+
+# # API DRY Handler — END
 
 # # Blockchain DRY Handlers — START
 async def validate_organization_existence(

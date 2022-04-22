@@ -27,7 +27,7 @@ from databases import Database
 from fastapi import Depends, Header, HTTPException, Request
 from pydantic import EmailStr
 from pyotp import TOTP
-from sqlalchemy import and_, false, select, true
+from sqlalchemy import and_, false, func, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
 from core.constants import ADDRESS_UUID_KEY_PREFIX
 from utils.http import get_http_client_instance
@@ -494,10 +494,15 @@ async def authenticate_node_client(
 
 class EnsureAuthorized:
     def __init__(
-        self, *, _as: UserEntity | list[UserEntity], blockchain_related: bool = False
+        self,
+        *,
+        _as: UserEntity | list[UserEntity],
+        blockchain_related: bool = False,
+        return_token: bool = False,
     ) -> None:
         self._as: UserEntity | list[UserEntity] = _as
         self._blockchain_related: Final[bool] = blockchain_related
+        self._return_token: bool = return_token
 
     async def __call__(
         self,
@@ -509,15 +514,15 @@ class EnsureAuthorized:
             None,
             description=f"The certificate token that proves the consensus negotiation between {NodeType.ARCHIVAL_MINER_NODE.name} and {NodeType.MASTER_NODE.name}",
         ),
-        db: Database = Depends(get_database_instance),
-    ) -> None:
+        database_instance: Database = Depends(get_database_instance),
+    ) -> JWTToken | None:
 
         if x_token:
-            req_ref_token: Select = tokens.select().where(
+            req_ref_token: Select = select([func.count()]).where(
                 (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
             )
 
-            req_token = await db.fetch_one(req_ref_token)
+            req_token = await database_instance.fetch_one(req_ref_token)
 
             if req_token:
                 ref_token = Tokens.parse_obj(req_token)
@@ -528,22 +533,36 @@ class EnsureAuthorized:
                     users.c.unique_address == ref_token.from_user
                 )
 
-                user_role: Mapping = await db.fetch_val(user_role_ref)
+                user_role: Mapping = await database_instance.fetch_val(user_role_ref)
+
+                condition_unmet_message: str = f"The role of this user is prohibited from running this method. | Allowed roles: {[self._as] if isinstance(self._as, list) else self._as}"
+                condition_unmet_http_code: HTTPStatus = HTTPStatus.FORBIDDEN
 
                 if isinstance(self._as, list):
                     for each_role in self._as:
-                        if user_role is each_role:
-                            return
-                else:
-                    if user_role is self._as:
-                        return
+                        if user_role.type is not each_role:  # type: ignore
+                            raise HTTPException(
+                                detail=condition_unmet_message,
+                                status_code=condition_unmet_http_code,
+                            )
 
+                if user_role.type is not self._as:  # type: ignore
+                    raise HTTPException(
+                        detail=condition_unmet_message,
+                        status_code=condition_unmet_http_code,
+                    )
+
+        # * I'm not quite sure if this is a right thing to do.
+        # * Something's missing, I can feel it.
         if self._blockchain_related and x_certificate_token is not None:
-            return
+            return None
+
+        if self._return_token and isinstance(user_type.type, UserEntity):  # type: ignore
+            return x_token
 
         raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED,
             detail="You are unauthorized to access this endpoint.",
+            status_code=HTTPStatus.UNAUTHORIZED,
         )
 
 

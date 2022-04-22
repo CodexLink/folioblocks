@@ -134,8 +134,8 @@ class ApplicantLogTransaction(BaseModel):
     file: UploadFile | HashUUID | None
     duration_start: datetime
     duration_end: datetime | None
-    validated_by: AddressUUID
-    timestamp: datetime
+    validated_by: AddressUUID | None  # * We will be using `AddressUUID` for the output. Meanwhile, we will left the right-operand as None since we are dependent to the user who does that by getting the session token.
+    timestamp: datetime | None  # * We will be using `datetime` for output, while we don't take any inputs from the frontend in terms of the timestamp, it can be easily modified, so therefore let the backend calculate the time.
 
 
 class ApplicantProcessTransaction(BaseModel):

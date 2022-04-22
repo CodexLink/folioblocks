@@ -493,7 +493,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         create_task(
                             self.email_service.send(
-                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Your Address: {new_uuid}, Association Address: {data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution_ref}<br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the <b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i> please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
+                                content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER}`</b>!<br><br>Your Address: <b>{new_uuid}</b><br>Association Address: <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution_ref}</b><br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                 subject="Hello from Folioblocks!",
                                 to=data.context.email,  # type: ignore
                             ),
@@ -1127,6 +1127,12 @@ class BlockchainMechanism(ConsensusMechanism):
                         "After multiple retries, the generated block will be stored and will find archival miner node candidates who doesn't disconnect."
                     )
                     self.unsent_block_container.append(generated_block)
+
+                    # * Have to eliminate the potential of colliding with other blocks.
+                    self.unsent_block_container.sort(
+                        key=lambda block_context: block_context.id
+                    )
+
                     continue
 
             logger.error(
@@ -1895,7 +1901,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 else AddressUUID(from_address),
                 to_address=AddressUUID(to_address) if to_address is not None else None,
             )
-            print("DEBUG", built_internal_transaction)
 
         except PydanticValidationError as e:
             error_message = (
@@ -1919,19 +1924,33 @@ class BlockchainMechanism(ConsensusMechanism):
         # @o After calculation, invoke this new hash from the `tx_hash` of the `built_transaction`.
         built_internal_transaction.tx_hash = HashUUID(premature_calc_sha256)
 
-        # @o Append this and we are good to go!
-        self.transaction_container.append(built_internal_transaction)
-        logger.info(
-            f"Transaction `{built_internal_transaction.tx_hash}` has been created and is on-queue for new blocks!"
-        )
+        is_duplicate: bool = False
+        # @o Then we attempt to resolve by sorting it back and removing any potential duplicates.
+        for each_stored_transaction in self.transaction_container:
+            if built_internal_transaction is each_stored_transaction:
+                is_duplicate = True
+                break
 
-        # - For user-based transactions, the method 'self.insert_external_transaction' waits for this method to finish for its transaction to get mapped from the blockchain. With that, let's return necessary contents.
+        # @o Append the new transaction.
+        if not is_duplicate:
+            self.transaction_container.append(built_internal_transaction)
 
-        return {
-            "tx_hash": built_internal_transaction.tx_hash,
-            "address_ref": to_address,
-            "timestamp": timestamp,
-        }
+            logger.info(
+                f"Transaction `{built_internal_transaction.tx_hash}` has been created and is on-queue for new blocks!"
+            )
+
+            # - For user-based transactions, the method 'self.insert_external_transaction' waits for this method to finish for its transaction to get mapped from the blockchain. With that, let's return necessary contents.
+
+            return {
+                "tx_hash": built_internal_transaction.tx_hash,
+                "address_ref": to_address,
+                "timestamp": timestamp,
+            }
+        else:
+            return HTTPException(
+                detail=f"A duplicate transaction regarding {built_internal_transaction.action} has been detected. The system will disregard this transaction as it already exists.",
+                status_code=HTTPStatus.CONFLICT,
+            )
 
     async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         return
