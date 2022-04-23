@@ -298,3 +298,4 @@ dist
 # Custom files
 folioblocks-chain.json
 node-env.vars
+userfiles/**
