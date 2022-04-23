@@ -91,6 +91,12 @@ async def register_entity(
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> EntityRegisterResult | JSONResponse | None:
 
+    if not isinstance(blockchain_instance, BlockchainMechanism):
+        raise HTTPException(
+            detail="Blockchain instance is not yet fully initialized. Please try again later.",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
     # - Since we are going to record this in blockchain, which requires the `acceptor_address`, validate if it contains something.
     # * New instances doesn't have new credentials, check if there's an auth code for the NodeType.MASTER_NODE and it's not yet used.
 
@@ -113,29 +119,29 @@ async def register_entity(
         )
 
     if new_user_auth_register.account_type is UserEntity.ORGANIZATION_DASHBOARD_USER:
-        if isinstance(blockchain_instance, BlockchainMechanism):
-            if (
-                isinstance(credentials.first_name, str)
-                and isinstance(credentials.last_name, str)
-            ) and (
-                (
-                    isinstance(credentials.association_name, str)
-                    and credentials.association_address is None
-                    and isinstance(credentials.association_type, OrganizationType)
-                    and isinstance(credentials.association_founded, datetime)
-                    and isinstance(credentials.association_description, str)
-                )
-                or (
-                    credentials.association_name is None
-                    and isinstance(credentials.association_address, str)
-                    and credentials.association_type is None
-                    and credentials.association_founded is None
-                    and credentials.association_description is None
-                )
-            ):
+        if (
+            isinstance(credentials.first_name, str)
+            and isinstance(credentials.last_name, str)
+        ) and (
+            (
+                isinstance(credentials.association_name, str)
+                and credentials.association_address is None
+                and isinstance(credentials.association_type, OrganizationType)
+                and isinstance(credentials.association_founded, datetime)
+                and isinstance(credentials.association_description, str)
+            )
+            or (
+                credentials.association_name is None
+                and isinstance(credentials.association_address, str)
+                and credentials.association_type is None
+                and credentials.association_founded is None
+                and credentials.association_description is None
+            )
+        ):
 
-                # @o When registering a user, there is a need of special handling, as things are recorded in the blockchain.
-                new_user_insertion_response: HTTPException | None = await blockchain_instance.insert_external_transaction(
+            # @o When registering a user, there is a need of special handling, as things are recorded in the blockchain.
+            new_user_insertion_response: HTTPException | None = (
+                await blockchain_instance.insert_external_transaction(
                     action=TransactionActions.ORGANIZATION_USER_REGISTER,
                     from_address=blockchain_instance.identity[0],
                     to_address=None,
@@ -154,39 +160,34 @@ async def register_entity(
                             founded=credentials.association_founded,
                             description=credentials.association_description,
                             identity=None,
-                            associations=None,
-                            extra=None,
+                            institution=credentials.association_address,
                         ),
                     ),
                 )
+            )
 
-                if isinstance(new_user_insertion_response, HTTPException):
-                    raise new_user_insertion_response
+            if isinstance(new_user_insertion_response, HTTPException):
+                raise new_user_insertion_response
 
-                else:
-                    dispose_auth_code_for_org: Update = (
-                        auth_codes.update()
-                        .where(auth_codes.c.code == new_user_auth_register.code)
-                        .values(is_used=True)
-                    )
-
-                    await database_instance.execute(dispose_auth_code_for_org)
-
-                    return JSONResponse(
-                        content={
-                            "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
-                        },
-                        status_code=HTTPStatus.ACCEPTED,
-                    )
             else:
-                raise HTTPException(
-                    detail=f"Your role is `{new_user_auth_register.account_type.value}` and fields given were insufficient.",
-                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                dispose_auth_code_for_org: Update = (
+                    auth_codes.update()
+                    .where(auth_codes.c.code == new_user_auth_register.code)
+                    .values(is_used=True)
+                )
+
+                await database_instance.execute(dispose_auth_code_for_org)
+
+                return JSONResponse(
+                    content={
+                        "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
+                    },
+                    status_code=HTTPStatus.ACCEPTED,
                 )
         else:
             raise HTTPException(
-                detail="Blockchain instance is not yet fully initialized. Please try again later.",
-                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+                detail=f"Your role is `{new_user_auth_register.account_type.value}` and fields given were insufficient.",
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
 
     elif new_user_auth_register.account_type is UserEntity.APPLICANT_DASHBOARD_USER:
@@ -238,7 +239,7 @@ async def register_entity(
 
             create_task(
                 get_email_instance().send(
-                    content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type.value}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                     subject="Hello from Folioblocks Technicals!",
                     to=credentials.email,
                 ),
@@ -366,7 +367,7 @@ async def login_entity(
 
                 # - Check if this node does have a association certificate token.
 
-                if fetched_credential_data.type == UserEntity.ARCHIVAL_MINER_NODE_USER:
+                if fetched_credential_data.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
                     logger.info(
                         "Checking if this node has its own associate node certificate token."
                     )

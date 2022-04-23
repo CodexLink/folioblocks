@@ -105,7 +105,7 @@ async def generate_auth_token_for_other_nodes(
 
             except IntegrityError:
                 raise HTTPException(
-                    detail=f"Cannot provide anymore `auth_token`.",
+                    detail=f"Cannot provide anymore `auth_token` to a user due to already having it.",
                     status_code=HTTPStatus.FORBIDDEN,
                 )
 

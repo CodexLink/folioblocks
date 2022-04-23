@@ -93,8 +93,8 @@ class AdditionalContextTransaction(BaseModel):
     address_origin: AddressUUID
     title: str
     description: str
-    inserted_by: AddressUUID
-    timestamp: datetime
+    inserter: AddressUUID | None
+    timestamp: datetime | None
 
 
 # # Generalized Transactions — END
@@ -125,6 +125,10 @@ class AgnosticTransactionUserCredentials(AgnosticCredentialValidator, BaseModel)
     password: str
 
 
+class AgnosticViewExtenderFields(BaseModel):
+    extra: AdditionalContextTransaction | None
+
+
 class ApplicantLogTransaction(BaseModel):
     address_origin: AddressUUID
     type: ApplicantLogContentType
@@ -141,19 +145,18 @@ class ApplicantLogTransaction(BaseModel):
 class ApplicantProcessTransaction(BaseModel):
     process_id: RandomUUID
     state: EmploymentApplicationState
-    requestor: AddressUUID
+    inserter: AddressUUID | None
     receiver: AddressUUID
-    timestamp: datetime
+    timestamp: datetime | None
 
 
 class ApplicantUserBaseTransaction(BaseModel):
     identity: AddressUUID | None  # * This is going to be resolved during process.
-    institution_ref: AddressUUID
+    inserter: AddressUUID | None  # * Reference to user from the organization.
+    institution: AddressUUID | None
     course: str
     year_level: int
     prefer_role: str
-    log: ApplicantLogTransaction | None
-    extra: AdditionalContextTransaction | None
 
 
 class ApplicantUserTransaction(
@@ -162,14 +165,25 @@ class ApplicantUserTransaction(
     pass
 
 
-# * For now, I can't think of any solution regarding this one since register_entity at entity.py uses it for the registration of the user.
-class OrganizationUserBaseTransaction(BaseModel):
-    identity: AddressUUID | None  # * Will be resolved during creation process.
+# - REST API Model.
+class ApplicantUserViewExtender(AgnosticViewExtenderFields, BaseModel):
+    applicants: ApplicantUserBaseTransaction
+    logs: list[ApplicantLogTransaction] | None
+
+
+# * This organization (generative) model contains fields that seem to be nullable or optional, which does not. Some fields may be nullable at the case were an association was registered in the first place, or was referred from this organization.
+# - The important matter here is that, a identity and a institution will be referred, to which at this case, when fetched will be rendered from this model later.
+
+
+class OrganizationUserBaseFields(BaseModel):
+    identity: str | None  # * Will be resolved during creation process.
+    institution: str | None
+
+
+class OrganizationUserBaseTransaction(OrganizationUserBaseFields, BaseModel):
     org_type: OrganizationType | None
     founded: datetime | None
     description: str | None
-    associations: list[AddressUUID] | None
-    extra: AdditionalContextTransaction | None
 
 
 class OrganizationUserTransaction(
@@ -178,6 +192,12 @@ class OrganizationUserTransaction(
     OrganizationUserBaseTransaction,
 ):
     pass
+
+
+# - Another Rest API model.
+class OrganizationUserViewExtender(AgnosticViewExtenderFields, BaseModel):
+    organizations: OrganizationUserBaseTransaction
+    associations: list[AddressUUID] | None
 
 
 # # Organization-based Transactions — END
@@ -222,7 +242,7 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
 
 class GroupTransaction(BaseModel):
     content_type: TransactionContextMappingType | None  # * Method `insert_external_transaction` handles this, so there's no way it will go without a context.
-    context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseTransaction
+    context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseFields | OrganizationUserBaseTransaction
 
 
 class NodeTransaction(BaseModel):

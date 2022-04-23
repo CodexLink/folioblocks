@@ -86,6 +86,10 @@ from blueprint.schemas import (
 from core.constants import ApplicantLogContentType, TransactionContextMappingType
 from core.constants import EmploymentApplicationState
 from core.dependencies import generate_auth_token
+from blueprint.schemas import (
+    AgnosticCredentialValidator,
+    OrganizationIdentityValidator,
+)
 from utils.processors import validate_source_and_origin_associates
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -369,7 +373,7 @@ async def process_raw_block(
 
 
 @node_router.post(
-    "/blockchain/receive_context",
+    "/receive_context",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary="Receives data that serves as an action of the user from the dashboard.",
     description=f"A special API endpoint that accepts payload from the dashboard. This requires special credentials and handling outside the scope of node.",
@@ -378,8 +382,7 @@ async def process_raw_block(
 async def receive_action_from_dashboard(
     payload: ApplicantProcessTransaction
     | ApplicantUserTransaction
-    | AdditionalContextTransaction
-    | OrganizationUserTransaction,
+    | AdditionalContextTransaction,
     auth_instance=Depends(
         EnsureAuthorized(
             _as=[
@@ -401,13 +404,6 @@ async def receive_action_from_dashboard(
     resolved_to_address: AddressUUID | None = None
     resolved_action: TransactionActions | None = None
 
-    supported_models: list[Any] = [
-        ApplicantProcessTransaction,
-        ApplicantUserTransaction,
-        AdditionalContextTransaction,
-        OrganizationUserTransaction,
-    ]
-
     # - Compare via instance and assign necessary components.
     # - As well compare the token payload from the
 
@@ -423,17 +419,17 @@ async def receive_action_from_dashboard(
         else:
             resolved_action = TransactionActions.APPLICANT_APPLY
 
+        payload.timestamp = datetime.now()
         resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
-        resolved_from_address, resolved_to_address = payload.requestor, payload.receiver
+        resolved_to_address = payload.receiver
 
     elif isinstance(payload, ApplicantUserTransaction):
         resolved_action = TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT
         resolved_content_type = TransactionContextMappingType.APPLICANT_BASE
 
-        resolved_from_address, resolved_to_address = (
-            payload.institution_ref,
-            None,
-        )  # - `to_address` is resolved from the method.
+        resolved_to_address = (
+            None  # - This will get resolved later since it was generative model.
+        )
 
     elif isinstance(payload, AdditionalContextTransaction):
         # - With the logic being too complicated, we should resolve this `content_type` here instead.
@@ -448,7 +444,7 @@ async def receive_action_from_dashboard(
 
         if identify_user_type is None:  # type: ignore
             raise HTTPException(
-                detail="Cannot classify user's additional context `type`.",
+                detail="Cannot classify user's additional context `type`. Address origin may be invalid.",
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 
@@ -470,18 +466,8 @@ async def receive_action_from_dashboard(
                 status_code=HTTPStatus.BAD_REQUEST,
             )
 
-        resolved_from_address, resolved_to_address = (
-            payload.inserted_by,
-            payload.address_origin,
-        )
-
-    elif isinstance(payload, OrganizationUserTransaction):
-        resolved_action = TransactionActions.ORGANIZATION_USER_REGISTER
-        resolved_content_type = None
-        resolved_from_address, resolved_to_address = (
-            payload.identity,
-            None,
-        )  # - `to_address` can be `None` since it's an organization.
+        payload.timestamp = datetime.now()
+        resolved_to_address = payload.address_origin
 
     else:
         raise HTTPException(
@@ -493,10 +479,8 @@ async def receive_action_from_dashboard(
     resolved_from_address = await validate_source_and_origin_associates(
         database_instance_ref=database_instance,
         source_session_token=auth_instance,
-        target_address=resolved_from_address,
-        skip_validation_on_target=isinstance(
-            payload, ApplicantUserTransaction | OrganizationUserTransaction
-        ),
+        target_address=resolved_to_address,
+        skip_validation_on_target=isinstance(payload, ApplicantUserTransaction),
         return_resolved_source_address=True,  # type: ignore # * `resolved_from_address` is already resolved on the top, where it validates the payload's instance.
     )
 
@@ -510,6 +494,9 @@ async def receive_action_from_dashboard(
             detail="Cannot find user reference when the provided `content-type` or the parameter `from_address` is invalid.",
             status_code=HTTPStatus.NOT_ACCEPTABLE,
         )
+
+    # - When validation for both the source and address is success, finally invoke the `from_address`.
+    payload.inserter = resolved_from_address
 
     extern_insertion_result = await blockchain_instance.insert_external_transaction(
         action=resolved_action,
@@ -531,14 +518,13 @@ async def receive_action_from_dashboard(
 
 
 @node_router.post(
-    "/blockchain/receive_context_with_file",
+    "/receive_context_log",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary="Receives a multiform content type specific to `ApplicationLogContentType`.",
     description=f"A special API endpoint that is exclusive to a pyadantic model `ApplicantLogTransaction`, which accepts payload from the dashboard along with the file. Even without file, `ApplicantLogTransaction` is destined from this endpoint.",
 )
 async def receive_file_from_dashboard(
     address_origin: AddressUUID = Form(...),
-    blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
     content_type: ApplicantLogContentType = Form(...),
     name: str = Form(...),
     description: str = Form(...),
@@ -555,8 +541,9 @@ async def receive_file_from_dashboard(
             return_token=True,
         )
     ),
-    database_instance: Database = Depends(generate_auth_token),
-) -> None:
+    blockchain_instance: BlockchainMechanism = Depends(get_blockchain_instance),
+    database_instance: Database = Depends(get_database_instance),
+) -> JSONResponse:
 
     try:
         # ! Logic Conditon Checking
@@ -598,11 +585,23 @@ async def receive_file_from_dashboard(
             context=wrapped_to_model,
         )
 
-        await blockchain_instance.insert_external_transaction(
-            action=TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT,
-            from_address=AddressUUID(resolved_source_address),  # type: ignore
-            to_address=AddressUUID(address_origin),
-            data=transaction,
+        insertion_result: HTTPException | None = (
+            await blockchain_instance.insert_external_transaction(
+                action=TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT,
+                from_address=AddressUUID(resolved_source_address),  # type: ignore
+                to_address=AddressUUID(address_origin),
+                data=transaction,
+            )
+        )
+
+        if isinstance(insertion_result, HTTPException):
+            raise insertion_result
+
+        return JSONResponse(
+            content={
+                "detail": f"An applicant log content given by <address hidden> to {address_origin} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
+            },
+            status_code=HTTPStatus.OK,
         )
 
     except PydanticValueError as e:

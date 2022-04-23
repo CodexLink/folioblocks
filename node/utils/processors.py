@@ -813,11 +813,24 @@ async def validate_source_and_origin_associates(
     database_instance_ref: Database,
     source_session_token: JWTToken,
     target_address: AddressUUID | None,
-    skip_validation_on_target: bool,  #
+    skip_validation_on_target: bool,
     return_resolved_source_address: bool,
 ) -> AddressUUID | None:
 
-    # - Validate the hash of the one who sent this transaction and receive the address.
+    # * Evaluate if there's a need to skip validating target address.
+    # ! Some models doens't have a target address by default, with that, we may only need to validate the source address.
+    should_skip_validation: bool = skip_validation_on_target and not isinstance(
+        target_address, str
+    )  # * And since it may be skipped, should the target address is not a string.
+
+    # - Ensure no ambigous condition by validating the `target_address` parameter.
+    if skip_validation_on_target and isinstance(target_address, str):
+        raise HTTPException(
+            detail="Skipping validation but the target address is specified, prohibited to avoid conflicting other conditions.",
+            status_code=HTTPStatus.BAD_REQUEST,
+        )
+
+    # - Validate the token of the one who sent this transaction and receive the address.
     get_sender_address_via_token_query: Select = select([tokens.c.from_user]).where(
         (tokens.c.token == source_session_token)
         & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
@@ -826,11 +839,18 @@ async def validate_source_and_origin_associates(
         get_sender_address_via_token_query
     )
 
+    if resolved_source_address == target_address:
+        raise HTTPException(
+            detail="Self-casting additional information is not possible!",
+            status_code=HTTPStatus.CONFLICT,
+        )
+
     # - Validate the provided target address by fetching the association reference.
     validate_target_address_query: Select = select([users.c.association]).where(
         (users.c.unique_address == target_address)
     )
-    resolved_target_address = await database_instance_ref.fetch_val(
+
+    resolved_target_address_as_association = await database_instance_ref.fetch_val(
         validate_target_address_query
     )
 
@@ -841,19 +861,13 @@ async def validate_source_and_origin_associates(
             status_code=HTTPStatus.UNAUTHORIZED,
         )
 
-    if (
-        resolved_target_address is None
-        and not skip_validation_on_target  # * And this metdho was not invoked to skip this validation.
-        and not isinstance(
-            target_address, str
-        )  # * And since it was not skipped, should the target address is not a string.
-    ):
+    if resolved_target_address_as_association is None and not should_skip_validation:
         raise HTTPException(
             detail="The target address does not exists.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
-    # - Since the target address contains the association, then get the source address.
+    # - Since the target address contains the association (most likely), then get the source address.
     get_source_address_association: Select = select([users.c.association]).where(
         (users.c.unique_address == resolved_source_address) & (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)  # type: ignore
     )
@@ -868,7 +882,16 @@ async def validate_source_and_origin_associates(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         )
 
-    # - Ensure that these users are connected from any of the association.
+    # - Ensure that these users are connected only from this organization.
+    if (
+        source_address_association != resolved_target_address_as_association
+    ) and not should_skip_validation:
+        raise HTTPException(
+            detail="The source or target address has a different organization!",
+            status_code=HTTPStatus.NOT_ACCEPTABLE,
+        )
+
+    # - Ensure that these users are connected from their association.
     check_source_address_associate_query: Select = select([func.count()]).where(
         associations.c.address == source_address_association
     )
@@ -885,10 +908,8 @@ async def validate_source_and_origin_associates(
         check_target_user_associate_query
     )
 
-    if not source_user_validity.count and (
-        not target_user_validity.count
-        and not skip_validation_on_target
-        and not isinstance(target_address, str)
+    if not source_user_validity.count and (  # type: ignore
+        not target_user_validity.count and not skip_validation_on_target  # type: ignore
     ):
         raise HTTPException(
             detail=f"The source or the target (address) user is not associated with any of the associations/organizations!",
@@ -906,7 +927,7 @@ async def validate_source_and_origin_associates(
     )
 
     check_target_address_tx_map: Select = select([func.count()]).where(
-        (tx_content_mappings.c.address_ref == resolved_target_address)
+        (tx_content_mappings.c.address_ref == resolved_target_address_as_association)
         & (
             tx_content_mappings.c.content_type
             == TransactionContextMappingType.APPLICANT_BASE
@@ -938,66 +959,82 @@ async def validate_source_and_origin_associates(
 
 # # Blockchain DRY Handlers — START
 async def validate_organization_existence(
-    *, org_identity: OrganizationIdentityValidator, scoped_to_education_group: bool
+    *, org_identity: OrganizationIdentityValidator, scoped_to_applicants: bool
 ) -> Mapping | None:
-
-    validate_association_existence_query: Select
 
     # - Specific instances of whether the organization is classified as non-educational or otherwise, each cases of it requires a different parameter or query to validate the existence of the association/organization.
     # @o For the instance of `OrganizationUserTransaction` it checks the `association_address` if given (in the scenario that the association/organiaztion does exists), or it was checked by `association_name` and `association_group_type.` (in the scenario where the association/organization does not exists and requires a new one)
     # ! Therefore, the way its variables are declared is when the organization does not exists or not.
 
-    # @d The switch `scoped_to_education_group` forces to query along both types along with the address. This is useful if we want to assert the type of the organization address that we refer. There's no way that there's an applicant enrolled in the company right? Confusing, take note that `hired` and `enrolled` is different.
+    # @d The switch `scope_to_applicants` forces to resolve the given parameter in 'org_identity', which is an address from the user, NOT a reference address from the association, by setting `scope_to_applicants` to `True`, it queries that address if the association exists based from the address of source.
+    # @d It does not forces to query along both types along with the address, when the instance is `ApplicantUserTransacion`.
 
-    validate_association_existence_query = select([associations.c.address]).where(
+    database_instance: Database = get_database_instance()
+    resolved_association_ref_from_user: Mapping | str | None = (
+        org_identity.association_address
+    )
+
+    if scoped_to_applicants:
+        get_association_query: Select = select([users.c.association]).where(
+            users.c.unique_address == org_identity.association_address
+        )
+
+        resolved_association_ref_from_user = await database_instance.fetch_val(
+            get_association_query
+        )
+
+    validate_association_existence_query: Select = select(
+        [associations.c.address]
+    ).where(
         (
-            (associations.c.address == org_identity.association_address)
-            if not scoped_to_education_group
+            (associations.c.address == resolved_association_ref_from_user)
+            if scoped_to_applicants
             else (
-                (associations.c.address == org_identity.association_address)
-                & (associations.c.group == OrganizationType.INSTITUTION)
-                | (associations.c.group == OrganizationType.ORGANIZATION)
-            )
-            | (
-                (associations.c.name == org_identity.association_name)
-                & (associations.c.group == org_identity.association_group_type)
+                (associations.c.address == resolved_association_ref_from_user)
+                | (
+                    (associations.c.name == org_identity.association_name)
+                    & (
+                        (associations.c.group == OrganizationType.INSTITUTION)
+                        | (associations.c.group == OrganizationType.ORGANIZATION)
+                    )
+                )
             )
         )
     )
 
-    existing_association: Mapping | None = await get_database_instance().fetch_val(
+    existing_association: Mapping | None = await database_instance.fetch_val(
         validate_association_existence_query
     )
 
     return existing_association
 
 
-async def validate_user_address(
-    *,
-    supplied_address: AddressUUID | str,
-) -> bool:
+async def validate_applicant_user_address(
+    *, supplied_address: AddressUUID, expected_type: UserEntity
+) -> None:
 
     if isinstance(supplied_address, str):
-        address_existence_checker_query: Select = select(
-            [users.c.unique_address]
-        ).where(users.c.unique_address == supplied_address)
+        address_existence_checker_query: Select = select([func.count()]).where(
+            (users.c.unique_address == supplied_address)
+            & (users.c.type == expected_type)
+        )
 
         address: Mapping | None = await get_database_instance().fetch_one(
             address_existence_checker_query
         )
 
-        if address is None:
-            logger.error(
-                "Supplied address seems to not exist. Please check your input and try again."
+        if not address.count:  # type: ignore
+            raise HTTPException(
+                detail="Supplied address reference does not exist. Please check your input and try again.",
+                status_code=HTTPStatus.NOT_FOUND,
             )
-            return False
 
-        return True
+        return None
 
-    logger.error(
-        f"Supplied address is invalid! Please ensure that the address is a type of {type(str)}."
+    raise HTTPException(
+        detail=f"Supplied address is an invalid object. Please ensure that the address is a type of {type(str)}.",
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
     )
-    return False
 
 
 async def validate_user_existence(
@@ -1021,12 +1058,27 @@ async def validate_user_existence(
 
 
 async def validate_transaction_mapping_exists(
-    *, reference_address: AddressUUID | str, content_type: TransactionContextMappingType
+    *, user_address: AddressUUID | str, content_type: TransactionContextMappingType
 ) -> bool:
-    if validate_user_address(supplied_address=reference_address) is True:
+
+    if content_type in [
+        TransactionContextMappingType.APPLICANT_BASE,
+        TransactionContextMappingType.ORGANIZATION_BASE,
+    ]:
+
+        resolved_reference_group: UserEntity = (
+            UserEntity.APPLICANT_DASHBOARD_USER
+            if content_type is TransactionContextMappingType.APPLICANT_BASE
+            else UserEntity.ORGANIZATION_DASHBOARD_USER
+        )
+
+        await validate_applicant_user_address(
+            supplied_address=AddressUUID(user_address),
+            expected_type=resolved_reference_group,
+        )
 
         find_tx_mapping_query_query: Select = select([func.count()]).where(
-            (tx_content_mappings.c.address_ref == reference_address)
+            (tx_content_mappings.c.address_ref == user_address)
             & (tx_content_mappings.c.content_type == content_type)
         )
 
@@ -1036,7 +1088,11 @@ async def validate_transaction_mapping_exists(
 
         return True if found_tx_mapping.count else False  # type: ignore
 
-    return False
+    # - Even this method returns `False`, this is an internal error logic that should hit any APIs associated from this method.
+    raise HTTPException(
+        detail="There was an error regarding transaction validation mappin, please report this to the administrators to fix this issue.",
+        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+    )
 
 
 # # Blockchain DRY Handlers — END

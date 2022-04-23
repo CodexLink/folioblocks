@@ -114,7 +114,6 @@ REF_MASTER_BLOCKCHAIN_ADDRESS: Final[str] = "MASTER_NODE_ADDRESS"
 REF_MASTER_BLOCKCHAIN_PORT: Final[str] = "MASTER_NODE_PORT"
 
 # # Constants, HTTP
-
 HTTP_MICRO_SLEEP_TO_FETCH_REQUEST: Final[float] = 0.2
 HTTP_SLEEP_TO_RETRY_SECONDS: Final[int] = 3
 
@@ -122,7 +121,7 @@ HTTP_SLEEP_TO_RETRY_SECONDS: Final[int] = 3
 JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"
 
-# # Constants, Auth: Time-based OTP.
+# # Constants, Auth: Time-based OTP (TOTP).
 TOTP_PASSCODE_REFRESH_INTERVAL: Final[int] = 15
 TOTP_VALID_WINDOW_SECONDS: Final[int] = 3
 
@@ -144,6 +143,7 @@ DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
 DEFAULT_SMTP_PORT: Final[int] = 465
 DEFAULT_SMTP_ATTEMPT_MAX_RETRIES: Final[int] = 10
 DEFAULT_SMTP_TIMEOUT_CONNECTION: Final[int] = 10
+USER_FILES_FOLDER_NAME: Final[str] = "userfiles/"
 
 # # Constants, Resources
 DATABASE_NAME: Final[str] = "folioblocks-node.db"

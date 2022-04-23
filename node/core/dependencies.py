@@ -323,8 +323,6 @@ async def authenticate_node_client(
                     else (instances[0].target_host, instances[0].target_port)
                 )
 
-                print(master_email_address)
-
                 register_node: ClientResponse = (
                     await get_http_client_instance().enqueue_request(
                         url=URLAddress(
@@ -523,7 +521,6 @@ class EnsureAuthorized:
             )
 
             req_token = await database_instance.fetch_val(req_ref_token)
-            print("req_token", req_token)
 
             if req_token is not None:  # type: ignore
 
