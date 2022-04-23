@@ -444,21 +444,21 @@ async def receive_action_from_dashboard(
             users.c.unique_address == payload.address_origin
         )
 
-        identify_user_type = await database_instance.fetch_one(identify_user_type_query)
+        identify_user_type = await database_instance.fetch_val(identify_user_type_query)
 
-        if identify_user_type.type is None:  # type: ignore
+        if identify_user_type is None:  # type: ignore
             raise HTTPException(
                 detail="Cannot classify user's additional context `type`.",
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 
-        if identify_user_type.type is UserEntity.APPLICANT_DASHBOARD_USER:  # type: ignore
+        if identify_user_type is UserEntity.APPLICANT_DASHBOARD_USER:  # type: ignore
             resolved_action = (
                 TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
             )
             resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
 
-        elif identify_user_type.type is UserEntity.ORGANIZATION_DASHBOARD_USER:  # type: ignore
+        elif identify_user_type is UserEntity.ORGANIZATION_DASHBOARD_USER:  # type: ignore
             resolved_action = TransactionActions.ORGANIZATION_REFER_EXTRA_INFO
             resolved_content_type = (
                 TransactionContextMappingType.ORGANIZATION_ADDITIONAL
@@ -666,7 +666,7 @@ async def acknowledge_as_response(
     # - [1.2] Then validate the token by incorporating previous query and the header `x_acceptance`.
     # * Validate other credentials and beyond at this point.
     if validated_source_address is not None:
-        fetch_node_auth_query = select([auth_codes.c.id]).where(
+        fetch_node_auth_query = select([func.count()]).where(
             (auth_codes.c.code == x_acceptance)
             & (
                 auth_codes.c.to_email == validated_source_address.email  # type: ignore
@@ -675,15 +675,15 @@ async def acknowledge_as_response(
 
         validated_auth_code = await db.fetch_one(fetch_node_auth_query)
 
-        if validated_auth_code is not None:
-            fetch_node_token_query = select([tokens.c.id]).where(
+        if validated_auth_code.count:  # type: ignore
+            fetch_node_token_query = select([func.count()]).where(
                 (tokens.c.token == x_session)
                 & (tokens.c.from_user == validated_source_address.unique_address)  # type: ignore
             )
 
             validated_node_token = await db.fetch_one(fetch_node_token_query)
 
-            if validated_node_token is not None:
+            if validated_node_token.count:  # type: ignore
                 authority_code: str | None = env.get("AUTH_KEY", None)
                 authority_signed: str | None = env.get("SECRET_KEY", None)
 

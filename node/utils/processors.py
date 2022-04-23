@@ -47,6 +47,7 @@ from sqlalchemy.sql.expression import Select
 
 from core.constants import OrganizationType
 from core.constants import JWTToken, TokenStatus
+from core.constants import UserEntity
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
@@ -821,7 +822,7 @@ async def validate_source_and_origin_associates(
         (tokens.c.token == source_session_token)
         & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
     )
-    resolved_source_address = await database_instance_ref.fetch_one(
+    resolved_source_address = await database_instance_ref.fetch_val(
         get_sender_address_via_token_query
     )
 
@@ -829,7 +830,7 @@ async def validate_source_and_origin_associates(
     validate_target_address_query: Select = select([users.c.association]).where(
         (users.c.unique_address == target_address)
     )
-    resolved_target_address = await database_instance_ref.fetch_one(
+    resolved_target_address = await database_instance_ref.fetch_val(
         validate_target_address_query
     )
 
@@ -842,8 +843,10 @@ async def validate_source_and_origin_associates(
 
     if (
         resolved_target_address is None
-        and not skip_validation_on_target
-        and not isinstance(target_address, str)
+        and not skip_validation_on_target  # * And this metdho was not invoked to skip this validation.
+        and not isinstance(
+            target_address, str
+        )  # * And since it was not skipped, should the target address is not a string.
     ):
         raise HTTPException(
             detail="The target address does not exists.",
@@ -852,10 +855,10 @@ async def validate_source_and_origin_associates(
 
     # - Since the target address contains the association, then get the source address.
     get_source_address_association: Select = select([users.c.association]).where(
-        (users.c.unique_address == resolved_source_address.from_user) & (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)  # type: ignore
+        (users.c.unique_address == resolved_source_address) & (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)  # type: ignore
     )
 
-    source_address_association = await database_instance_ref.fetch_one(
+    source_address_association = await database_instance_ref.fetch_val(
         get_source_address_association
     )
 
@@ -867,7 +870,7 @@ async def validate_source_and_origin_associates(
 
     # - Ensure that these users are connected from any of the association.
     check_source_address_associate_query: Select = select([func.count()]).where(
-        associations.c.address == source_address_association.association  # type: ignore
+        associations.c.address == source_address_association
     )
 
     source_user_validity = await database_instance_ref.fetch_one(
@@ -875,20 +878,20 @@ async def validate_source_and_origin_associates(
     )
 
     check_target_user_associate_query: Select = select([func.count()]).where(
-        associations.c.address == source_address_association.association  # type: ignore
+        associations.c.address == source_address_association
     )
 
     target_user_validity = await database_instance_ref.fetch_one(
         check_target_user_associate_query
     )
 
-    if source_user_validity is None or (
-        target_user_validity is None
+    if not source_user_validity.count and (
+        not target_user_validity.count
         and not skip_validation_on_target
         and not isinstance(target_address, str)
     ):
         raise HTTPException(
-            detail=f"The source or the target (address) user is not associated from any of the associations / organizations!",
+            detail=f"The source or the target (address) user is not associated with any of the associations/organizations!",
             status_code=HTTPStatus.NOT_ACCEPTABLE,
         )
 
@@ -918,8 +921,8 @@ async def validate_source_and_origin_associates(
         check_target_address_tx_map
     )
 
-    if source_address_tx_map is None or (
-        target_address_tx_map is None
+    if source_address_tx_map.count and (  # type: ignore
+        target_address_tx_map.count  # type: ignore
         and not skip_validation_on_target
         and not isinstance(target_address, str)
     ):
@@ -928,7 +931,7 @@ async def validate_source_and_origin_associates(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         )
 
-    return AddressUUID(resolved_source_address.from_user) if return_resolved_source_address else None  # type: ignore
+    return AddressUUID(resolved_source_address) if return_resolved_source_address else None  # type: ignore
 
 
 # # API DRY Handler — END
@@ -962,7 +965,7 @@ async def validate_organization_existence(
         )
     )
 
-    existing_association: Mapping | None = await get_database_instance().fetch_one(
+    existing_association: Mapping | None = await get_database_instance().fetch_val(
         validate_association_existence_query
     )
 
@@ -1011,7 +1014,7 @@ async def validate_user_existence(
         validate_existence_user_query
     )
 
-    if existing_user:
+    if not existing_user.count:  # type: ignore
         return False
 
     return True
@@ -1031,7 +1034,7 @@ async def validate_transaction_mapping_exists(
             find_tx_mapping_query_query
         )
 
-        return True if found_tx_mapping else False
+        return True if found_tx_mapping.count else False  # type: ignore
 
     return False
 

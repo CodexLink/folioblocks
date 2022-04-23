@@ -517,48 +517,51 @@ class EnsureAuthorized:
         database_instance: Database = Depends(get_database_instance),
     ) -> JWTToken | None:
 
-        if x_token:
-            req_ref_token: Select = select([func.count()]).where(
+        if len(x_token):
+            req_ref_token: Select = select([tokens.c.from_user]).where(
                 (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
             )
 
-            req_token = await database_instance.fetch_one(req_ref_token)
+            req_token = await database_instance.fetch_val(req_ref_token)
+            print("req_token", req_token)
 
-            if req_token:
-                ref_token = Tokens.parse_obj(req_token)
+            if req_token is not None:  # type: ignore
 
                 # ! I didn't use the Metadata().select() because its parameter `whereclause` prohibits selective column to return.
                 # * Therefore use the general purpose sqlalchemy.select instead.
                 user_role_ref = select([users.c.type]).where(
-                    users.c.unique_address == ref_token.from_user
+                    users.c.unique_address == req_token  # type: ignore
                 )
 
                 user_role: Mapping = await database_instance.fetch_val(user_role_ref)
 
-                condition_unmet_message: str = f"The role of this user is prohibited from running this method. | Allowed roles: {[self._as] if isinstance(self._as, list) else self._as}"
+                # * Exception variables, for use later.
+                condition_unmet_message: str = f"The role of this user is prohibited from running this method. | Allowed roles: {self._as}"
                 condition_unmet_http_code: HTTPStatus = HTTPStatus.FORBIDDEN
 
+                user_role_sufficient: bool = False
                 if isinstance(self._as, list):
                     for each_role in self._as:
-                        if user_role.type is not each_role:  # type: ignore
-                            raise HTTPException(
-                                detail=condition_unmet_message,
-                                status_code=condition_unmet_http_code,
-                            )
+                        if user_role is each_role:  # type: ignore
+                            user_role_sufficient = True
 
-                if user_role.type is not self._as:  # type: ignore
+                else:
+                    if user_role is self._as:  # type: ignore
+                        user_role_sufficient = True
+
+                if not user_role_sufficient:
                     raise HTTPException(
                         detail=condition_unmet_message,
                         status_code=condition_unmet_http_code,
                     )
 
+                if self._return_token and isinstance(user_role, UserEntity):  # type: ignore
+                    return x_token
+
         # * I'm not quite sure if this is a right thing to do.
         # * Something's missing, I can feel it.
         if self._blockchain_related and x_certificate_token is not None:
             return None
-
-        if self._return_token and isinstance(user_type.type, UserEntity):  # type: ignore
-            return x_token
 
         raise HTTPException(
             detail="You are unauthorized to access this endpoint.",

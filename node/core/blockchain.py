@@ -652,7 +652,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     users.c.unique_address == from_address
                 )
 
-                from_address_email = await self.db_instance.fetch_one(
+                from_address_email = await self.db_instance.fetch_val(
                     get_from_address_email_query
                 )
 
@@ -661,7 +661,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         self.email_service.send(
                             content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {data.content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                             subject="Error Transaction from Folioblock!",
-                            to=EmailStr(from_address_email.email),  # type: ignore
+                            to=EmailStr(from_address_email),  # type: ignore
                         ),
                         name="send_email_invalid_address_notification",
                     )
