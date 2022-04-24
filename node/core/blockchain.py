@@ -7,7 +7,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from logging import Logger, getLogger
 from pathlib import Path
-from secrets import token_urlsafe
+from secrets import token_hex, token_urlsafe
 from sqlite3 import IntegrityError
 from sys import maxsize as MAX_INT_PYTHON
 from time import time
@@ -64,6 +64,10 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from core.constants import (
+    BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
+    BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
+)
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -135,84 +139,95 @@ class BlockchainMechanism(ConsensusMechanism):
     ) -> None:
 
         # # Containers
-        self.transaction_container: list[Transaction] = []
-        self.already_hashed_block_container: list[Block] = []
-        self.confirming_block_container: list[Block] = []
-        self.unsent_block_container: list[Block] = []
+        self.__transaction_container: list[Transaction] = []
+        self.__already_hashed_block_container: list[Block] = []
+        self.__confirming_block_container: list[Block] = []
+        self.__unsent_block_container: list[Block] = []
 
         # # Counters
-        self.cached_block_id: int = (
+        self.__cached_block_id: int = (
             1  # * The current ID of the block to be rendered from the blockchain.
         )
-        self.cached_total_transactions: int = 0
+        self.__cached_total_transactions: int = 0
 
         # # Instances
-        self.db_instance: Final[Database] = get_database_instance()
-        self.http_instance: HTTPClient = get_http_client_instance()
-        self.email_service: EmailService = get_email_instance()
-        self.identity = auth_tokens  # - Equivalent to get_identity_tokens()
+        self.__database_instance: Database = get_database_instance()
+        self.__http_instance: HTTPClient = get_http_client_instance()
+        self.__email_service: EmailService = get_email_instance()
+        self.__node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
         # # Required Variables for the Blockchain Operaetion.
-        self.node_role: NodeType = node_role
-        self.auth_token: IdentityTokens = auth_tokens
+        self.__node_role: NodeType = node_role
+        self.__auth_token: IdentityTokens = auth_tokens
 
         # # Timer Containers
-        self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.mine_duration: timedelta = timedelta(seconds=0)
-        self.consensus_sleep_date_expiration: datetime = datetime.now()
+        self.__block_timer_seconds: Final[int] = block_timer_seconds
+        self.__mine_duration: timedelta = timedelta(seconds=0)
+        self.__consensus_sleep_date_expiration: datetime = datetime.now()
 
         # # State and Variable References
-        self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
-        self.new_master_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
-        self.node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
-        self.mine_ready: bool = False  # * A bool propery that allows the `NodeType.ARCHIVAL_MINER_NODE` to mine the given block. This allows other methods to work at something before getting deadlocking the instance.
-        self.sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
+        self.__blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
+        self.__new_master_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
+        self.__node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
+        self.__sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
 
-        super().__init__(role=node_role)
-
-    async def initialize(self) -> None:
-        """
-        # A method that initialize resources needed for the blockchain system to work.
-        """
-
-        # - Load the blockchain for both nodes.
-        self._chain: frozendict = await self._process_blockchain_file_to_current_state(
-            operation=BlockchainIOAction.TO_READ
+        super().__init__(
+            role=node_role,
+            ref_database_instance=self.__database_instance,
+            ref_http_instance=self.__http_instance,
+            ref_node_identity_instance=self.__node_identity,
         )
 
-        if self.node_role is NodeType.MASTER_NODE:
-            if self.new_master_instance:
+    async def initialize(self) -> None:
+        """# A method that initialize resources needed for the blockchain system to work."""
+
+        # - Load the blockchain for both nodes.
+        self.__chain: frozendict = (
+            await self.__process_blockchain_file_to_current_state(
+                operation=BlockchainIOAction.TO_READ
+            )
+        )
+
+        if self.__node_role is NodeType.MASTER_NODE:
+            if self.__new_master_instance:
                 for _ in range(0, BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
-                    await self._create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
+                    await self.__create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
 
                 # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
-                self.blockchain_ready = True
-                self.new_master_instance = False
+                self.__blockchain_ready = True
+                self.__new_master_instance = False
 
                 logger.info(
                     "Genesis block generation has been finished! Blockchain system ready."
                 )
 
             else:
-                self.blockchain_ready = True
+                self.__blockchain_ready = True
                 logger.info("Blockchain system is ready.")
 
             create_task(
-                self._block_timer_executor(),
-                name=f"{BlockchainMechanism.__name__}_{self.role.name}_instance_{self._block_timer_executor.__name__}",
+                self.__block_timer_executor(),
+                name=f"{BlockchainMechanism.__name__}_{self.__node_role.name}_instance_{self.__block_timer_executor.__name__}",
             )
 
-            print("final", self._chain)
+            print("final", self.__chain)
 
         else:
-            if self.identity is not None:
+            if self.__node_identity is not None:
                 existing_certificate = await self._get_consensus_certificate()
 
                 if not existing_certificate:
                     logger.warning(
-                        f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE} blockchain."
+                        f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
                     )
-                    await self.establish()
+                    while True:
+                        if self.establish() is True:
+                            break
+
+                        logger.error(
+                            f"Establishment to the {NodeType.MASTER_NODE.name} failed, cannot continue other blockchain operations, retrying after 10 seconds ..."
+                        )
+                        await sleep(10)
                 else:
                     logger.info(
                         "Association certificate token exists. Ignoring establishment from the `MASTER_NODE`."
@@ -222,7 +237,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE} blockchain."
             )
 
-            await self._update_chain()
+            await self.__update_chain()
 
     @restrict_call(on=NodeType.MASTER_NODE)
     async def insert_external_transaction(
@@ -381,7 +396,9 @@ class BlockchainMechanism(ConsensusMechanism):
                                         group=data.context.association_group_type,
                                     )
                                 )
-                                await self.db_instance.execute(new_association_query)
+                                await self.__database_instance.execute(
+                                    new_association_query
+                                )
 
                                 data.context.association_address = generated_org_address  # type: ignore
                                 data.context.institution = data.context.association_address  # type: ignore
@@ -431,14 +448,14 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
 
                             # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
-                            await self.db_instance.execute(insert_user_query)
+                            await self.__database_instance.execute(insert_user_query)
 
                             # * Resolve fields with missing data.
                             to_address = new_uuid
                             data.context.identity = new_uuid  # type: ignore
 
                             create_task(
-                                self.email_service.send(
+                                self.__email_service.send(
                                     content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER.value}`</b>!<br><br>Your Address: <b>{new_uuid}</b><br>Association Address: <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution}</b><br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                     subject="Hello from Folioblocks!",
                                     to=data.context.email,  # type: ignore
@@ -586,7 +603,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # - To ensure that this method will be processed the same way as `NodeTransaction`, we need to create a `GroupTransaction` for this.
                 transaction_context: dict | HTTPException = (
-                    await self._resolve_transaction_payload(
+                    await self.__resolve_transaction_payload(
                         action=action,
                         from_address=from_address,
                         to_address=to_address,
@@ -600,14 +617,16 @@ class BlockchainMechanism(ConsensusMechanism):
                     insert_transaction_content_map_query: Insert = (
                         tx_content_mappings.insert().values(
                             address_ref=to_address,
-                            block_no_ref=self.cached_block_id,
+                            block_no_ref=self.__cached_block_id,
                             tx_ref=transaction_context["tx_hash"],
                             content_type=data.content_type,
                             timestamp=datetime.now(),
                         )
                     )
 
-                    await self.db_instance.execute(insert_transaction_content_map_query)
+                    await self.__database_instance.execute(
+                        insert_transaction_content_map_query
+                    )
 
                     return None
 
@@ -620,13 +639,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     users.c.unique_address == from_address
                 )
 
-                from_address_email = await self.db_instance.fetch_val(
+                from_address_email = await self.__database_instance.fetch_val(
                     get_from_address_email_query
                 )
 
                 if from_address_email is not None and data.content_type is not None:
                     create_task(
-                        self.email_service.send(
+                        self.__email_service.send(
                             content=f"<html><body><h1>Notification from Folioblocks!</h1><p>There was an error from your inputs. The transaction regarding {data.content_type.name} has been disregarded. Please try your actions again.</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                             subject="Error Transaction from Folioblock!",
                             to=EmailStr(from_address_email),  # type: ignore
@@ -658,32 +677,32 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
-        if self.node_role is NodeType.MASTER_NODE:
+        if self.__node_role is NodeType.MASTER_NODE:
 
             # # This may not be okay.
             return NodeMasterInformation(
-                chain_block_timer=self.block_timer_seconds,
-                total_blocks=len(self._chain["chain"])
-                if self._chain is not None
+                chain_block_timer=self.__block_timer_seconds,
+                total_blocks=len(self.__chain["chain"])
+                if self.__chain is not None
                 else 0,
-                total_transactions=self.cached_total_transactions,
+                total_transactions=self.__cached_total_transactions,
             )
         logger.warning(
-            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
+            f"This client node requests for the `public_state` when their role is {self.__node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
         )
         return None
 
     @ensure_blockchain_ready()
     def get_blockchain_private_state(self) -> NodeConsensusInformation:
-        last_block: Block | None = self._get_last_block()
+        last_block: Block | None = self.__get_last_block()
 
         return NodeConsensusInformation(
-            consensus_timer_expiration=self.consensus_sleep_date_expiration,
-            is_mining=not self.is_blockchain_ready,
-            is_sleeping=self.is_node_ready,
+            consensus_timer_expiration=self.__consensus_sleep_date_expiration,
+            is_mining=not self.__blockchain_ready,
+            is_sleeping=self.__node_ready and self.__blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
-            node_role=self.role.name,
-            owner=self.auth_token[0],
+            node_role=self.__node_role.name,
+            owner=self.__auth_token[0],
         )
 
     async def get_chain_hash(self) -> HashUUID:
@@ -691,7 +710,9 @@ class BlockchainMechanism(ConsensusMechanism):
             file_signatures.c.filename == BLOCKCHAIN_NAME
         )
 
-        return HashUUID(await self.db_instance.fetch_val(fetch_chain_hash_query))
+        return HashUUID(
+            await self.__database_instance.fetch_val(fetch_chain_hash_query)
+        )
 
     async def get_chain(self) -> str:
         # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
@@ -701,14 +722,6 @@ class BlockchainMechanism(ConsensusMechanism):
             data: str = await chain_reader.read()
 
         return data
-
-    @property
-    def is_blockchain_ready(self) -> bool:
-        return self.blockchain_ready
-
-    @property
-    def is_node_ready(self) -> bool:
-        return self.node_ready and self.is_blockchain_ready
 
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
     async def mine_and_store_given_block(
@@ -731,13 +744,13 @@ class BlockchainMechanism(ConsensusMechanism):
         )
         await sleep(BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER)
 
-        mined_block: Block | None = await self._miner_block_processor(
+        mined_block: Block | None = await self.__miner_block_processor(
             block=block, return_hashed=True
         )
 
         if not isinstance(mined_block, Block):
             logger.info(
-                f"Block given is {type(mined_block)} This should not occur as a {self.node_role.name}, please contact the developer regarding this issue."
+                f"Block given is {type(mined_block)} This should not occur as a {self.__node_role.name}, please contact the developer regarding this issue."
             )
             return None
 
@@ -758,29 +771,31 @@ class BlockchainMechanism(ConsensusMechanism):
             & (consensus_negotiation.c.peer_address == master_address_ref)
         )
 
-        recorded_consensus_negotiation = await self.db_instance.fetch_one(
+        recorded_consensus_negotiation = await self.__database_instance.fetch_one(
             recorded_consensus_negotiation_query
         )
 
         if recorded_consensus_negotiation is not None:
-            self.consensus_sleep_date_expiration = datetime.now() + self.mine_duration
+            self.__consensus_sleep_date_expiration = (
+                datetime.now() + self.__mine_duration
+            )
 
-            payload_to_master: ClientResponse = await self.http_instance.enqueue_request(
+            payload_to_master: ClientResponse = await self.__http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_origin_source_host}:{master_origin_source_port}/node/receive_hashed_block"
                 ),
                 method=HTTPQueueMethods.POST,
                 headers={
                     "x-certificate-token": await self._get_consensus_certificate(),
-                    "x-token": self.identity[1],
+                    "x-token": self.__node_identity[1],
                 },
                 data={
                     "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
-                    "miner_address": self.identity[0],
+                    "miner_address": self.__node_identity[0],
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
-                    "consensus_sleep_expiration": self.consensus_sleep_date_expiration.isoformat(),
+                    "consensus_sleep_expiration": self.__consensus_sleep_date_expiration.isoformat(),
                 },
                 retry_attempts=100,
                 name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
@@ -813,13 +828,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
 
                 # - Sum the mined_timer sleep phase + given random sleep timer.
-                self._consensus_calculate_sleep_time(
+                self.__consensus_calculate_sleep_time(
                     mining_duration=payload_master_response_ref.addon_consensus_sleep_seconds,
                     add_on=True,
                 )
 
                 # - Run the consensus sleeping phase.
-                await self._consensus_sleeping_phase()
+                await self.__consensus_sleeping_phase()
 
             else:
                 if payload_to_master.status == HTTPStatus.INTERNAL_SERVER_ERROR:
@@ -840,9 +855,9 @@ class BlockchainMechanism(ConsensusMechanism):
     # # This method may be modified for the development of Explorer API.
     @ensure_blockchain_ready()
     async def preview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
-        if self._chain is not None:
+        if self.__chain is not None:
             candidate_blocks: list[BlockOverview] = deepcopy(
-                self._chain["chain"][len(self._chain["chain"]) - limit_to :]
+                self.__chain["chain"][len(self.__chain["chain"]) - limit_to :]
             )
             resolved_candidate_blocks: list[BlockOverview] | list = []
 
@@ -870,10 +885,10 @@ class BlockchainMechanism(ConsensusMechanism):
     # # This method may be modified for the development of Explorer API.
     @ensure_blockchain_ready()
     async def preview_transactions(self, limit_to: int) -> list[Transaction] | None:
-        if self._chain is not None:
+        if self.__chain is not None:
             pass
 
-    async def _append_block(
+    async def __append_block(
         self,
         *,
         context: Block,
@@ -888,23 +903,23 @@ class BlockchainMechanism(ConsensusMechanism):
         TODO
         * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
         """
-        if self._chain is not None:
+        if self.__chain is not None:
             block_context: dict = context.dict()
             block_context["contents"] = frozendict(block_context["contents"])
 
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            if block_context["id"] != self.cached_block_id:
+            if block_context["id"] != self.__cached_block_id:
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
                 return
 
             # - Apply immutability on other `dict` objects from the block context.
-            # @o As per the approach indicated from the `self._process_serialize_to_blockchain_file`. We are going to do this in descending form.
+            # @o As per the approach indicated from the `self.__process_serialize_to_blockchain_file`. We are going to do this in descending form.
 
             if len(block_context["contents"]["transactions"]):
 
-                # # Iteration method is the same as from the method `self._process_deserialize_to_load_blockchain_in_memory'.
+                # # Iteration method is the same as from the method `self.__process_deserialize_to_load_blockchain_in_memory'.
                 # @o I cannot DRY this one out due to its nature of the condition.
                 # @o Also to reduce the fatigue of going through method after method, I will retain this one since it is confusing to read, it needs the context as a whole or otherwise it will be disregarded.
                 for transaction_idx, transaction_data in enumerate(
@@ -927,18 +942,18 @@ class BlockchainMechanism(ConsensusMechanism):
                     ] = frozendict(transaction_data)
 
                     # @o Increment transaction by one as it was loaded in memory.
-                    self.cached_total_transactions += 1
+                    self.__cached_total_transactions += 1
 
                 # - [4] Apply immutability on the contents, contaning a set of transaction/s.
                 block_context["contents"] = frozendict(block_context["contents"])
 
             # - [5] Apply immutability from the whole block and then append it.
-            self._chain["chain"].append(frozendict(block_context))
+            self.__chain["chain"].append(frozendict(block_context))
 
             # ! Hit the next block for the allocation as we finished processing a block!
-            self.cached_block_id += 1
+            self.__cached_block_id += 1
 
-            await self._process_blockchain_file_to_current_state(
+            await self.__process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
             logger.info(f"Block #{context.id} has been appended from the blockchain!")
@@ -949,22 +964,22 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
     @restrict_call(on=NodeType.MASTER_NODE)
-    async def _block_timer_executor(self) -> None:
+    async def __block_timer_executor(self) -> None:
         logger.info(
-            f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
+            f"Block timer has been executed. Refreshes at {self.__block_timer_seconds} seconds."
         )
 
         while True:
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions."
+                f"Sleeping for {self.__block_timer_seconds} seconds while collecting real-time transactions."
             )
 
             # - Sleep first due to block timer.
-            await sleep(self.block_timer_seconds)
+            await sleep(self.__block_timer_seconds)
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can mine the block.
             available_node_info: ArchivalMinerNodeInformation | None = (
-                await self._get_available_archival_miner_nodes()
+                await self.__get_available_archival_miner_nodes()
             )
 
             # @o When there's no miner active, sleep for a while and requeue again.
@@ -980,24 +995,24 @@ class BlockchainMechanism(ConsensusMechanism):
             # - Wait until a number of sufficient transactions were received.
             # - Since we already have a node, do not let this one go.
             if len(
-                self.transaction_container
+                self.__transaction_container
             ) >= BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK and not len(
-                self.unsent_block_container
+                self.__unsent_block_container
             ):
 
                 logger.info(
-                    f"Number of required transactions were sufficient! There are {len(self.transaction_container)} transactions that will be converted to a block for processing."
+                    f"Number of required transactions were sufficient! There are {len(self.__transaction_container)} transactions that will be converted to a block for processing."
                 )
 
                 # - Create a block from all of the transactions.
-                generated_block = await self._create_block()
+                generated_block = await self.__create_block()
 
-            elif len(self.unsent_block_container):
+            elif len(self.__unsent_block_container):
                 logger.info(
-                    f"Block {self.unsent_block_container[0]} has been left-out from mining due to previous miner unable to respond in time. Using this block for the mining process instead."
+                    f"Block {self.__unsent_block_container[0]} has been left-out from mining due to previous miner unable to respond in time. Using this block for the mining process instead."
                 )
 
-                generated_block = self.unsent_block_container.pop(0)
+                generated_block = self.__unsent_block_container.pop(0)
 
             else:
                 logger.warning(
@@ -1016,7 +1031,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     BLOCKCHAIN_NEGOTIATION_ID_LENGTH
                 )
 
-                attempt_deliver_payload: ClientResponse = await self.http_instance.enqueue_request(
+                attempt_deliver_payload: ClientResponse = await self.__http_instance.enqueue_request(
                     url=URLAddress(
                         f"{available_node_info.source_host}:{available_node_info.source_port}/node/receive_raw_block"
                     ),
@@ -1027,14 +1042,14 @@ class BlockchainMechanism(ConsensusMechanism):
                             address_ref=available_node_info.miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
-                        "x-token": self.identity[1],
+                        "x-token": self.__node_identity[1],
                     },
                     data={
                         # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
                         "block": import_raw_json_to_dict(
                             export_to_json(generated_block.dict())
                         ),
-                        "master_address": self.identity[0],
+                        "master_address": self.__node_identity[0],
                         "consensus_negotiation_id": generated_consensus_negotiation_id,
                     },
                     retry_attempts=100,
@@ -1047,7 +1062,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         consensus_negotiation.insert().values(
                             block_no_ref=generated_block.id,
                             consensus_negotiation_id=generated_consensus_negotiation_id,
-                            peer_address=self.identity[0],
+                            peer_address=self.__node_identity[0],
                             status=ConsensusNegotiationStatus.ON_PROGRESS,
                         )
                     )
@@ -1063,15 +1078,19 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     await gather(
-                        self.db_instance.execute(save_in_progress_negotiation_query),
-                        self.db_instance.execute(set_miner_state_as_mining_query),
+                        self.__database_instance.execute(
+                            save_in_progress_negotiation_query
+                        ),
+                        self.__database_instance.execute(
+                            set_miner_state_as_mining_query
+                        ),
                     )
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
-                    self.confirming_block_container.append(generated_block)
+                    self.__confirming_block_container.append(generated_block)
 
                     # - And save this that the negotiation consensus to mine a block has been confirmed.
-                    await self._insert_internal_transaction(
+                    await self.__insert_internal_transaction(
                         action=TransactionActions.NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START,
                         data=NodeTransaction(
                             action=NodeTransactionInternalActions.CONSENSUS,
@@ -1079,7 +1098,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                 consensus_negotiation_id=RandomUUID(
                                     generated_consensus_negotiation_id
                                 ),
-                                master_address=self.identity[0],
+                                master_address=self.__node_identity[0],
                                 miner_address=available_node_info.miner_address,
                             ),
                         ),
@@ -1094,10 +1113,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     logger.warning(
                         "After multiple retries, the generated block will be stored and will find archival miner node candidates who doesn't disconnect."
                     )
-                    self.unsent_block_container.append(generated_block)
+                    self.__unsent_block_container.append(generated_block)
 
                     # * Have to eliminate the potential of colliding with other blocks.
-                    self.unsent_block_container.sort(
+                    self.__unsent_block_container.sort(
                         key=lambda block_context: block_context.id
                     )
 
@@ -1107,35 +1126,35 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"Cannot proceed when block generated returned {generated_block}! This is probably a developer-logic error issue. Please contact the developer regarding this."
             )
 
-    def _consensus_calculate_sleep_time(
+    def __consensus_calculate_sleep_time(
         self, *, mining_duration: int | float, add_on: bool
     ) -> None:
 
-        if not self.new_master_instance:
+        if not self.__new_master_instance:
 
             if add_on:
-                self.mine_duration += timedelta(seconds=mining_duration)
+                self.__mine_duration += timedelta(seconds=mining_duration)
             else:
-                self.mine_duration = timedelta(seconds=mining_duration)
+                self.__mine_duration = timedelta(seconds=mining_duration)
 
-            logger.info(f"Consensus sleep timer were set to {self.mine_duration}.")
+            logger.info(f"Consensus sleep timer were set to {self.__mine_duration}.")
             return
 
         logger.error("Unable to set the consensus timer.")
 
-    async def _consensus_sleeping_phase(self) -> None:
-        if not self.new_master_instance:
-            self.sleeping_from_consensus = True
+    async def __consensus_sleeping_phase(self) -> None:
+        if not self.__new_master_instance:
+            self.__sleeping_from_consensus = True
 
             logger.info(
-                f"Block mining is finished. Sleeping for seconds. until {datetime.now() + self.mine_duration}."
+                f"Block mining is finished. Sleeping for seconds. until {datetime.now() + self.__mine_duration}."
             )
 
-            await sleep(self.mine_duration.total_seconds())
-            self.sleeping_from_consensus = False
+            await sleep(self.__mine_duration.total_seconds())
+            self.__sleeping_from_consensus = False
 
             # * When done, ensure that the node's sate is changed.
-            self._set_node_state()
+            self.__set_node_state()
 
             logger.info(
                 "Woke up from the consensus timer! Ready to take blocks to mine."
@@ -1146,17 +1165,17 @@ class BlockchainMechanism(ConsensusMechanism):
             f"Consensus timer ignored due to condition (ie. new instance, blockchain state not ready or otherwise."
         )
 
-    async def _create_block(self) -> Block | None:
+    async def __create_block(self) -> Block | None:
         # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size_bytes, and hash_block.
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
 
-        last_block: Block | None = self._get_last_block()
+        last_block: Block | None = self.__get_last_block()
 
         if last_block is not None:
-            if last_block.id >= self.cached_block_id:
+            if last_block.id >= self.__cached_block_id:
                 logger.critical(
-                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.cached_block_id}"
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.__cached_block_id}"
                 )
                 return None
         else:
@@ -1164,11 +1183,11 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"This new block will be the first block from this blockchain."
             )
 
-        shadow_transaction_container = deepcopy(self.transaction_container)
-        self.transaction_container.clear()
+        shadow_transaction_container = deepcopy(self.__transaction_container)
+        self.__transaction_container.clear()
 
         _block: Block = Block(
-            id=self.cached_block_id,
+            id=self.__cached_block_id,
             block_size_bytes=None,  # * To be resolved on the later process.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
             prev_hash_block=HashUUID(
@@ -1178,7 +1197,7 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
             contents=HashableBlock(
                 nonce=None,  # - This are determined during the process of mining.
-                validator=self.identity[0],
+                validator=self.__node_identity[0],
                 transactions=shadow_transaction_container,
                 timestamp=datetime.now(),
             ),
@@ -1193,28 +1212,36 @@ class BlockchainMechanism(ConsensusMechanism):
         return _block
 
     @restrict_call(on=NodeType.MASTER_NODE)
-    async def _create_genesis_block(self) -> None:
+    async def __create_genesis_block(self) -> None:
         """
         Generates a block, hash it and append it within the context of the blockchain, for both the file and the in-memory.
         """
 
         # * Create a transaction for the generation of the genesis block.
-        await self._insert_internal_transaction(
+        await self.__insert_internal_transaction(
             action=TransactionActions.NODE_GENERAL_GENESIS_BLOCK_INIT,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.INIT,
                 context=NodeGenesisTransaction(
-                    block_genesis_no=self.cached_block_id,
-                    generator_address=self.identity[0],
+                    block_genesis_no=self.__cached_block_id,
+                    data=HashUUID(
+                        token_hex(
+                            random_generator.randint(
+                                BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
+                                BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
+                            )
+                        )
+                    ),
+                    generator_address=self.__node_identity[0],
                     time_initiated=datetime.now(),
                 ),
             ),
         ),
 
-        generated_block_w_genesis: Block | None = await self._create_block()
+        generated_block_w_genesis: Block | None = await self.__create_block()
 
         if isinstance(generated_block_w_genesis, Block):
-            await self._miner_block_processor(
+            await self.__miner_block_processor(
                 block=generated_block_w_genesis, return_hashed=False
             )
         else:
@@ -1222,7 +1249,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return None
 
-    async def _get_available_archival_miner_nodes(
+    async def __get_available_archival_miner_nodes(
         self,
     ) -> ArchivalMinerNodeInformation | None:
 
@@ -1234,20 +1261,20 @@ class BlockchainMechanism(ConsensusMechanism):
             ]
         ).where(associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE)
 
-        available_nodes: list[Mapping] = await self.db_instance.fetch_all(
+        available_nodes: list[Mapping] = await self.__database_instance.fetch_all(
             available_nodes_query
         )
 
         if not len(available_nodes):
             logger.info(
-                f"There are no available nodes to mine the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
+                f"There are no available nodes to mine the block. Retrying again the after interval of the block timer. ({self.__block_timer_seconds} seconds)"
             )
             return None
 
         logger.info(f"There are {len(available_nodes)} candidates available!")
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
-            candidate_response: ClientResponse = await self.http_instance.enqueue_request(
+            candidate_response: ClientResponse = await self.__http_instance.enqueue_request(
                 url=URLAddress(
                     f"{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
                 ),
@@ -1275,7 +1302,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 selected_node_last_consensus_sleep_datetime = (
-                    await self.db_instance.fetch_one(
+                    await self.__database_instance.fetch_one(
                         last_selected_node_consensus_sleep_datetime_query
                     )
                 )
@@ -1308,19 +1335,19 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
         logger.warning(
-            f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.block_timer_seconds} seconds)"
+            f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.__block_timer_seconds} seconds)"
         )
         return None
 
-    def _get_last_block(self) -> Block | None:
+    def __get_last_block(self) -> Block | None:
         # ! This return seems confusing but I have to sacrafice for my own sake of readability.
         # @o First we access the list by calling the key 'chain'.
         # @o Since we got to the list, we might wanna get the last block by slicing the list with the use of its own length - 1 to get the last block.
         # @o But before we do that, ensure that last item has a content. Accessing the last item with the use of index while it doesn't contain anything will result in `IndexError`.
 
-        if len(self._chain["chain"]):
+        if len(self.__chain["chain"]):
             last_block_ref = Block.parse_obj(
-                self._chain["chain"][len(self._chain["chain"]) - 1 :][0]
+                self.__chain["chain"][len(self.__chain["chain"]) - 1 :][0]
             )
             logger.debug(
                 f"Last block has been fetched. Context | ID: {last_block_ref.id}, Hash: {last_block_ref.hash_block}, Date: {last_block_ref.contents.timestamp.isoformat()}"
@@ -1330,24 +1357,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         logger.warning("There's no block inside blockchain.")
 
-    async def _get_consensus_certificate(
-        self, *, address_ref: AddressUUID | None = None
-    ) -> str:
-
-        resolved_address: AddressUUID = (
-            self.identity[0] if address_ref is None else address_ref
-        )
-
-        find_existing_certificate_query = select(
-            [associated_nodes.c.certificate]
-        ).where(associated_nodes.c.user_address == resolved_address)
-
-        return await self.db_instance.fetch_val(find_existing_certificate_query)
-
-    def _get_sizeof(self, *, block: Block) -> int | None:
-        return asizeof(block)
-
-    async def _get_content_data(
+    async def __get_content_data(
         self,
         *,
         data_type: BlockchainContentType,
@@ -1361,7 +1371,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return
 
     @restrict_call(on=NodeType.MASTER_NODE)
-    async def _insert_internal_transaction(
+    async def __insert_internal_transaction(
         self, action: TransactionActions, data: NodeTransaction
     ) -> None:
 
@@ -1398,7 +1408,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         elif isinstance(data.context, NodeCertificateTransaction | NodeSyncTransaction):
             resolved_from_address, resolved_to_address = (
-                self.identity[0],
+                self.__node_identity[0],
                 data.context.requestor_address,
             )
 
@@ -1415,14 +1425,14 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
         else:
-            resolved_from_address, resolved_to_address = self.identity[0], None
+            resolved_from_address, resolved_to_address = self.__node_identity[0], None
 
-        if await self._resolve_transaction_payload(
+        if await self.__resolve_transaction_payload(
             action=action,
             from_address=AddressUUID(
                 resolved_to_address
                 if resolved_to_address is not None
-                else self.identity[0]
+                else self.__node_identity[0]
             ),
             to_address=AddressUUID(resolved_from_address),
             is_internal_payload=True,
@@ -1433,9 +1443,9 @@ class BlockchainMechanism(ConsensusMechanism):
         unconventional_terminate(message="Cannot resolve transaction.")
 
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
-    async def _mine_block(self, block: Block) -> Block:
+    async def __mine_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
-        self.blockchain_ready = False
+        self.__blockchain_ready = False
         prev: float = time()
         nth: int = 1
 
@@ -1457,21 +1467,21 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(
                     f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
-                self._consensus_calculate_sleep_time(
+                self.__consensus_calculate_sleep_time(
                     mining_duration=time() - prev, add_on=False
                 )
-                self.blockchain_ready = True
+                self.__blockchain_ready = True
                 return block
 
             nth += 1
 
-    async def _miner_block_processor(
+    async def __miner_block_processor(
         self, *, block: Block, return_hashed: bool
     ) -> Block | None:
         block_mining_processor = await (
             get_event_loop().run_in_executor(
                 None,
-                self._mine_block,
+                self.__mine_block,
                 block,
             )
         )
@@ -1479,18 +1489,12 @@ class BlockchainMechanism(ConsensusMechanism):
         mined_block: Block = await block_mining_processor
 
         logger.info(f"Block {block.id} has been mined.")
-        await self._append_block(context=mined_block)
+        await self.__append_block(context=mined_block)
 
         return mined_block if return_hashed else None
 
-    async def _process_block_transactions(
-        self,
-    ) -> Any:
-        # Processes the block along with the transactions, to be embedded from the blockchain (deserialize) or convert the block transactions object / datatype to a universally acceptable format.
-        pass
-
     # Overwrites existing buffer from the frozendict if consensus has been established.
-    async def _process_blockchain_file_to_current_state(
+    async def __process_blockchain_file_to_current_state(
         self,
         *,
         operation: BlockchainIOAction,
@@ -1512,8 +1516,8 @@ class BlockchainMechanism(ConsensusMechanism):
             if operation is BlockchainIOAction.TO_WRITE:
                 if not bypass_from_update and not len(context_from_update):
                     byte_json_content: bytes = export_to_json(
-                        self._chain,
-                        default=self._process_serialize_to_blockchain_file,
+                        self.__chain,
+                        default=self.__process_serialize_to_blockchain_file,
                     )
 
                     logger.debug(
@@ -1521,7 +1525,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     new_blockchain_hash: str = sha256(byte_json_content).hexdigest()
 
-                    await self._update_chain_hash(new_hash=new_blockchain_hash)
+                    await self.__update_chain_hash(new_hash=new_blockchain_hash)
                     await content_buffer.write(byte_json_content.decode("utf-8"))
 
                     logger.debug(
@@ -1529,16 +1533,16 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 else:
                     logger.warning("Bypass from the update method has been declared.")
-                    await self._update_chain_hash(new_hash=context_from_update[0])
+                    await self.__update_chain_hash(new_hash=context_from_update[0])
                     await content_buffer.write(context_from_update[1])
 
-                return self._chain
+                return self.__chain
 
             else:
                 raw_data = await content_buffer.read()
                 partial_deserialized_data = import_raw_json_to_dict(raw_data)
                 deserialized_data = (
-                    self._process_deserialize_to_load_blockchain_in_memory(
+                    self.__process_deserialize_to_load_blockchain_in_memory(
                         partial_deserialized_data
                     )
                 )
@@ -1555,7 +1559,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     return deserialized_data
 
-    def _process_deserialize_to_load_blockchain_in_memory(
+    def __process_deserialize_to_load_blockchain_in_memory(
         self, context: RawBlockchainPayload, update: bool = False
     ) -> frozendict | None:
         """
@@ -1571,7 +1575,7 @@ class BlockchainMechanism(ConsensusMechanism):
         # - Check if there's a context inside of the JSON. If there's none then create a n of genesis blocks.
         # @o New instances is indicated when this node doesn't contain any blocks on load. To avoid consensus timer on new instance, we have this switch to ensure that new blocks on fetch has been processed. As well as not flagged itself as fraudalent when there is a missing amount of genesis blocks.
 
-        self.new_master_instance = (  # # Redundant condition checking but better.
+        self.__new_master_instance = (  # # Redundant condition checking but better.
             context is not None  # - [1] Check if the variable contains something.
             and "chain" in context  # - [2] And it contains a key named as 'chain'.
             and isinstance(
@@ -1583,7 +1587,7 @@ class BlockchainMechanism(ConsensusMechanism):
         # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
         if isinstance(context, dict):
             if update:
-                self.cached_total_transactions = 0  # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
+                self.__cached_total_transactions = 0  # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
 
             required_genesis_blocks: int = BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS  # ! We need to validate that there should be a set of required gensis blocks. If there are insufficient, then this blockchain as a whole is fraudalent.
 
@@ -1629,7 +1633,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             block_data["contents"]["transactions"][transaction_idx]
                         )
 
-                        self.cached_total_transactions += 1
+                        self.__cached_total_transactions += 1
 
                 # - Add immutability to the `contents`, which encapsulates the whole set of `transactions`.
                 context["chain"][block_idx]["contents"] = frozendict(
@@ -1653,7 +1657,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         logger.critical(
                             "Due to potential fraudalent local blockchain file, please wait for the `MASTER_NODE` node to acknowledge your replacement of blockchain file."
                         )
-                        self.blockchain_ready = False
+                        self.__blockchain_ready = False
 
                         # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
@@ -1666,16 +1670,16 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                 # - If cached_block_id is equal to dict_data["id"]. Then increment it easily.
-                if self.cached_block_id == block_data["id"]:
-                    self.cached_block_id += 1
+                if self.__cached_block_id == block_data["id"]:
+                    self.__cached_block_id += 1
                     logger.debug(
-                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.cached_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
+                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.__cached_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
                     )
 
                 # - However, when its not equal then then something is wrong.
                 else:
                     unconventional_terminate(
-                        message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
+                        message=f"Blockchain is currently unchained! (Currently Cached: {self.__cached_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
                     )
                     return None
 
@@ -1684,30 +1688,33 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if (
                 required_genesis_blocks
-                and self.node_role is NodeType.MASTER_NODE
-                and not self.new_master_instance
+                and self.__node_role is NodeType.MASTER_NODE
+                and not self.__new_master_instance
             ):
                 unconventional_terminate(
                     message=f"This node's blockchain contains a potential fraudalent blocks! Though with the intention of using {NodeType.ARCHIVAL_MINER_NODE.name} for the possibility of finding the longest chain to recover, this may not be possible as of now. Please load any backup and replace the files then try again."
                 )
 
-            elif required_genesis_blocks and self.role is NodeType.ARCHIVAL_MINER_NODE:
+            elif (
+                required_genesis_blocks
+                and self.__node_role is NodeType.ARCHIVAL_MINER_NODE
+            ):
                 logger.error(
-                    "This node's blockchain may be incomplete from the previous update, note that it will get updated after communicating with the master no`de."
+                    "This node's blockchain may be incomplete from the previous update, note that it will get updated after communicating with the master node."
                 )
             else:
                 logger.info(
-                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
+                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.__cached_block_id}."
                 )
 
-            self.blockchain_ready = True
+            self.__blockchain_ready = True
             return frozendict(context)
 
         unconventional_terminate(
             message=f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)}). This is a logic error, please report to the developers as soon as possible.",
         )
 
-    def _process_serialize_to_blockchain_file(self, o: frozendict) -> dict[str, Any]:
+    def __process_serialize_to_blockchain_file(self, o: frozendict) -> dict[str, Any]:
         """
         A method that serializes the python objects to a much more universally-readable JSON format to the blockchain file.
 
@@ -1759,7 +1766,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         raise TypeError
 
-    async def _resolve_transaction_payload(
+    async def __resolve_transaction_payload(
         self,
         *,
         action: TransactionActions,
@@ -1865,7 +1872,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         sha256(export_to_json(payload_to_encrypt.dict())).hexdigest()
                     ),
                 ),
-                from_address=AddressUUID(self.identity[0])
+                from_address=AddressUUID(self.__node_identity[0])
                 if isinstance(payload_to_encrypt, NodeTransaction)
                 else AddressUUID(from_address),
                 to_address=AddressUUID(to_address) if to_address is not None else None,
@@ -1895,14 +1902,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
         is_duplicate: bool = False
         # @o Then we attempt to resolve by sorting it back and removing any potential duplicates.
-        for each_stored_transaction in self.transaction_container:
+        for each_stored_transaction in self.__transaction_container:
             if built_internal_transaction is each_stored_transaction:
                 is_duplicate = True
                 break
 
         # @o Append the new transaction.
         if not is_duplicate:
-            self.transaction_container.append(built_internal_transaction)
+            self.__transaction_container.append(built_internal_transaction)
 
             logger.info(
                 f"Transaction `{built_internal_transaction.tx_hash}` has been created and is on-queue for new blocks!"
@@ -1921,18 +1928,18 @@ class BlockchainMechanism(ConsensusMechanism):
                 status_code=HTTPStatus.CONFLICT,
             )
 
-    async def _search_for(self, *, type: str, uid: AddressUUID | str) -> None:
+    async def __search_for(self, *, type: str, uid: AddressUUID | str) -> None:
         return
 
-    def _set_node_state(self) -> None:
-        self.node_ready = (
+    def __set_node_state(self) -> None:
+        self.__node_ready = (
             True
-            if not self.sleeping_from_consensus and self.is_blockchain_ready
+            if not self.__sleeping_from_consensus and self.__blockchain_ready
             else False
         )
 
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
-    async def _update_chain(self) -> None:
+    async def __update_chain(self) -> None:
         """
         A private method to call to validate the node's blockchain file from the master's blockchain file.
 
@@ -1950,14 +1957,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
             # - Fetch from the master first by checking the hash, let the endpoint compare it.
 
-            master_hash_valid_response: ClientResponse = await self.http_instance.enqueue_request(
+            master_hash_valid_response: ClientResponse = await self.__http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/verify_chain_hash"  # type: ignore
                 ),
                 method=HTTPQueueMethods.POST,
                 await_result_immediate=True,
                 headers={
-                    "x-token": self.identity[1],
+                    "x-token": self.__node_identity[1],
                     "x-certificate-token": await self._get_consensus_certificate(),
                     "x-hash": await self.get_chain_hash(),
                 },
@@ -1967,14 +1974,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if not master_hash_valid_response.ok:
                 # - If that's the case then fetch the blockchain file.
-                blockchain_content: ClientResponse = await self.http_instance.enqueue_request(
+                blockchain_content: ClientResponse = await self.__http_instance.enqueue_request(
                     url=URLAddress(
                         f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/pull_chain_upstream"  # type: ignore
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     headers={
-                        "x-token": self.identity[1],
+                        "x-token": self.__node_identity[1],
                         "x-certificate-token": await self._get_consensus_certificate(),
                     },
                     name="fetch_upstream_from_master_node",
@@ -1985,7 +1992,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     dict_blockchain_content = await blockchain_content.json()
 
                     in_memory_chain: frozendict | None = (
-                        self._process_deserialize_to_load_blockchain_in_memory(
+                        self.__process_deserialize_to_load_blockchain_in_memory(
                             import_raw_json_to_dict(dict_blockchain_content["content"])
                         )
                     )
@@ -1997,11 +2004,11 @@ class BlockchainMechanism(ConsensusMechanism):
                         await sleep(INFINITE_TIMER)
 
                     else:
-                        self._chain = in_memory_chain
+                        self.__chain = in_memory_chain
 
                     # ! Once we inject the new payload after fetch, then write it from the file.
 
-                    await self._process_blockchain_file_to_current_state(
+                    await self.__process_blockchain_file_to_current_state(
                         operation=BlockchainIOAction.TO_WRITE,
                         context_from_update=(
                             HashUUID(dict_blockchain_content["current_hash"]),
@@ -2027,17 +2034,17 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
                 break
 
-            self.blockchain_ready = True
+            self.__blockchain_ready = True
             return
 
-    async def _update_chain_hash(self, *, new_hash: str) -> None:
+    async def __update_chain_hash(self, *, new_hash: str) -> None:
         blockchain_hash_update_query: Update = (
             file_signatures.update()
             .where(file_signatures.c.filename == BLOCKCHAIN_NAME)
             .values(hash_signature=new_hash)
         )
 
-        await self.db_instance.execute(blockchain_hash_update_query)
+        await self.__database_instance.execute(blockchain_hash_update_query)
 
 
 # # This approach was (not completely) taken from stackoverflow.

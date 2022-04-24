@@ -203,6 +203,7 @@ class NodeRegisterTransaction(BaseModel):
 class NodeGenesisTransaction(BaseModel):
     block_genesis_no: int
     generator_address: AddressUUID
+    data: HashUUID
     time_initiated: datetime
 
 

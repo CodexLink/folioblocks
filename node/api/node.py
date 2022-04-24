@@ -158,7 +158,7 @@ async def receive_hashed_block(
     if isinstance(blockchain_instance, BlockchainMechanism):
         block_confirmed: bool = False
         # - Validate the given block by checking its id and other fields that is outside from the context.
-        for each_confirming_block in blockchain_instance.confirming_block_container:
+        for each_confirming_block in blockchain_instance.__confirming_block_container:
 
             logger.debug(
                 f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {context_from_archival_miner.block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {context_from_archival_miner.block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
@@ -167,7 +167,7 @@ async def receive_hashed_block(
             if (
                 (
                     each_confirming_block.id == context_from_archival_miner.block.id
-                    and blockchain_instance.cached_block_id
+                    and blockchain_instance.__cached_block_id
                     == context_from_archival_miner.block.id
                 )
                 and each_confirming_block.block_size_bytes
@@ -177,7 +177,7 @@ async def receive_hashed_block(
                 and each_confirming_block.contents.timestamp
                 == context_from_archival_miner.block.contents.timestamp
             ):
-                blockchain_instance.confirming_block_container.remove(
+                blockchain_instance.__confirming_block_container.remove(
                     each_confirming_block
                 )  # - Remove from the container as it was already confirmed.
 
@@ -192,14 +192,17 @@ async def receive_hashed_block(
 
         # * Regardless of who receives it, append it from their context_from_archival_miner.block.
         # - For MASTER_NODE, this may be a redundant check, but its fine.
-        if blockchain_instance.cached_block_id != context_from_archival_miner.block.id:
+        if (
+            blockchain_instance.__cached_block_id
+            != context_from_archival_miner.block.id
+        ):
             raise HTTPException(
                 detail="The given block seem to be out of sync! This is not possible in terms of implementation, contact the developers to investigate this issue.",
                 status_code=HTTPStatus.NOT_ACCEPTABLE,
             )
 
         proposed_consensus_addon_timer: float = (
-            random_generator.uniform(0, 2) * blockchain_instance.block_timer_seconds
+            random_generator.uniform(0, 2) * blockchain_instance.__block_timer_seconds
         )
 
         # - Update the Consensus Negotiation ID.
@@ -279,7 +282,7 @@ async def receive_hashed_block(
                 )
 
         # - Insert the block.
-        await blockchain_instance._append_block(
+        await blockchain_instance.__append_block(
             context=context_from_archival_miner.block
         )
 
@@ -291,7 +294,7 @@ async def receive_hashed_block(
                 action=NodeTransactionInternalActions.CONSENSUS,
                 context=NodeConfirmMineConsensusTransaction(
                     miner_address=context_from_archival_miner.miner_address,
-                    master_address=blockchain_instance.identity[0],
+                    master_address=blockchain_instance.__node_identity[0],
                     consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
                 ),
             ),
@@ -300,7 +303,7 @@ async def receive_hashed_block(
         # - Insert transaction from the blockchain for the successful thing.
         return ConsensusSuccessPayload(
             addon_consensus_sleep_seconds=proposed_consensus_addon_timer,
-            reiterate_master_address=blockchain_instance.identity[0],
+            reiterate_master_address=blockchain_instance.__node_identity[0],
         )
 
     raise HTTPException(
@@ -742,7 +745,9 @@ async def pull_chain_upstream(
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.SYNC,
                 context=NodeSyncTransaction(
-                    requestor_address=AddressUUID(blockchain_instance.identity[0]),
+                    requestor_address=AddressUUID(
+                        blockchain_instance.__node_identity[0]
+                    ),
                     timestamp=datetime.now(),
                 ),
             ),

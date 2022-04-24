@@ -15,8 +15,9 @@ from os import environ as env
 from aiohttp import ClientResponse
 from blueprint.models import associated_nodes
 from databases import Database
-from sqlalchemy.sql.expression import Insert
-from utils.http import get_http_client_instance
+from utils.http import HTTPClient
+from sqlalchemy import select
+from sqlalchemy.sql.expression import Insert, Select
 from utils.processors import load_env
 
 from core.constants import (
@@ -33,28 +34,33 @@ from core.constants import (
     URLAddress,
 )
 from core.decorators import restrict_call
-from core.dependencies import (
-    get_args_values,
-    get_database_instance,
-    get_identity_tokens,
-    get_master_node_properties,
-)
+from core.dependencies import get_args_values, get_master_node_properties
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 
 class ConsensusMechanism:
-    def __init__(self, *, role: NodeType) -> None:
-        self.role = role
-        self.http_instance = get_http_client_instance()
-        self.master_target = get_master_node_properties
+    def __init__(
+        self,
+        *,
+        role: NodeType,
+        ref_database_instance: Database,
+        ref_http_instance: HTTPClient,
+        ref_node_identity_instance: IdentityTokens,
+    ) -> None:
+        self.node_role: NodeType = role
+        self.__master_target = get_master_node_properties
+
+        self.__http_instance: HTTPClient = ref_http_instance
+        self.__database_instance: Database = ref_database_instance
+        self.__identity = ref_node_identity_instance
 
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
-    async def establish(self) -> None:
+    async def establish(self) -> bool:
         """Make `ARCHIVAL_MINER_NODE` to call master's `acknowledge` endpoint providing certains credentials as a proof of registration."""
-        master_origin_address, master_origin_port = self.master_target(
+        master_origin_address, master_origin_port = self.__master_target(
             key=REF_MASTER_BLOCKCHAIN_ADDRESS
-        ), self.master_target(key=REF_MASTER_BLOCKCHAIN_PORT)
+        ), self.__master_target(key=REF_MASTER_BLOCKCHAIN_PORT)
 
         node_instance_args = get_args_values()
         node_address, node_port = (
@@ -62,17 +68,8 @@ class ConsensusMechanism:
             node_instance_args.node_port,
         )
 
-        stored_session_token: IdentityTokens | None = get_identity_tokens()
-        db: Database = get_database_instance()
-
-        if stored_session_token is None:
-            logger.error(
-                "There are no stored session token (`AddressUUID` and `JWTToken`) for this process to begin. This may be an error logic issue. Please report to the developers as possible."
-            )
-            return None
-
-        auth_source: AddressUUID = stored_session_token[0]
-        auth_session: JWTToken = stored_session_token[1]  # * Get the JWT token.
+        auth_source: AddressUUID = self.__identity[0]
+        auth_session: JWTToken = self.__identity[1]
 
         while True:
             auth_acceptance: str | None = env.get("AUTH_ACCEPTANCE_CODE", None)
@@ -87,7 +84,7 @@ class ConsensusMechanism:
                 continue
             break
 
-        master_response: ClientResponse = await self.http_instance.enqueue_request(
+        master_response: ClientResponse = await self.__http_instance.enqueue_request(
             url=URLAddress(
                 f"{master_origin_address}:{master_origin_port}/node/certify_miner"
             ),
@@ -101,6 +98,7 @@ class ConsensusMechanism:
             method=HTTPQueueMethods.POST,
             await_result_immediate=True,
             name="get_echo_from_master",
+            retry_attempts=99,
         )
 
         # - Add the credentials to the associated nodes as self.
@@ -118,58 +116,28 @@ class ConsensusMechanism:
                 source_port=master_origin_port,
             )
 
-            await db.execute(insert_fetched_certificate_query)
+            await self.__database_instance.execute(insert_fetched_certificate_query)
 
             logger.info("Generation of Association certificate token were successful!")
+            return True
 
         else:
             logger.error(
                 f"Generation of association certificate is not successful due to rejection or no reply from the {NodeType.MASTER_NODE.name}"
             )
 
-        return None
+            return False
 
+    async def _get_consensus_certificate(
+        self, *, address_ref: AddressUUID | None = None
+    ) -> str:
 
-"""
-# # THESE COMMENTS WILL BE PRUNED SOON.
+        resolved_address: AddressUUID = (
+            self.__identity[0] if address_ref is None else address_ref
+        )
 
-# Node-to-Node Consensus Blockchain Operation Endpoints
+        find_existing_certificate_query = select(
+            [associated_nodes.c.certificate]
+        ).where(associated_nodes.c.user_address == resolved_address)
 
-@o Whenever the blockchain's `MASTER_NODE` is looking for `ARCHIVAL_MINER_NODE`s. It has to ping them in a way that it shows their availability.
-@o However, since we already did some established connection between them, we need to pass them off from the `ARCHIVAL_MINER_NODE`s themselves to the
-@o `MASTER_NODE`. This was to ensure that the node under communication is not a fake node by providing the `AssociationCertificate`.
-
-! These endpoints are being used both.
-
-=========================
-/consensus/echo | When received ensure its the master by fetching its info.
-/consensus/acknowledge | When acknowledging, give something, then it will return something.
-
-# Note that MASTER will have to do this command once! Miners who just finished will have to wait and keep on retrying.
-/consensus/negotiate | This is gonna be complex, on MASTER, if there's current consensus negotiation then create a new one (token). Then return a consensus as initial from the computation of the consensus_timer.
-/consensus/negotiate | When there's already a consensus negotiation, when called by MASTER, return the context of the consensus_timer and other properties that validates you of getting the block when you are selected.
-/consensus/negotiate | When block was fetched then acknowledge it.
-/consensus/negotiate | When the miner is done, call this one again but with a payload, and then keep on retrying, SHOULD BLOCK THIS ONE.
-/consensus/negotiate | When it's done, call this again for you to sleep by sending the calculated consensus, if not right then the MASTER will send a correct timer.
-/consensus/negotiate | Repeat.
-# TODO: Actions should be, receive_block, (During this, one of the assert processes will be executed.)
-
-# Node-to-Node Establish Connection Endpoints
-
-@o Before doing anything, an `ARCHIVAL_MINER_NODE` has to establish connection to the `MASTER_NODE`.
-@o With that, the `ARCHIVAL_MINER_NODE` has to give something a proof, that shows their proof of registration and login.
-@o The following are required: `JWT Token` and `Auth Code` (as Auth Acceptance Code)
-
-- When the `MASTER_NODE` identified those tokens to be valid, it will create a special token for the association.
-- To-reiterate, the following are the structure of the token that is composed of the attributes between the communicator `ARCHIVAL_MINER_NODE` and the `MASTER_NODE`.
-- Which will be the result of the entity named as `AssociationCertificate`.
-
-@o From the `ARCHIVAL_MINER_NODE`: (See above).
-@o From the `MASTER_NODE`: `ARCHIVAL_MINER_NODE`'s keys + AUTH_KEY (1st-Half, 32 characters) + SECRET_KEY(2nd-half, 32 character offset, 64 characters)
-
-# Result: AssociationCertificate for the `ARCHIVAL_MINER_NODE` in AES form, whereas, the key is based from the ARCHIVAL-MINER_NODE's keys + SECRET_KEY + AUTH_KEY + DATETIME (in ISO format).
-
-! Note that the result from the `MASTER_NODE` is saved, thurs, using `datetime` for the final key is possible.
-
-- When this was created, `ARCHIVAL_MINER_NODE` will save this under the database and will be used further with no expiration.
-"""
+        return await self.__database_instance.fetch_val(find_existing_certificate_query)

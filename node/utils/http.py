@@ -52,7 +52,7 @@ class HTTPClient:
 
         create_task(
             name=f"{HTTPClient.__name__.lower()}_queue_iterator",
-            coro=self._queue_iterator_runtime(),
+            coro=self.__queue_iterator_runtime(),
         )
         self._is_ready = True
         logger.info("HTTP client is ready to take some requests.")
@@ -215,25 +215,25 @@ class HTTPClient:
                 f"This instance is not yet initialized (from: {self.enqueue_request.__name__}). Please execute initialize() first before attempting to enqueue requests that requires to have its data to be returned immediately."
             )
 
-    async def _queue_iterator_runtime(self) -> None:
+    async def __queue_iterator_runtime(self) -> None:
         if not self._is_ready:
             logger.warning(
-                f"You cannot initialize this iterator '{self._queue_iterator_runtime.__name__}' unless this instance's initialize() method has been executed."
+                f"You cannot initialize this iterator '{self.__queue_iterator_runtime.__name__}' unless this instance's initialize() method has been executed."
             )
             return
 
         while True:
             if self._queue:
                 create_task(
-                    name=f"{HTTPClient.__name__}_{self._queue_iterator_runtime.__name__}",
-                    coro=self._run_request(),
+                    name=f"{HTTPClient.__name__}_{self.__queue_iterator_runtime.__name__}",
+                    coro=self.__run_request(),
                 )
             await sleep(0)
 
-    async def _run_request(self) -> None:
+    async def __run_request(self) -> None:
         if not self._is_ready:
             logger.warning(
-                f"You cannot initialize this request executor '{self._run_request.__name__}' unless this instance's initialize() method has been executed."
+                f"You cannot initialize this request executor '{self.__run_request.__name__}' unless this instance's initialize() method has been executed."
             )
             return
 
@@ -349,12 +349,6 @@ class HTTPClient:
 
         logger.info("All requests destroyed! HTTP client sessions will close.")
         return await self._session.close()
-
-    async def _sync_state_to_database(
-        self,
-    ) -> None:
-        logger.debug("Syncing unfinished tasks to the database (if there is any) ...")
-        raise HTTPClientFeatureUnavailable
 
     def get_current_queue(  # * This is just an extra.
         self, format: HTTPQueueResponseFormat = HTTPQueueResponseFormat.AS_OBJECT

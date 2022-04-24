@@ -122,7 +122,7 @@ async def crypt_file(
     file_content: str | bytes = ""
 
     # Open the file first.
-    file_content = await _process_crpyt_file(
+    file_content = await process_crpyt_file(
         is_async=enable_async, filename=filename, mode="rb"
     )
 
@@ -151,7 +151,7 @@ async def crypt_file(
         )(file_content)
 
         # Then write to the file for the final effect.
-        await _process_crpyt_file(
+        await process_crpyt_file(
             content_to_write=processed_content,
             filename=filename,
             is_async=enable_async,
@@ -185,7 +185,7 @@ async def crypt_file(
         _exit(1)
 
 
-async def _process_crpyt_file(
+async def process_crpyt_file(
     *,
     is_async: bool,
     filename: str,

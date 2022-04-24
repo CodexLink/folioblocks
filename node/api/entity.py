@@ -51,17 +51,14 @@ from core.constants import (
     UserActivityState,
     UserEntity,
 )
-from core.dependencies import (
-    get_args_values,
-    get_database_instance,
-)
-from utils.email import get_email_instance
+from core.dependencies import generate_uuid_user, get_args_values, get_database_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import Table, false, func, select
-from sqlalchemy.sql.expression import Insert, Select, Update
-from core.dependencies import generate_uuid_user
-from utils.processors import hash_context, verify_hash_context
 from fastapi.responses import JSONResponse
+from sqlalchemy import Table, false, func, select
+from sqlalchemy.orm import Query
+from sqlalchemy.sql.expression import Insert, Select, Update
+from utils.email import get_email_instance
+from utils.processors import hash_context, verify_hash_context
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -93,7 +90,6 @@ async def register_entity(
         get_master_node_acc_query: Select = select([func.count()]).where(
             users.c.type == UserEntity.MASTER_NODE_USER
         )
-        from sqlalchemy.orm import Query
 
         master_node_acc: Mapping[Query[Table], int] = await database_instance.fetch_val(
             get_master_node_acc_query
@@ -160,7 +156,7 @@ async def register_entity(
             new_user_insertion_response: HTTPException | None = (
                 await blockchain_instance.insert_external_transaction(
                     action=TransactionActions.ORGANIZATION_USER_REGISTER,
-                    from_address=blockchain_instance.identity[0],
+                    from_address=blockchain_instance.__node_identity[0],
                     to_address=None,
                     data=GroupTransaction(
                         content_type=TransactionContextMappingType.ORGANIZATION_BASE,
@@ -271,7 +267,7 @@ async def register_entity(
                     new_user_auth_register.account_type is UserEntity.MASTER_NODE_USER
                     or new_user_auth_register.account_type
                     is UserEntity.ARCHIVAL_MINER_NODE_USER
-                    and blockchain_instance.node_role is NodeType.MASTER_NODE
+                    and blockchain_instance.__node_role is NodeType.MASTER_NODE
                 ):
                     await blockchain_instance._insert_internal_transaction(
                         action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
@@ -279,7 +275,7 @@ async def register_entity(
                             action=NodeTransactionInternalActions.INIT,
                             context=NodeRegisterTransaction(
                                 acceptor_address=AddressUUID(
-                                    blockchain_instance.identity[0]
+                                    blockchain_instance.__node_identity[0]
                                 ),
                                 new_address=AddressUUID(user_new_uuid),
                                 role=new_user_auth_register.account_type,
