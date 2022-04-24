@@ -767,7 +767,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             payload_to_master: ClientResponse = await self.http_instance.enqueue_request(
                 url=URLAddress(
-                    f"{master_origin_source_host}:{master_origin_source_port}/node/blockchain/receive_hashed_block"
+                    f"{master_origin_source_host}:{master_origin_source_port}/node/receive_hashed_block"
                 ),
                 method=HTTPQueueMethods.POST,
                 headers={
@@ -1018,7 +1018,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 attempt_deliver_payload: ClientResponse = await self.http_instance.enqueue_request(
                     url=URLAddress(
-                        f"{available_node_info.source_host}:{available_node_info.source_port}/node/blockchain/receive_raw_block"
+                        f"{available_node_info.source_host}:{available_node_info.source_port}/node/receive_raw_block"
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
@@ -1952,7 +1952,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             master_hash_valid_response: ClientResponse = await self.http_instance.enqueue_request(
                 url=URLAddress(
-                    f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/verify_hash"  # type: ignore
+                    f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/verify_chain_hash"  # type: ignore
                 ),
                 method=HTTPQueueMethods.POST,
                 await_result_immediate=True,
@@ -1969,7 +1969,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - If that's the case then fetch the blockchain file.
                 blockchain_content: ClientResponse = await self.http_instance.enqueue_request(
                     url=URLAddress(
-                        f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/blockchain/request_update"  # type: ignore
+                        f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/pull_chain_upstream"  # type: ignore
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,

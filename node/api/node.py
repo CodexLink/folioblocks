@@ -135,7 +135,7 @@ async def get_node_info() -> NodeInformation:
 
 
 @node_router.post(
-    "/blockchain/receive_hashed_block",
+    "/receive_hashed_block",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary=f"Receives a hashed block for the {NodeType.MASTER_NODE} to append from the blockchain.",
     description=f"A special API endpoint that receives a raw bock to be mined.",
@@ -149,7 +149,7 @@ async def get_node_info() -> NodeInformation:
     response_model=ConsensusSuccessPayload,
     status_code=HTTPStatus.ACCEPTED,
 )
-async def process_hashed_block(
+async def receive_hashed_block(
     context_from_archival_miner: ConsensusToMasterPayload,
     database_instance: Database = Depends(get_database_instance),
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
@@ -310,7 +310,7 @@ async def process_hashed_block(
 
 
 @node_router.post(
-    "/blockchain/receive_raw_block",
+    "/receive_raw_block",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.ARCHIVAL_MINER_NODE_API.value],
     summary=f"Receives a raw block for the {NodeType.ARCHIVAL_MINER_NODE} to mine.",
     description=f"A special API endpoint that receives a raw bock to be mined.",
@@ -320,7 +320,7 @@ async def process_hashed_block(
         )
     ],
 )
-async def process_raw_block(
+async def receive_raw_block(
     context_from_master: ConsensusFromMasterPayload,
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> Response:
@@ -365,7 +365,7 @@ async def process_raw_block(
     status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_action_from_dashboard(
-    payload:ApplicantUserTransaction | AdditionalContextTransaction,
+    payload: ApplicantUserTransaction | AdditionalContextTransaction,
     auth_instance=Depends(
         EnsureAuthorized(
             _as=[
@@ -603,7 +603,7 @@ async def receive_file_from_dashboard(
 
 
 @node_router.post(
-    "/establish/receive_echo",
+    "/certify_miner",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API],
     summary=f"Receives echo from the {NodeType.ARCHIVAL_MINER_NODE} for establishment of their connection to the blockchain.",
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
@@ -611,7 +611,7 @@ async def receive_file_from_dashboard(
         Depends(EnsureAuthorized(_as=[UserEntity.ARCHIVAL_MINER_NODE_USER])),
     ],  # - This is blockchain-related but not internally related, it was under consensus category. Therefore seperate the contents of the method below from the handler of the <class 'EnsureAuthorized'>.
 )
-async def acknowledge_as_response(
+async def certify_miner(
     origin: SourcePayload,
     x_source: AddressUUID = Header(..., description="The address of the requestor."),
     x_session: JWTToken = Header(
@@ -722,7 +722,7 @@ async def acknowledge_as_response(
 
 
 @node_router.post(
-    "/blockchain/request_update",
+    "/pull_chain_upstream",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary=f"Requests the blockchain file as-is from the '{NodeType.MASTER_NODE.name}'.",
     description=f"A special API endpoint that allows '{NodeType.ARCHIVAL_MINER_NODE.name}' to fetch the latest version of the blockchain file from the '{NodeType.MASTER_NODE.name}'. This is mandatory before allowing the node to mine or participate from the blockchain.",
@@ -732,7 +732,7 @@ async def acknowledge_as_response(
         )
     ],
 )
-async def request_blockchain_upstream(
+async def pull_chain_upstream(
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> JSONResponse:
 
@@ -763,7 +763,7 @@ async def request_blockchain_upstream(
 
 
 @node_router.post(
-    "/blockchain/verify_hash",
+    "/verify_chain_hash",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary="Verifies the input as a hash towards to the latest blockchain.",
     description=f"A special API endpoint that accepts hash in return to validate them against the `{NodeType.MASTER_NODE}`'s blockchain file.",
@@ -773,7 +773,7 @@ async def request_blockchain_upstream(
         )
     ],
 )
-async def verify_given_hash(
+async def verify_chain_hash(
     x_hash: str = Header(
         ...,
         description=f"The input hash that is going to be compared against the {NodeType.MASTER_NODE.name}.",

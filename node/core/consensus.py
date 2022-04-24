@@ -89,7 +89,7 @@ class ConsensusMechanism:
 
         master_response: ClientResponse = await self.http_instance.enqueue_request(
             url=URLAddress(
-                f"{master_origin_address}:{master_origin_port}/node/establish/receive_echo"
+                f"{master_origin_address}:{master_origin_port}/node/certify_miner"
             ),
             headers={
                 "x-source": auth_source,
@@ -124,7 +124,7 @@ class ConsensusMechanism:
 
         else:
             logger.error(
-                f"Generation of association certificate is not successful due to rejection or no reply from the {NodeType.MASTER_NODE}"
+                f"Generation of association certificate is not successful due to rejection or no reply from the {NodeType.MASTER_NODE.name}"
             )
 
         return None
