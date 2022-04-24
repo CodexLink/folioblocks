@@ -19,14 +19,12 @@ from os import environ as env
 
 from aiosmtplib import (
     SMTP,
-    SMTPAuthenticationError,
-    SMTPConnectError,
     SMTPConnectTimeoutError,
+    SMTPException,
     SMTPReadTimeoutError,
     SMTPRecipientRefused,
     SMTPRecipientsRefused,
     SMTPResponseException,
-    SMTPServerDisconnected,
     SMTPTimeoutError,
 )
 from pydantic import EmailStr
@@ -116,12 +114,7 @@ class EmailService:
                 logger.info(f"SMTP email service acknowledged and ready.")
                 return
 
-            except (
-                SMTPAuthenticationError,
-                SMTPConnectError,
-                SMTPReadTimeoutError,
-                SMTPServerDisconnected,
-            ) as e:
+            except SMTPException as e:
                 # When service is not possible, then data senders will automatically return and log that it is not possible due to is_connected: False.
                 logger.critical(
                     f"Failed to connect at email services. | Additional Info: {e}."

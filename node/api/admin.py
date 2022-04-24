@@ -87,12 +87,6 @@ async def generate_auth_token_for_other_nodes(
         if auth_instance.verify(x_passcode):
             generated_token: str = generate_auth_token()
 
-            await email_instance.send(
-                content=f"<html><body><h1>Auth Code for the Folioblock's Archival Miner Node!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                subject=f"Auth Code for Registration as {payload.role.value} @ Folioblocks",
-                to=payload.email,
-            )
-
             try:
                 insert_generated_token_query: Insert = auth_codes.insert().values(
                     code=generated_token,
@@ -103,9 +97,15 @@ async def generate_auth_token_for_other_nodes(
 
                 await db_instance.execute(insert_generated_token_query)
 
+                await email_instance.send(
+                    content=f"<html><body><h1>Auth Code for the Folioblock's Archival Miner Node!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject=f"Auth Code for Registration as {payload.role.value} @ Folioblocks",
+                    to=payload.email,
+                )
+
             except IntegrityError:
                 raise HTTPException(
-                    detail=f"Cannot provide anymore `auth_token` to a user due to already having it.",
+                    detail=f"Cannot provide anymore `auth_token` to a user due to already having an un-expired token.",
                     status_code=HTTPStatus.FORBIDDEN,
                 )
 

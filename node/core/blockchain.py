@@ -1083,12 +1083,19 @@ class BlockchainMechanism(ConsensusMechanism):
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
             # - Since we already have a node, do not let this one go.
+            print(
+                BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
+                available_node_info,
+                BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE,
+            )
             if (
                 len(self.__transaction_container)
                 >= BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                if available_node_info[0] == 0
-                else BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                + (available_node_info[0] * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
+                if not available_node_info[0]
+                else (
+                    BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+                    + (available_node_info[0] * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
+                )
                 and not len(self.__unsent_block_container)
             ):
 
@@ -1419,7 +1426,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         and (datetime.now() >= resolved_last_consensus_sleep_datetime)
                     ):
                         return (
-                            available_nodes,
+                            len(available_nodes),
                             ArchivalMinerNodeInformation(
                                 candidate_no=candidate_idx,
                                 miner_address=resolved_candidate_state_info["owner"],

@@ -1,8 +1,7 @@
 from os import environ as env
 from dotenv import load_dotenv
-from datetime import datetime
 from core.dependencies import PasscodeTOTP
-from time import sleep
+from time import time
 
 load_dotenv("node-env.vars")  # ! Adjust this as possible.
 otp_interval: int = 15
@@ -19,9 +18,12 @@ else:
     exit(-1)
 
 nth: int = 1
+start = time()
+stored_passcode = None
+
 while True:
-    print(
-        f"Iteration #{nth} | Date: {datetime.now()} | Current OTP: {totp_instance.get_code()} | Passcode will refresh after {otp_interval} seconds."
-    )
-    nth += 1
-    sleep(otp_interval)
+    if totp_instance.get_code() != stored_passcode:
+        print(
+            f"Time Elapsed: {time() - start} | Current OTP: {totp_instance.get_code()} | Passcode will refresh after {otp_interval} seconds."
+        )
+        stored_passcode = totp_instance.get_code()
