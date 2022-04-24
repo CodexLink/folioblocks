@@ -1130,6 +1130,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             address_ref=available_node_info.miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
+                        "x-token": self.node_identity[1],
                     },
                     data={
                         # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
@@ -1232,7 +1233,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def __consensus_sleeping_phase(self) -> None:
         if not self.__new_master_instance:
-            self.__sleeping_from_consensupogiw24387@idurse.coms = True
+            self.__sleeping_from_consensus = True
 
             logger.info(
                 f"Sleeping for {self.__hashing_duration} seconds. Waking up after {datetime.now() + self.__hashing_duration}."
