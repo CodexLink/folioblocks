@@ -11,11 +11,11 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from http import HTTPStatus
 import sys
-from asyncio import create_task, gather, get_event_loop, wait
+from asyncio import gather, get_event_loop
 from getpass import getpass
 from hashlib import sha256
+from http import HTTPStatus
 from json import dump as json_export
 from logging import Logger, getLogger
 from os import _exit
@@ -24,30 +24,30 @@ from os import getpid
 from os import kill as kill_process
 from pathlib import Path
 from secrets import token_hex
-from aiohttp import ClientResponse
 
+from aiohttp import ClientResponse
 from aiosmtplib import SMTPException
-from fastapi import HTTPException
 from blueprint.models import tokens
-from core.constants import (
-    REF_MASTER_BLOCKCHAIN_ADDRESS,
-    REF_MASTER_BLOCKCHAIN_PORT,
-    AddressUUID,
-    HTTPQueueMethods,
-    URLAddress,
-)
-from core.dependencies import set_master_node_properties
 from blueprint.schemas import (
     AgnosticCredentialValidator,
     ApplicantUserTransaction,
     OrganizationIdentityValidator,
 )
-from core.constants import TransactionContextMappingType
+from core.constants import (
+    REF_MASTER_BLOCKCHAIN_ADDRESS,
+    REF_MASTER_BLOCKCHAIN_PORT,
+    AddressUUID,
+    HTTPQueueMethods,
+    JWTToken,
+    OrganizationType,
+    TokenStatus,
+    TransactionContextMappingType,
+    URLAddress,
+    UserEntity,
+)
+from core.dependencies import set_master_node_properties
+from fastapi import HTTPException
 from sqlalchemy.sql.expression import Select
-
-from core.constants import OrganizationType
-from core.constants import JWTToken, TokenStatus
-from core.constants import UserEntity
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT

@@ -1,8 +1,9 @@
 from logging import Logger, getLogger
 from typing import Any, Callable
-from core.constants import NodeType
-from core.constants import ASYNC_TARGET_LOOP
+
 from utils.processors import unconventional_terminate
+
+from core.constants import ASYNC_TARGET_LOOP, NodeType
 
 # - Parameterized Decorator | Based: https://www.geeksforgeeks.org/creating-decorator-inside-a-class-in-python/, Adapted from https://stackoverflow.com/questions/5929107/decorators-with-parameters
 

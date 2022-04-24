@@ -14,9 +14,9 @@ from typing import Final
 
 from core.constants import (
     AssociatedNodeStatus,
-    OrganizationType,
     ConsensusNegotiationStatus,
     EmploymentApplicationState,
+    OrganizationType,
     TokenStatus,
     TransactionContextMappingType,
     UserActivityState,

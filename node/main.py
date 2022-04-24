@@ -57,9 +57,9 @@ from core.dependencies import (
     get_master_node_properties,
     store_args_value,
 )
-from core.email import EmailService, get_email_instance
-from core.logger import LoggerHandler
+from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
+from utils.logger import LoggerHandler
 from utils.processors import (
     close_resources,
     contact_master_node,

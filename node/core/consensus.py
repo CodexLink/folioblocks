@@ -8,13 +8,11 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from asyncio import create_task, sleep, wait
+from asyncio import sleep
 from logging import Logger, getLogger
 from os import environ as env
-from typing import Any, Callable
 
 from aiohttp import ClientResponse
-
 from blueprint.models import associated_nodes
 from databases import Database
 from sqlalchemy.sql.expression import Insert

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from http import HTTPStatus
 from logging import Logger, getLogger
+from pathlib import Path
 from secrets import token_urlsafe
 from sqlite3 import IntegrityError
 from sys import maxsize as MAX_INT_PYTHON
@@ -35,6 +36,7 @@ from blueprint.schemas import (
     Block,
     BlockOverview,
     ConsensusSuccessPayload,
+    GroupTransaction,
     HashableBlock,
     NodeCertificateTransaction,
     NodeConfirmMineConsensusTransaction,
@@ -46,6 +48,7 @@ from blueprint.schemas import (
     NodeSyncTransaction,
     NodeTransaction,
     OrganizationIdentityValidator,
+    OrganizationUserBaseFields,
     OrganizationUserBaseTransaction,
     OrganizationUserTransaction,
     Transaction,
@@ -62,13 +65,7 @@ from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
-from blueprint.schemas import GroupTransaction
-from core.constants import BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER
-from core.constants import UserEntity
-from core.dependencies import generate_uuid_user
-from core.constants import OrganizationType
-from core.constants import USER_FILES_FOLDER_NAME
-from blueprint.schemas import OrganizationUserBaseFields
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -77,8 +74,7 @@ from utils.processors import (
     validate_transaction_mapping_exists,
     validate_user_existence,
 )
-from pathlib import Path
-from starlette.datastructures import UploadFile as StarletteUploadFile
+
 from core.consensus import ConsensusMechanism
 from core.constants import (
     ADDRESS_UUID_KEY_PREFIX,
@@ -90,10 +86,12 @@ from core.constants import (
     BLOCKCHAIN_NEGOTIATION_ID_LENGTH,
     BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
+    BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
     BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION,
     INFINITE_TIMER,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
+    USER_FILES_FOLDER_NAME,
     AddressUUID,
     AssociatedNodeStatus,
     BlockchainContentType,
@@ -114,16 +112,18 @@ from core.constants import (
     TransactionActions,
     TransactionContextMappingType,
     URLAddress,
+    UserEntity,
     random_generator,
 )
 from core.decorators import ensure_blockchain_ready, restrict_call
 from core.dependencies import (
+    generate_uuid_user,
     get_args_values,
     get_database_instance,
     get_identity_tokens,
     get_master_node_properties,
 )
-from core.email import EmailService, get_email_instance
+from utils.email import EmailService, get_email_instance
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 

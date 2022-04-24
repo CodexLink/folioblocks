@@ -12,15 +12,13 @@ from argparse import Namespace
 from datetime import timedelta
 from enum import Enum, IntEnum, auto
 from pathlib import Path
+from secrets import SystemRandom
 from typing import Any, Callable, Final
 from typing import NewType as _N
 from typing import TypeVar, Union
 
 from asgiref.typing import ASGIApplication
-from secrets import SystemRandom
-
 from databases import Database
-
 
 # # Custom Assertable Types
 # TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.

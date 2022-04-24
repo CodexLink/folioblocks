@@ -22,7 +22,7 @@ from sqlite3 import IntegrityError
 from blueprint.models import auth_codes
 from blueprint.schemas import GenerateAuthInput
 from core.constants import BaseAPI, NodeAPI, RequestPayloadContext, UserEntity
-from core.email import EmailService, get_email_instance
+from utils.email import EmailService, get_email_instance
 from databases import Database
 from fastapi import APIRouter, Header, HTTPException
 from sqlalchemy.sql.expression import Insert

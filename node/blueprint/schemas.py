@@ -37,7 +37,7 @@ from core.constants import (
     UserRole,
 )
 from fastapi import UploadFile
-from pydantic import BaseModel, EmailStr, Field, FileUrl
+from pydantic import BaseModel, EmailStr, Field
 
 from core.constants import TransactionContextMappingType
 

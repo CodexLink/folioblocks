@@ -11,7 +11,6 @@ from asyncio import create_task, gather
 from datetime import datetime, timedelta
 from enum import EnumMeta
 from http import HTTPStatus
-from http.client import ACCEPTED
 from logging import Logger, getLogger
 from os import environ as env
 from sqlite3 import IntegrityError
@@ -32,7 +31,6 @@ from blueprint.schemas import (
 )
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
-    ADDRESS_UUID_KEY_PREFIX,
     ASYNC_TARGET_LOOP,
     JWT_ALGORITHM,
     JWT_DAY_EXPIRATION,
@@ -42,7 +40,6 @@ from core.constants import (
     BaseAPI,
     EntityAPI,
     HashedData,
-    IdentityTokens,
     JWTToken,
     NodeTransactionInternalActions,
     NodeType,
@@ -57,9 +54,8 @@ from core.constants import (
 from core.dependencies import (
     get_args_values,
     get_database_instance,
-    get_identity_tokens,
 )
-from core.email import get_email_instance
+from utils.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import false, select
 from sqlalchemy.sql.expression import Insert, Select, Update

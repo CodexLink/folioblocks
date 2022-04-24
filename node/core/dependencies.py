@@ -22,17 +22,17 @@ from uuid import uuid4
 
 from aiohttp import ClientError, ClientResponse
 from blueprint.models import auth_codes, tokens, users
-from blueprint.schemas import EntityLoginResult, Tokens
+from blueprint.schemas import EntityLoginResult
 from databases import Database
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
 from pyotp import TOTP
-from sqlalchemy import and_, false, func, select, true
+from sqlalchemy import and_, false, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
-from core.constants import ADDRESS_UUID_KEY_PREFIX
 from utils.http import get_http_client_instance
 
 from core.constants import (
+    ADDRESS_UUID_KEY_PREFIX,
     ASYNC_TARGET_LOOP,
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
@@ -244,7 +244,7 @@ async def authenticate_node_client(
                         ):
                             generated_token = generate_auth_token()
 
-                            from core.email import get_email_instance
+                            from utils.email import get_email_instance
 
                             create_task(
                                 get_email_instance().send(

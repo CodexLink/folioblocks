@@ -14,10 +14,6 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from logging import Logger, getLogger
 from os import environ as env
-from typing import Any
-
-from databases import Database
-from pydantic import PydanticValueError
 
 from blueprint.models import (
     associated_nodes,
@@ -27,9 +23,14 @@ from blueprint.models import (
     users,
 )
 from blueprint.schemas import (
+    AdditionalContextTransaction,
+    ApplicantLogTransaction,
+    ApplicantProcessTransaction,
+    ApplicantUserTransaction,
     ConsensusFromMasterPayload,
     ConsensusSuccessPayload,
     ConsensusToMasterPayload,
+    GroupTransaction,
     NodeCertificateTransaction,
     NodeConfirmMineConsensusTransaction,
     NodeConsensusInformation,
@@ -43,23 +44,25 @@ from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ASYNC_TARGET_LOOP,
     AddressUUID,
+    ApplicantLogContentType,
+    AssociatedNodeStatus,
     AuthAcceptanceCode,
     BaseAPI,
     ConsensusNegotiationStatus,
+    EmploymentApplicationState,
     JWTToken,
     NodeAPI,
     NodeTransactionInternalActions,
     NodeType,
     SourceNodeOrigin,
     TransactionActions,
+    TransactionContextMappingType,
     UserEntity,
     random_generator,
 )
-from core.dependencies import (
-    EnsureAuthorized,
-    get_database_instance,
-)
+from core.dependencies import EnsureAuthorized, get_database_instance
 from cryptography.fernet import Fernet
+from databases import Database
 from fastapi import (
     APIRouter,
     Depends,
@@ -71,25 +74,9 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import JSONResponse
+from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
-
-from core.constants import AssociatedNodeStatus
-from blueprint.schemas import (
-    AdditionalContextTransaction,
-    ApplicantLogTransaction,
-    ApplicantProcessTransaction,
-    ApplicantUserTransaction,
-    GroupTransaction,
-    OrganizationUserTransaction,
-)
-from core.constants import ApplicantLogContentType, TransactionContextMappingType
-from core.constants import EmploymentApplicationState
-from core.dependencies import generate_auth_token
-from blueprint.schemas import (
-    AgnosticCredentialValidator,
-    OrganizationIdentityValidator,
-)
 from utils.processors import validate_source_and_origin_associates
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
