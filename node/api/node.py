@@ -317,7 +317,9 @@ async def receive_hashed_block(
     description=f"A special API endpoint that receives a raw bock to be mined.",
     dependencies=[
         Depends(
-            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+            # - In archival instance, we cannot determine the role of the master node since it wasn't registered.
+            # - With that, we can use the certification token instead.
+            EnsureAuthorized(blockchain_related=True)
         )
     ],
 )

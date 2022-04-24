@@ -506,11 +506,11 @@ class EnsureAuthorized:
     def __init__(
         self,
         *,
-        _as: UserEntity | list[UserEntity],
+        _as: UserEntity | list[UserEntity] | None = None,
         blockchain_related: bool = False,
         return_token: bool = False,
     ) -> None:
-        self.__as: UserEntity | list[UserEntity] = _as
+        self.__as: UserEntity | list[UserEntity] | None = _as
         self.__blockchain_related: Final[bool] = blockchain_related
         self.__return_token: bool = return_token
 
@@ -572,17 +572,17 @@ class EnsureAuthorized:
                 if req_token is not None:
                     return None
 
-            # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
-            if self.__blockchain_related and x_certificate_token is not None:
-                certificate_token_query: Select = select([func.count()]).where(
-                    associated_nodes.c.certificate == x_certificate_token
-                )
-                certificate_count_count = await database_instance.fetch_val(
-                    certificate_token_query
-                )
+        # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
+        if self.__blockchain_related and x_certificate_token is not None:
+            certificate_token_query: Select = select([func.count()]).where(
+                associated_nodes.c.certificate == x_certificate_token
+            )
+            certificate_count_count = await database_instance.fetch_val(
+                certificate_token_query
+            )
 
-                if certificate_count_count:
-                    return None
+            if certificate_count_count:
+                return None
 
         raise HTTPException(
             detail="You are unauthorized to access this endpoint.",

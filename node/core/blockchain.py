@@ -162,7 +162,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # # Timer Containers
         self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.__mine_duration: timedelta = timedelta(seconds=0)
+        self.__hashing_duration: timedelta = timedelta(seconds=0)
         self.__consensus_sleep_date_expiration: datetime = datetime.now()
 
         # # State and Variable References
@@ -449,7 +449,9 @@ class BlockchainMechanism(ConsensusMechanism):
                                 unique_address=new_uuid,
                                 avatar=None,
                                 description=data.context.description,
-                                skills=data.context.skills if isinstance(data.context, ApplicantUserTransaction) else None,
+                                skills=data.context.skills
+                                if isinstance(data.context, ApplicantUserTransaction)
+                                else None,
                                 first_name=data.context.first_name,  # type: ignore
                                 last_name=data.context.last_name,  # type: ignore
                                 association=data.context.institution,  # type: ignore
@@ -863,7 +865,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if recorded_consensus_negotiation is not None:
             self.__consensus_sleep_date_expiration = (
-                datetime.now() + self.__mine_duration
+                datetime.now() + self.__hashing_duration
             )
 
             payload_to_master: ClientResponse = await self.__http_instance.enqueue_request(
@@ -1220,11 +1222,11 @@ class BlockchainMechanism(ConsensusMechanism):
         if not self.__new_master_instance:
 
             if add_on:
-                self.__mine_duration += timedelta(seconds=hashing_duration)
+                self.__hashing_duration += timedelta(seconds=hashing_duration)
             else:
-                self.__mine_duration = timedelta(seconds=hashing_duration)
+                self.__hashing_duration = timedelta(seconds=hashing_duration)
 
-            logger.info(f"Consensus sleep timer were set to {self.__mine_duration}.")
+            logger.info(f"Consensus sleep timer were set to {self.__hashing_duration}.")
             return
 
         logger.error("Unable to set the consensus timer.")
@@ -1234,10 +1236,10 @@ class BlockchainMechanism(ConsensusMechanism):
             self.__sleeping_from_consensus = True
 
             logger.info(
-                f"Block hashing is finished. Sleeping for seconds. until {datetime.now() + self.__mine_duration}."
+                f"Sleeping for {self.__hashing_duration} seconds. Waking up after {datetime.now() + self.__hashing_duration}."
             )
 
-            await sleep(self.__mine_duration.total_seconds())
+            await sleep(self.__hashing_duration.total_seconds())
             self.__sleeping_from_consensus = False
 
             # * When done, ensure that the node's sate is changed.
