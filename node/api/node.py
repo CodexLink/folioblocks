@@ -367,9 +367,7 @@ async def process_raw_block(
     status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_action_from_dashboard(
-    payload: ApplicantProcessTransaction
-    | ApplicantUserTransaction
-    | AdditionalContextTransaction,
+    payload:ApplicantUserTransaction | AdditionalContextTransaction,
     auth_instance=Depends(
         EnsureAuthorized(
             _as=[
@@ -396,21 +394,7 @@ async def receive_action_from_dashboard(
 
     #! Note that, `ApplicantLogTransaction` has been handled from `receive_file_from_dashboard` method.
 
-    if isinstance(payload, ApplicantProcessTransaction):
-        if payload.state is EmploymentApplicationState.ACCEPTED:
-            resolved_action = TransactionActions.APPLICANT_APPLY_CONFIRMED
-
-        elif payload.state is EmploymentApplicationState.REJECTED:
-            resolved_action = TransactionActions.APPLICANT_APPLY_REJECTED
-
-        else:
-            resolved_action = TransactionActions.APPLICANT_APPLY
-
-        payload.timestamp = datetime.now()
-        resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
-        resolved_to_address = payload.receiver
-
-    elif isinstance(payload, ApplicantUserTransaction):
+    if isinstance(payload, ApplicantUserTransaction):
         resolved_action = TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT
         resolved_content_type = TransactionContextMappingType.APPLICANT_BASE
 

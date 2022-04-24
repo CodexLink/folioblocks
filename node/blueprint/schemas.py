@@ -142,14 +142,6 @@ class ApplicantLogTransaction(BaseModel):
     timestamp: datetime | None  # * We will be using `datetime` for output, while we don't take any inputs from the frontend in terms of the timestamp, it can be easily modified, so therefore let the backend calculate the time.
 
 
-class ApplicantProcessTransaction(BaseModel):
-    process_id: RandomUUID
-    state: EmploymentApplicationState
-    inserter: AddressUUID | None
-    receiver: AddressUUID
-    timestamp: datetime | None
-
-
 class ApplicantUserBaseTransaction(BaseModel):
     identity: AddressUUID | None  # * This is going to be resolved during process.
     inserter: AddressUUID | None  # * Reference to user from the organization.

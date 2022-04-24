@@ -388,17 +388,6 @@ class TransactionActions(IntEnum):
     NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START = auto()
     NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING = auto()
 
-    # - For Students as Applicants.
-    APPLICANT_APPLY = auto()
-    APPLICANT_APPLY_CONFIRMED = auto()
-    APPLICANT_APPLY_REJECTED = auto()
-
-    # # About Classification / Organization
-    # # Groups with classification of associate/organization should refer to the actual classification instead of just associate/organization.
-    # - For Company / Organization.
-    # ! Note that this/these may not be used since our scenario is leaning towards to applicants wanting to get hired by them doing the process.
-    COMPANY_INVITE_APPLICANTS = auto()
-
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = auto()
     INSTITUTION_ORG_REFER_NEW_DOCUMENT = auto()
@@ -407,6 +396,18 @@ class TransactionActions(IntEnum):
     # - For Organization, in general.
     ORGANIZATION_USER_REGISTER = auto()
     ORGANIZATION_REFER_EXTRA_INFO = auto()
+
+    # # Deprecated Enum Members.
+    # * The following enum members are deprecated because their feature is too much than what this system is intended to be.
+    # * For the system to have a USP, the initial thought was to have an additional feature such as the applicant processing and approval for hiring purposes.
+    # ! However its too far from the scope and should be deduced since this is a thesis with a limited time frame.
+
+    # - The enums with prefixes 'APPLICANT_' is intended to implement the hiring system.
+    # - The enum with prefix 'COMPANY_' is intended to implement the invitation to access the credentials of the user (the non-sensitive information).
+    # APPLICANT_APPLY = auto()
+    # APPLICANT_APPLY_CONFIRMED = auto()
+    # APPLICANT_APPLY_REJECTED = auto()
+    # COMPANY_INVITE_APPLICANTS = auto()
 
 
 # # Program Metadata

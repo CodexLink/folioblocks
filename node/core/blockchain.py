@@ -276,65 +276,8 @@ class BlockchainMechanism(ConsensusMechanism):
             # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
             # # [4]
 
-            # - For the applicant application attempt actions.
-            if (
-                action
-                in [
-                    TransactionActions.APPLICANT_APPLY,
-                    TransactionActions.APPLICANT_APPLY_CONFIRMED,
-                    TransactionActions.APPLICANT_APPLY_REJECTED,
-                ]
-                and isinstance(data.context, ApplicantProcessTransaction)
-                and isinstance(to_address, str)
-            ):
-
-                # - Since this was a new entry, we need to do some handling for the database entry.
-                try:
-                    # @o It doesn't matter beyond this point if the user tries again or not, we cannot handle that for now. See `CANNOT DO` of TODO.
-                    if (
-                        await validate_transaction_mapping_exists(
-                            user_address=AddressUUID(to_address),
-                            content_type=TransactionContextMappingType.APPLICANT_BASE,
-                        )
-                        is True
-                    ):
-                        # @o Type-hint.
-                        application_process_query: Insert | Update
-
-                        if action is TransactionActions.APPLICANT_APPLY:
-                            application_process_query = applications.insert().values(
-                                process_id=RandomUUID(token_urlsafe(16)),
-                                requestor=data.context.inserter,
-                                to=data.context.receiver,
-                                state=EmploymentApplicationState.REQUESTED,
-                            )
-                        else:
-                            application_process_query = (
-                                applications.update()
-                                .where(
-                                    applications.c.process_uuid
-                                    == data.context.process_id
-                                )
-                                .values(
-                                    state=EmploymentApplicationState.ACCEPTED
-                                    if action
-                                    is TransactionActions.APPLICANT_APPLY_CONFIRMED
-                                    else EmploymentApplicationState.REJECTED
-                                )
-                            )
-
-                        await self.db_instance.execute(application_process_query)
-
-                    else:
-                        exception_message = f"There is no content type ({TransactionContextMappingType.APPLICANT_BASE}) transaction mapping for {to_address}. Please create an applicant account and try again."
-                        exception_status = HTTPStatus.NOT_FOUND
-
-                except IntegrityError as e:
-                    exception_message = f"There was an error regarding application process entry to database. | Info: {e}"
-                    exception_status = HTTPStatus.INTERNAL_SERVER_ERROR
-
             # - For transactions that require generation of `user` under Organization or as an Applicant.
-            elif action in [
+            if action in [
                 TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
                 TransactionActions.ORGANIZATION_USER_REGISTER,
             ] and (
