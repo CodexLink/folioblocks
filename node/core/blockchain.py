@@ -64,12 +64,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
-from core.constants import (
-    BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
-    BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
-)
-from core.constants import BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS
-from core.constants import BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE
+from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -84,6 +79,9 @@ from core.constants import (
     ADDRESS_UUID_KEY_PREFIX,
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
+    BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS,
+    BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
+    BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
     BLOCKCHAIN_NAME,
@@ -91,6 +89,7 @@ from core.constants import (
     BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
+    BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE,
     BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION,
     INFINITE_TIMER,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
@@ -126,7 +125,6 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
-from utils.email import EmailService, get_email_instance
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -1112,7 +1110,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             else:
                 logger.warning(
-                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions + 1} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
@@ -1244,7 +1242,7 @@ class BlockchainMechanism(ConsensusMechanism):
             self.__sleeping_from_consensus = True
 
             logger.info(
-                f"Sleeping for {self.__hashing_duration} seconds. Waking up after {datetime.now() + self.__hashing_duration}."
+                f"Sleeping for {self.__hashing_duration.total_seconds()} seconds. Waking up after {datetime.now() + self.__hashing_duration}."
             )
 
             await sleep(self.__hashing_duration.total_seconds())
@@ -1361,6 +1359,10 @@ class BlockchainMechanism(ConsensusMechanism):
         available_nodes: list[Mapping] = await self.__database_instance.fetch_all(
             available_nodes_query
         )
+
+        random_generator.shuffle(
+            available_nodes
+        )  # ! Note that this does not create a new copy of the referred object, but rather mutates the referred object!
 
         if not len(available_nodes):
             logger.info(
