@@ -15,7 +15,6 @@ from typing import Final
 from core.constants import (
     AssociatedNodeStatus,
     ConsensusNegotiationStatus,
-    EmploymentApplicationState,
     OrganizationType,
     TokenStatus,
     TransactionContextMappingType,
@@ -96,32 +95,6 @@ users.association_ref = relationship(associations, foreign_keys="association")  
 
 # ! The following element will be used throughout to refer to the user.
 user_addr_ref: Final[str] = "users.unique_address"
-
-applications = Table(
-    "applications",
-    model_metadata,
-    Column("id", Integer, nullable=False, primary_key=True, unique=False),
-    Column("process_uuid", String(16), nullable=False, unique=True),
-    Column("requestor", ForeignKey(user_addr_ref), nullable=False, unique=False),
-    Column("to", ForeignKey(user_addr_ref), nullable=False, unique=False),
-    Column(
-        "state",
-        SQLEnum(EmploymentApplicationState),
-        nullable=False,
-        server_default=EmploymentApplicationState.REQUESTED.name,
-        unique=False,
-    ),
-    Column(
-        "date_created",
-        DateTime,
-        nullable=False,
-        server_default=func.now(),
-        unique=False,
-    ),
-)
-
-applications.requestor_ref = relationship(users, foreign_keys="requestor")  # type: ignore
-applications.to_ref = relationship(users, foreign_keys="to")  # type: ignore
 
 associated_nodes = Table(
     "associated_nodes",

@@ -29,7 +29,6 @@ from blueprint.schemas import (
     AdditionalContextTransaction,
     AgnosticCredentialValidator,
     ApplicantLogTransaction,
-    ApplicantProcessTransaction,
     ApplicantUserBaseTransaction,
     ApplicantUserTransaction,
     ArchivalMinerNodeInformation,
@@ -99,7 +98,6 @@ from core.constants import (
     BlockchainIOAction,
     BlockchainPayload,
     ConsensusNegotiationStatus,
-    EmploymentApplicationState,
     HashUUID,
     HTTPQueueMethods,
     IdentityTokens,
@@ -242,7 +240,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 * action (TransactionActions): An enum that describes the cause of instantiation of this transaction.
                 * from_address (AddressUUID): A unique identifier that instantiated this transaction.
                 * to_address (AddressUUID): A unique identifier that is being referred from the content of this transaction.
-                * data (ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserTransactionInternal | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
+                * data (ApplicantLogTransaction | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
 
         ### Returns:
                 * bool: Returns `True` or `False` depending whether this function success or fails on execution of resolving the transaction for block minin.
@@ -254,7 +252,6 @@ class BlockchainMechanism(ConsensusMechanism):
         # @o I don't know how to type this one.
         supported_models: Final[list[Any]] = [
             ApplicantLogTransaction,
-            ApplicantProcessTransaction,
             ApplicantUserTransaction,
             OrganizationUserBaseTransaction,
             AdditionalContextTransaction,

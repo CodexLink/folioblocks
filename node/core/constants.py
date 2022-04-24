@@ -180,7 +180,6 @@ class AdminAPI(Enum):
 class DashboardAPI(Enum):
     DASHBOARD_GENERAL_API = f"{BaseAPI.DASHBOARD.value}: General"
     APPLICANT_API = f"{BaseAPI.DASHBOARD.value}: Applicant"
-    EMPLOYER_API = f"{BaseAPI.DASHBOARD.value}: Employer"
     INSTITUTION_API = f"{BaseAPI.DASHBOARD.value}: Institution"
 
 
@@ -256,7 +255,6 @@ class AssociatedNodeStatus(IntEnum):
 
 
 class OrganizationType(IntEnum):
-    COMPANY = auto()
     INSTITUTION = auto()
     ORGANIZATION = auto()
 
@@ -264,12 +262,6 @@ class OrganizationType(IntEnum):
 class ConsensusNegotiationStatus(IntEnum):
     COMPLETED = auto()
     ON_PROGRESS = auto()
-
-
-class EmploymentApplicationState(IntEnum):
-    REQUESTED = auto()
-    REJECTED = auto()
-    ACCEPTED = auto()
 
 
 class TokenStatus(IntEnum):
@@ -349,19 +341,6 @@ class ApplicantLogContentType(IntEnum):
     ACTIVITY = auto()
     PROMOTION = auto()
     EMPLOYMENT = auto()
-
-
-class EmploymentActivityType(IntEnum):
-    ACTIVITIES = auto()
-    PROJECTS = auto()
-    PROMOTION = auto()
-
-
-class TransactionContentCategory(IntEnum):
-    APPLICANT = auto()
-    INSTITUTION_ORG = auto()
-    COMPANY_ORG = auto()
-    NODE_INTERNAL = auto()
 
 
 class TransactionActions(IntEnum):

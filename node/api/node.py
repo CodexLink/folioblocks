@@ -25,7 +25,6 @@ from blueprint.models import (
 from blueprint.schemas import (
     AdditionalContextTransaction,
     ApplicantLogTransaction,
-    ApplicantProcessTransaction,
     ApplicantUserTransaction,
     ConsensusFromMasterPayload,
     ConsensusSuccessPayload,
@@ -49,7 +48,6 @@ from core.constants import (
     AuthAcceptanceCode,
     BaseAPI,
     ConsensusNegotiationStatus,
-    EmploymentApplicationState,
     JWTToken,
     NodeAPI,
     NodeTransactionInternalActions,

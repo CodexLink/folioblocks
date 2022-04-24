@@ -18,12 +18,10 @@ from core.constants import (
     ApplicantLogContentType,
     OrganizationType,
     CredentialContext,
-    EmploymentApplicationState,
     HashUUID,
     HTTPQueueMethods,
     JWTToken,
     NodeTransactionInternalActions,
-    NodeType,
     NotificationContext,
     OrganizationType,
     RandomUUID,
@@ -234,7 +232,7 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
 
 class GroupTransaction(BaseModel):
     content_type: TransactionContextMappingType | None  # * Method `insert_external_transaction` handles this, so there's no way it will go without a context.
-    context: ApplicantLogTransaction | ApplicantProcessTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseFields | OrganizationUserBaseTransaction
+    context: ApplicantLogTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseFields | OrganizationUserBaseTransaction
 
 
 class NodeTransaction(BaseModel):

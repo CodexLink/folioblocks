@@ -361,9 +361,9 @@ class HTTPClient:
     ) -> HTTPRequestPayload | RequestPayloadContext | bytes | None:
 
         if self._queue:
-            if format == HTTPQueueResponseFormat.AS_DICT:
+            if format is HTTPQueueResponseFormat.AS_DICT:
                 return self._queue[0].dict()
-            elif format == HTTPQueueResponseFormat.AS_JSON:
+            elif format is HTTPQueueResponseFormat.AS_JSON:
                 return self._queue[0].json()
             else:
                 return self._queue[0]
