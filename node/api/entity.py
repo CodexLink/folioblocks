@@ -244,8 +244,8 @@ async def register_entity(
 
             create_task(
                 get_email_instance().send(
-                    content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type.value}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                    subject="Hello from Folioblocks Technicals!",
+                    content=f"<html><body><h1>Hello from Folioblocks::Node!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type.value}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject="Hello from Folioblocks::Node!",
                     to=credentials.email,
                 ),
                 name=f"{get_email_instance.__name__}_send_register_welcome_node",

@@ -69,7 +69,7 @@ from core.constants import (
     BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
 )
 from core.constants import BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS
-from node.core.constants import BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE
+from core.constants import BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -473,8 +473,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
                             create_task(
                                 self.__email_service.send(
-                                    content=f"<html><body><h1>Hello from Folioblocks!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER.value}`</b>!<br><br>Your Address: <b>{new_uuid}</b><br>Association Address: <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution}</b><br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
-                                    subject="Hello from Folioblocks!",
+                                    content=f"<html><body><h1>Hello from Folioblocks::Users!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER.value}`</b>!<br><br>Your Address: <b>{new_uuid}</b><br>Association Address: <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution}</b><br><br>Remember, if you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one.<br><br>For the `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
+                                    subject="Hello from Folioblocks::Users!",
                                     to=data.context.email,  # type: ignore
                                 ),
                                 name=f"{get_email_instance.__name__}_send_register_welcome_user",
