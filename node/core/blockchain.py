@@ -221,13 +221,19 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
                     )
                     while True:
-                        if await self.establish() is True:
+                        consensus_establish_ref: float | None = await self.establish_node_certification()  # type: ignore # ! ConsensusMechanism has established this method.
+
+                        if isinstance(consensus_establish_ref, float):
                             break
 
                         logger.error(
                             f"Establishment to the {NodeType.MASTER_NODE.name} failed, cannot continue other blockchain operations, retrying after 10 seconds ..."
                         )
                         await sleep(10)
+
+                        self.__consensus_calculate_sleep_time(
+                            mining_duration=consensus_establish_ref, add_on=True
+                        )
                 else:
                     logger.info(
                         "Association certificate token exists. Ignoring establishment from the `MASTER_NODE`."
@@ -237,7 +243,12 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE} blockchain."
             )
 
+            # - We update the blockchain upstream.
             await self.__update_chain()
+
+            # - And, we sleep initially. Bypassing this is impossible even on instance restart. The master node knows when's the time you are sleeping and when is not.
+            # - Though, if there's a possibility that the archival miner node has started with delay, the master node respects that (by looking at the public/private state of this node).
+            await self.__consensus_sleeping_phase()
 
     @restrict_call(on=NodeType.MASTER_NODE)
     async def insert_external_transaction(
@@ -1016,7 +1027,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             else:
                 logger.warning(
-                    f"There isn't enough transactions to create a block. Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
@@ -1301,6 +1312,8 @@ class BlockchainMechanism(ConsensusMechanism):
                     == resolved_candidate_state_info["owner"]
                 )
 
+                # - Use backend time referene instead of relying from the archival miner instead.
+                # * This implementation is surely fool-proof.
                 selected_node_last_consensus_sleep_datetime = (
                     await self.__database_instance.fetch_one(
                         last_selected_node_consensus_sleep_datetime_query
@@ -1828,7 +1841,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 encrypter_key = urlsafe_b64encode(constructed_context_to_key)
 
             else:
-                error_message = "Payload is not internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
+                error_message = "Payload is not a internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
 
                 logger.error(error_message)
                 return HTTPException(
@@ -1844,7 +1857,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Hash the content of the payload.
         if not isinstance(payload_to_encrypt.context, str):
-            print("END RESULT PAYLOAD", payload_to_encrypt.context.dict())
             payload_to_encrypt.context = HashUUID(
                 (
                     encrypter_payload.encrypt(
@@ -1854,6 +1866,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 ).decode("utf-8")
             )
+
+        print(
+            "\n\n\n\n\n",
+            payload_to_encrypt.dict(),
+            type(payload_to_encrypt),
+            end="\n\n\n\n",
+        )
 
         # - Build the transaction
         try:
@@ -1881,6 +1900,7 @@ class BlockchainMechanism(ConsensusMechanism):
             error_message = (
                 f"There was an error during payload transformation. Info: {e}"
             )
+
             return HTTPException(
                 detail=error_message, status_code=HTTPStatus.UNPROCESSABLE_ENTITY
             )
@@ -1973,7 +1993,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if not master_hash_valid_response.ok:
                 # - If that's the case then fetch the blockchain file.
-                blockchain_content: ClientResponse = await self.__http_instance.enqueue_request(
+                upstream_chain_content: ClientResponse = await self.__http_instance.enqueue_request(
                     url=URLAddress(
                         f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/pull_chain_upstream"  # type: ignore
                     ),
@@ -1987,8 +2007,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.
-                if blockchain_content.ok:
-                    dict_blockchain_content = await blockchain_content.json()
+                if upstream_chain_content.ok:
+                    dict_blockchain_content = await upstream_chain_content.json()
 
                     in_memory_chain: frozendict | None = (
                         self.__process_deserialize_to_load_blockchain_in_memory(
@@ -1998,7 +2018,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     if not isinstance(in_memory_chain, frozendict):
                         logger.error(
-                            "There was an error duing loading the blockchain from file to in-memory. It should not be possible to get on this condition as the method already handles it. But since we are in async state, please wait for it to terminate."
+                            "There was an error loading the blockchain from file to in-memory."
                         )
                         await sleep(INFINITE_TIMER)
 

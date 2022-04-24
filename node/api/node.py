@@ -75,6 +75,7 @@ from fastapi.responses import JSONResponse
 from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from core.dependencies import generate_consensus_sleep_time
 from utils.processors import validate_source_and_origin_associates
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -198,8 +199,8 @@ async def receive_hashed_block(
                 status_code=HTTPStatus.NOT_ACCEPTABLE,
             )
 
-        proposed_consensus_addon_timer: float = (
-            random_generator.uniform(0, 2) * blockchain_instance.block_timer_seconds
+        proposed_consensus_addon_timer: float = generate_consensus_sleep_time(
+            block_timer=blockchain_instance.block_timer_seconds
         )
 
         # - Update the Consensus Negotiation ID.
@@ -621,7 +622,8 @@ async def certify_miner(
         ...,
         description="The auth code that is known as acceptance code, used for extra validation.",
     ),
-    db: Database = Depends(get_database_instance),
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+    database_instance: Database = Depends(get_database_instance),
 ) -> Response:
 
     # - [1] Validate such entries from the header.
@@ -629,7 +631,9 @@ async def certify_miner(
     fetch_node_source_query = select([users.c.unique_address, users.c.email]).where(
         users.c.unique_address == x_source
     )
-    validated_source_address = await db.fetch_one(fetch_node_source_query)
+    validated_source_address = await database_instance.fetch_one(
+        fetch_node_source_query
+    )
 
     # - [1.2] Then validate the token by incorporating previous query and the header `x_acceptance`.
     # * Validate other credentials and beyond at this point.
@@ -641,7 +645,7 @@ async def certify_miner(
             )  # @o Equivalent to validated_source_address.email.
         )
 
-        validated_auth_code = await db.fetch_one(fetch_node_auth_query)
+        validated_auth_code = await database_instance.fetch_one(fetch_node_auth_query)
 
         if validated_auth_code.count:  # type: ignore
             fetch_node_token_query = select([func.count()]).where(
@@ -649,7 +653,9 @@ async def certify_miner(
                 & (tokens.c.from_user == validated_source_address.unique_address)  # type: ignore
             )
 
-            validated_node_token = await db.fetch_one(fetch_node_token_query)
+            validated_node_token = await database_instance.fetch_one(
+                fetch_node_token_query
+            )
 
             if validated_node_token.count:  # type: ignore
                 authority_code: str | None = env.get("AUTH_KEY", None)
@@ -684,11 +690,7 @@ async def certify_miner(
                         source_address=origin.source_address,
                         source_port=origin.source_port,
                     )
-                    await db.execute(store_authored_token_query)
-
-                    blockchain_instance: BlockchainMechanism | None = (
-                        get_blockchain_instance()
-                    )
+                    await database_instance.execute(store_authored_token_query)
 
                     if isinstance(blockchain_instance, BlockchainMechanism):
                         await blockchain_instance.insert_internal_transaction(
@@ -702,10 +704,35 @@ async def certify_miner(
                             ),
                         )
 
+                        proposed_consensus_sleep_time: float = (
+                            generate_consensus_sleep_time(
+                                block_timer=blockchain_instance.block_timer_seconds
+                            )
+                        )
+
+                        # - Fool-proof by recording this consensus sleep time in the database.
+                        update_association_initial_query: Update = (
+                            associated_nodes.update()
+                            .where(
+                                associated_nodes.c.user_address
+                                == validated_source_address.unique_address  # type: ignore
+                            )
+                            .values(
+                                status=AssociatedNodeStatus.CURRENTLY_AVAILABLE,
+                                consensus_sleep_expiration=datetime.now()
+                                + timedelta(seconds=proposed_consensus_sleep_time),
+                            )
+                        )
+
+                        await database_instance.execute(
+                            update_association_initial_query
+                        )
+
                         # # Then return it.
                         return JSONResponse(
                             content={
-                                "certificate_token": authored_token.decode("utf-8")
+                                "initial_consensus_sleep_seconds": proposed_consensus_sleep_time,
+                                "certificate_token": authored_token.decode("utf-8"),
                             },
                             status_code=HTTPStatus.OK,
                         )
@@ -716,7 +743,7 @@ async def certify_miner(
                 )
 
     raise HTTPException(
-        detail="One or more headers are invalid.",
+        detail="One or more headers are invalid to initiate certification.",
         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
     )
 
@@ -771,7 +798,9 @@ async def pull_chain_upstream(
     description=f"A special API endpoint that accepts hash in return to validate them against the `{NodeType.MASTER_NODE}`'s blockchain file.",
     dependencies=[
         Depends(
-            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+            EnsureAuthorized(
+                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
+            )
         )
     ],
 )

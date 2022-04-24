@@ -233,7 +233,7 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
 
 
 class GroupTransaction(BaseModel):
-    content_type: TransactionContextMappingType | None  # * Method `insert_external_transaction` handles this, so there's no way it will go without a context.
+    content_type: TransactionContextMappingType
     context: ApplicantLogTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseFields | OrganizationUserBaseTransaction
 
 
