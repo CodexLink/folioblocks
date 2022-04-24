@@ -254,7 +254,7 @@ class NodeType(IntEnum):
 
 class AssociatedNodeStatus(IntEnum):
     CURRENTLY_AVAILABLE = auto()
-    CURRENTLY_MINING = auto()
+    CURRENTLY_HASHING = auto()
     CURRENTLY_NOT_AVAILABLE = auto()
     CURRENTLY_SLEEPING = auto()
 

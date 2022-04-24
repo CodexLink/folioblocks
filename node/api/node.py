@@ -313,7 +313,7 @@ async def receive_hashed_block(
 @node_router.post(
     "/receive_raw_block",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.ARCHIVAL_MINER_NODE_API.value],
-    summary=f"Receives a raw block for the {NodeType.ARCHIVAL_MINER_NODE} to mine.",
+    summary=f"Receives a raw block for the {NodeType.ARCHIVAL_MINER_NODE} to hash.",
     description=f"A special API endpoint that receives a raw bock to be mined.",
     dependencies=[
         Depends(
@@ -345,7 +345,7 @@ async def receive_raw_block(
 
         # - Enqueue the block from the local instance of blockchain.
         create_task(
-            blockchain_instance.mine_and_store_given_block(
+            blockchain_instance.hash_and_store_given_block(
                 block=context_from_master.block,
                 from_origin=SourceNodeOrigin.FROM_MASTER,
                 master_address_ref=context_from_master.master_address,
@@ -752,7 +752,7 @@ async def certify_miner(
     "/pull_chain_upstream",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
     summary=f"Requests the blockchain file as-is from the '{NodeType.MASTER_NODE.name}'.",
-    description=f"A special API endpoint that allows '{NodeType.ARCHIVAL_MINER_NODE.name}' to fetch the latest version of the blockchain file from the '{NodeType.MASTER_NODE.name}'. This is mandatory before allowing the node to mine or participate from the blockchain.",
+    description=f"A special API endpoint that allows '{NodeType.ARCHIVAL_MINER_NODE.name}' to fetch the latest version of the blockchain file from the '{NodeType.MASTER_NODE.name}'. This is mandatory before allowing the node to hash or participate from the blockchain.",
     dependencies=[
         Depends(
             EnsureAuthorized(

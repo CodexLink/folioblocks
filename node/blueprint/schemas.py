@@ -311,7 +311,7 @@ class ConsensusToMasterPayload(BaseModel):
 class NodeConsensusInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
-    is_mining: bool
+    is_hashing: bool
     node_role: NodeType
     consensus_timer_expiration: datetime
     last_mined_block: int
