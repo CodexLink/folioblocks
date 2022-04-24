@@ -39,6 +39,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from core.constants import TransactionContextMappingType
 from core.constants import NodeType
+from core.constants import ApplicantChangeInfoActions
 
 # # Dashboard API — START
 
@@ -86,6 +87,11 @@ class GenerateAuthInput(BaseModel):
 # @o This is used for both fields under `extra` of Applicant and Organization.
 
 # # Generalized Transactions — END
+
+
+class ApplicantChangeInfoTransaction(BaseModel):
+    content_changed: ApplicantChangeInfoActions
+    timestamp: datetime
 
 
 class AdditionalContextTransaction(BaseModel):
@@ -142,9 +148,13 @@ class ApplicantLogTransaction(BaseModel):
 
 
 class ApplicantUserBaseTransaction(BaseModel):
+    avatar: UploadFile | None  # - Changeable but will be recorded as a proof.
     identity: AddressUUID | None  # * This is going to be resolved during process.
     inserter: AddressUUID | None  # * Reference to user from the organization.
     institution: AddressUUID | None
+    email: EmailStr | None
+    description: str | None  # - Changeable, but will be recorded as a proof.
+    skills: str | None  # - Changeable, but will be recorded as a proof.
     course: str
     year_level: int
     prefer_role: str
@@ -174,7 +184,7 @@ class OrganizationUserBaseFields(BaseModel):
 class OrganizationUserBaseTransaction(OrganizationUserBaseFields, BaseModel):
     org_type: OrganizationType | None
     founded: datetime | None
-    description: str | None
+    description: str | None  # - May be changeable.
 
 
 class OrganizationUserTransaction(

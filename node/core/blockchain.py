@@ -234,7 +234,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
             logger.info(
-                f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE} blockchain."
+                f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE.name} blockchain."
             )
 
             await self.__update_chain()
@@ -436,15 +436,18 @@ class BlockchainMechanism(ConsensusMechanism):
                             new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
                             insert_user_query: Insert = users.insert().values(
                                 unique_address=new_uuid,
-                                association=data.context.institution,  # type: ignore
+                                avatar=None,
+                                description=data.context.description,
+                                skills=data.context.skills if isinstance(data.context, ApplicantUserTransaction) else None,
                                 first_name=data.context.first_name,  # type: ignore
                                 last_name=data.context.last_name,  # type: ignore
+                                association=data.context.institution,  # type: ignore
+                                username=data.context.username,  # type: ignore
+                                password=hash_context(pwd=RawData(data.context.password)),  # type: ignore
+                                email=data.context.email,  # type: ignore
                                 type=UserEntity.ORGANIZATION_DASHBOARD_USER
                                 if isinstance(data.context, OrganizationUserTransaction)
                                 else UserEntity.APPLICANT_DASHBOARD_USER,
-                                email=data.context.email,  # type: ignore
-                                username=data.context.username,  # type: ignore
-                                password=hash_context(pwd=RawData(data.context.password)),  # type: ignore
                             )
 
                             # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
@@ -1667,6 +1670,12 @@ class BlockchainMechanism(ConsensusMechanism):
                     logger.debug(
                         f"Block #{block_data['id']} doesn't have a prev or leading block to compare reference, probably the latest block."
                     )
+                    print(
+                        block_data["prev_hash_block"],
+                        context["chain"][block_idx - 1]["hash_block"],
+                    )
+
+                print(self.cached_block_id, block_data["id"])
 
                 # - If cached_block_id is equal to dict_data["id"]. Then increment it easily.
                 if self.cached_block_id == block_data["id"]:

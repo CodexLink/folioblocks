@@ -329,6 +329,15 @@ class HTTPQueueStatus(IntEnum):
 
 
 # # Enums, Transaction-Related Attributes
+class ApplicantChangeInfoActions(IntEnum):
+    AVATAR = auto()
+    DESCRIPTION = auto()
+    PERSONAL_SKILLS = auto()
+    AVATAR_PLUS_DESCRIPTION = auto()
+    AVATAR_PLUS_PERSONAL_SKILLS = auto()
+    DESCRIPTION_PLUS_PERSONAL_SKILLS = auto()
+
+
 class NodeTransactionInternalActions(IntEnum):
     CONSENSUS = auto()
     INIT = auto()
@@ -339,10 +348,9 @@ class NodeTransactionInternalActions(IntEnum):
 
 
 class ApplicantLogContentType(IntEnum):
-    PROJECT = auto()
-    ACTIVITY = auto()
-    PROMOTION = auto()
-    EMPLOYMENT = auto()
+    WORK_EXPERIENCE = auto()
+    EDUCATION = auto()
+    MISCELLANEOUS = auto()
 
 
 class TransactionActions(IntEnum):
@@ -362,12 +370,14 @@ class TransactionActions(IntEnum):
     NODE_GENERAL_REGISTER_INIT = auto()
     NODE_GENERAL_GENESIS_BLOCK_INIT = auto()
 
-    # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
-
     # - Node-based Transaction: Consensus (Consensus)
     NODE_GENERAL_CONSENSUS_BLOCK_SYNC = auto()  # - To edit.
     NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START = auto()
     NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING = auto()
+
+    # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
+    # - Applicant-based actions.
+    APPLICANT_CHANGE_BASIC_INFO = auto()
 
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = auto()
