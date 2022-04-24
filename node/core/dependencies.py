@@ -189,12 +189,12 @@ async def authenticate_node_client(
                             )
                         )
 
-                        unused_code_email = await instances[1].fetch_one(
+                        unused_code_email = await instances[1].fetch_val(
                             unused_code_email_query
                         )
 
                         master_email_address = EmailStr()
-                        generated_token: str = ""
+                        generated_token: str
 
                         if unused_code_email is None:
                             logger.debug(
@@ -271,9 +271,7 @@ async def authenticate_node_client(
                         logger.info(
                             "Previous entry to registration of master email has been retrieved and is identified as registered. Skipping registration."
                         )
-                        master_email_address = EmailStr(
-                            previous_registered_email.to_email
-                        )
+                        master_email_address = EmailStr(previous_registered_email)
 
                 # - After extra handling some functions for validating email address, we can now do register.
                 resolved_context_fields: list[str]
@@ -348,7 +346,7 @@ async def authenticate_node_client(
                     )
                     continue
 
-                resolved_env_contents: str = (  # ! Nope, I don't want to complicate this further. I have idea though, but no, just don't.
+                resolved_env_contents: str = (  # ! Nope, I don't want to complicate this further. I have an idea though, but no, just don't.
                     f"NODE_USERNAME={inputted_credentials[1]}\nNODE_PWD={inputted_credentials[2]}\nAUTH_ACCEPTANCE_CODE={inputted_credentials[3]}\n"
                     if role is NodeType.ARCHIVAL_MINER_NODE
                     else f"NODE_USERNAME={inputted_credentials[0]}\nNODE_PWD={inputted_credentials[1]}\n"
@@ -377,7 +375,7 @@ async def authenticate_node_client(
                         "Environment file has been loaded due to new credentials invoked."
                     )
 
-                logger.info(f"{role} registration successful!")
+                logger.info(f"{role.name} registration successful!")
 
             # ! Assumeing that the email service is running, I have to step away from this since complexity rises if I continue on improving it.
             except IntegrityError as e:
@@ -562,7 +560,9 @@ class EnsureAuthorized:
                     certificate_token_query: Select = select([func.count()]).where(
                         associated_nodes.c.certificate == x_certificate_token
                     )
-                    certificate_count_count = await database_instance.fetch_val(certificate_token_query)
+                    certificate_count_count = await database_instance.fetch_val(
+                        certificate_token_query
+                    )
 
                     if certificate_count_count:
                         return None
