@@ -152,7 +152,6 @@ class ApplicantUserBaseTransaction(BaseModel):
     identity: AddressUUID | None  # * This is going to be resolved during process.
     inserter: AddressUUID | None  # * Reference to user from the organization.
     institution: AddressUUID | None
-    email: EmailStr | None
     description: str | None  # - Changeable, but will be recorded as a proof.
     skills: str | None  # - Changeable, but will be recorded as a proof.
     course: str

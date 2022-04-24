@@ -69,6 +69,7 @@ from core.constants import (
     BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
 )
 from core.constants import BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS
+from node.core.constants import BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -1066,9 +1067,9 @@ class BlockchainMechanism(ConsensusMechanism):
             await sleep(self.block_timer_seconds)
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can hash the block.
-            available_node_info: ArchivalMinerNodeInformation | None = (
-                await self.__get_available_archival_miner_nodes()
-            )
+            available_node_info: tuple[
+                int, ArchivalMinerNodeInformation
+            ] | None = await self.__get_available_archival_miner_nodes()
 
             # @o When there's no miner active, sleep for a while and requeue again.
             if available_node_info is None:
@@ -1082,10 +1083,13 @@ class BlockchainMechanism(ConsensusMechanism):
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
             # - Since we already have a node, do not let this one go.
-            if len(
-                self.__transaction_container
-            ) >= BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK and not len(
-                self.__unsent_block_container
+            if (
+                len(self.__transaction_container)
+                >= BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+                if available_node_info[0] == 0
+                else BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+                + (available_node_info[0] * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
+                and not len(self.__unsent_block_container)
             ):
 
                 logger.info(
@@ -1121,13 +1125,13 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 attempt_deliver_payload: ClientResponse = await self.__http_instance.enqueue_request(
                     url=URLAddress(
-                        f"{available_node_info.source_host}:{available_node_info.source_port}/node/receive_raw_block"
+                        f"{available_node_info[1].source_host}:{available_node_info[1].source_port}/node/receive_raw_block"
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     headers={
                         "x-certificate-token": await self._get_consensus_certificate(
-                            address_ref=available_node_info.miner_address
+                            address_ref=available_node_info[1].miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
                         "x-token": self.node_identity[1],
@@ -1141,7 +1145,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         "consensus_negotiation_id": generated_consensus_negotiation_id,
                     },
                     retry_attempts=100,
-                    name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info.miner_address[-6:]}",
+                    name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info[1].miner_address[-6:]}",
                 )
 
                 if attempt_deliver_payload.ok:
@@ -1160,7 +1164,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         associated_nodes.update()
                         .where(
                             associated_nodes.c.user_address
-                            == available_node_info.miner_address
+                            == available_node_info[1].miner_address
                         )
                         .values(status=AssociatedNodeStatus.CURRENTLY_HASHING)
                     )
@@ -1188,13 +1192,13 @@ class BlockchainMechanism(ConsensusMechanism):
                                     generated_consensus_negotiation_id
                                 ),
                                 master_address=self.node_identity[0],
-                                miner_address=available_node_info.miner_address,
+                                miner_address=available_node_info[1].miner_address,
                             ),
                         ),
                     )
 
                     logger.info(
-                        f"Block {generated_block.id} has been sent and is in process of hashing! (By Miner Node: {available_node_info.miner_address})"
+                        f"Block {generated_block.id} has been sent and is in process of hashing! (By Miner Node: {available_node_info[1].miner_address})"
                     )
                     continue
 
@@ -1340,7 +1344,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def __get_available_archival_miner_nodes(
         self,
-    ) -> ArchivalMinerNodeInformation | None:
+    ) -> tuple[int, ArchivalMinerNodeInformation] | None:
 
         available_nodes_query = select(
             [
@@ -1363,66 +1367,75 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.info(f"{len(available_nodes)} Archival Miner Node Candidate/s found!")
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
-            candidate_response: ClientResponse = await self.__http_instance.enqueue_request(
-                url=URLAddress(
-                    f"{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
-                ),
-                method=HTTPQueueMethods.GET,
-                await_result_immediate=True,
-                do_not_retry=True,
-                name=f"contact_archival_node_candidate_{each_candidate['user_address'][-6:]}",
-            )
-
-            if candidate_response.ok:
-                parsed_candidate_state_info = await candidate_response.json()
-                resolved_candidate_state_info = parsed_candidate_state_info[
-                    "properties"
-                ]
-
-                logger.info(
-                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
+            try:
+                candidate_response: ClientResponse = await self.__http_instance.enqueue_request(
+                    url=URLAddress(
+                        f"{each_candidate['source_address']}:{each_candidate['source_port']}/node/info"
+                    ),
+                    method=HTTPQueueMethods.GET,
+                    await_result_immediate=True,
+                    do_not_retry=True,
+                    name=f"contact_archival_node_candidate_{each_candidate['user_address'][-6:]}",
                 )
 
-                last_selected_node_consensus_sleep_datetime_query: Select = select(
-                    [associated_nodes.c.consensus_sleep_expiration]
-                ).where(
-                    associated_nodes.c.user_address
-                    == resolved_candidate_state_info["owner"]
-                )
+                if candidate_response.ok:
+                    parsed_candidate_state_info = await candidate_response.json()
+                    resolved_candidate_state_info = parsed_candidate_state_info[
+                        "properties"
+                    ]
 
-                # - Use backend time referene instead of relying from the archival miner instead.
-                # * This implementation is surely fool-proof.
-                selected_node_last_consensus_sleep_datetime = (
-                    await self.__database_instance.fetch_one(
-                        last_selected_node_consensus_sleep_datetime_query
-                    )
-                )
-
-                # @o Type-hint.
-                resolved_last_consensus_sleep_datetime: datetime
-                if selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration is None:  # type: ignore
-                    resolved_last_consensus_sleep_datetime = datetime.now()
-                else:
-                    resolved_last_consensus_sleep_datetime = (
-                        selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration  # type: ignore
+                    logger.info(
+                        f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
                     )
 
-                if (
-                    not resolved_candidate_state_info["is_hashing"]
-                    and NodeType(resolved_candidate_state_info["node_role"])
-                    is NodeType.ARCHIVAL_MINER_NODE
-                    and (datetime.now() >= resolved_last_consensus_sleep_datetime)
-                ):
-                    return ArchivalMinerNodeInformation(
-                        candidate_no=candidate_idx,
-                        miner_address=resolved_candidate_state_info["owner"],
-                        source_host=URLAddress(each_candidate["source_address"]),
-                        source_port=each_candidate["source_port"],
+                    last_selected_node_consensus_sleep_datetime_query: Select = select(
+                        [associated_nodes.c.consensus_sleep_expiration]
+                    ).where(
+                        associated_nodes.c.user_address
+                        == resolved_candidate_state_info["owner"]
                     )
 
-                logger.warning(
-                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be currently hashing but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
-                )
+                    # - Use backend time referene instead of relying from the archival miner instead.
+                    # * This implementation is surely fool-proof.
+                    selected_node_last_consensus_sleep_datetime = (
+                        await self.__database_instance.fetch_one(
+                            last_selected_node_consensus_sleep_datetime_query
+                        )
+                    )
+
+                    # @o Type-hint.
+                    resolved_last_consensus_sleep_datetime: datetime
+                    if selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration is None:  # type: ignore
+                        resolved_last_consensus_sleep_datetime = datetime.now()
+                    else:
+                        resolved_last_consensus_sleep_datetime = (
+                            selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration  # type: ignore
+                        )
+
+                    if (
+                        not resolved_candidate_state_info["is_hashing"]
+                        and NodeType(resolved_candidate_state_info["node_role"])
+                        is NodeType.ARCHIVAL_MINER_NODE
+                        and (datetime.now() >= resolved_last_consensus_sleep_datetime)
+                    ):
+                        return (
+                            available_nodes,
+                            ArchivalMinerNodeInformation(
+                                candidate_no=candidate_idx,
+                                miner_address=resolved_candidate_state_info["owner"],
+                                source_host=URLAddress(
+                                    each_candidate["source_address"]
+                                ),
+                                source_port=each_candidate["source_port"],
+                            ),
+                        )  # type: ignore # * I don't know how to type this.
+                    logger.warning(
+                        f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be currently hashing but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
+                    )
+
+            except AttributeError:
+                logger.error("An error occured in the middle of the process.")
+                continue
 
         logger.warning(
             f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.block_timer_seconds} seconds)"

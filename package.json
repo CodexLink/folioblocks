@@ -22,6 +22,7 @@
     "reload-archival-chain": "pwsh -Command clear; npm run clear-node-files; cp backup/archival/with_chain/** .; npm run backend-archival",
     "reload-master-registered": "pwsh -Command clear; npm run clear-node-files; cp backup/master/registered/** .; npm run backend-master",
     "reload-master-semail": "pwsh -Command clear; npm run clear-node-files; cp backup/master/with_semail/** .; npm run backend-master",
+    "reload-master-chain-init": "pwsh -Command clear; npm run clear-node-files; cp backup/master/with_chain_initial/** .; npm run backend-master",
     "reload-archival-registered": "pwsh -Command clear; npm run clear-node-files; cp backup/archival/registered/** .; npm run backend-archival",
     "reload-master-new": "pwsh -Command npm run clear-node-files; npm run backend-master",
     "reload-archival-new": "pwsh -Command npm run clear-node-files; npm run backend-archival"

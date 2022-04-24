@@ -187,7 +187,7 @@ async def receive_hashed_block(
 
             if not block_confirmed:
                 raise HTTPException(
-                    detail="Cannot confirm any confirming blocks from the received mined blocks. This is not possible for this logic condition to be hit. There may be a missing implementation, please report this to the developer.",
+                    detail="Cannot confirm any confirming blocks from the received mined blocks.",
                     status_code=HTTPStatus.NO_CONTENT,
                 )
 
