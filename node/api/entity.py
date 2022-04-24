@@ -238,8 +238,8 @@ async def register_entity(
 
         try:
             await gather(
-                database_instance.execute(dispose_auth_code),
                 database_instance.execute(data),
+                database_instance.execute(dispose_auth_code),
             )
 
             create_task(
@@ -276,10 +276,10 @@ async def register_entity(
                         ),
                     )
 
-        except IntegrityError:
+        except IntegrityError as e:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
-                detail="Your credential input already exists. Please request to replace your password if you think you already have an account.",
+                detail=f"Your credential already exists. Please request to replace your password if you already have an account. | Info: {e}",
             )
 
         return EntityRegisterResult(

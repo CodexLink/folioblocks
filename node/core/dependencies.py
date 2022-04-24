@@ -555,21 +555,21 @@ class EnsureAuthorized:
                 if self.__return_token and isinstance(user_role, UserEntity):  # type: ignore
                     return x_token
 
-                # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
-                if self.__blockchain_related and x_certificate_token is not None:
-                    certificate_token_query: Select = select([func.count()]).where(
-                        associated_nodes.c.certificate == x_certificate_token
-                    )
-                    certificate_count_count = await database_instance.fetch_val(
-                        certificate_token_query
-                    )
-
-                    if certificate_count_count:
-                        return None
-
                 # - If no other specific conditions have been specified, ensure that we return if the token has been matched.
                 if req_token is not None:
-                    return
+                    return None
+
+            # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
+            if self.__blockchain_related and x_certificate_token is not None:
+                certificate_token_query: Select = select([func.count()]).where(
+                    associated_nodes.c.certificate == x_certificate_token
+                )
+                certificate_count_count = await database_instance.fetch_val(
+                    certificate_token_query
+                )
+
+                if certificate_count_count:
+                    return None
 
         raise HTTPException(
             detail="You are unauthorized to access this endpoint.",
