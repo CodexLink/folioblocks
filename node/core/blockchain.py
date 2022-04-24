@@ -17,7 +17,6 @@ from uuid import uuid4
 from aiofiles import open as aopen
 from aiohttp import ClientResponse
 from blueprint.models import (
-    applications,
     associated_nodes,
     associations,
     consensus_negotiation,

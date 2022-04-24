@@ -57,7 +57,7 @@ from core.dependencies import (
 )
 from utils.email import get_email_instance
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import false, select
+from sqlalchemy import Table, false, func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from core.dependencies import generate_uuid_user
 from utils.processors import hash_context, verify_hash_context
@@ -88,9 +88,30 @@ async def register_entity(
 ) -> EntityRegisterResult | JSONResponse | None:
 
     if not isinstance(blockchain_instance, BlockchainMechanism):
-        raise HTTPException(
-            detail="Blockchain instance is not yet fully initialized. Please try again later.",
-            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        # - Before concluding that its not yet, ready bypass this mechanism only when there's no `MASTER_NODE` in the node system.
+
+        get_master_node_acc_query: Select = select([func.count()]).where(
+            users.c.type == UserEntity.MASTER_NODE_USER
+        )
+        from sqlalchemy.orm import Query
+
+        master_node_acc: Mapping[Query[Table], int] = await database_instance.fetch_val(
+            get_master_node_acc_query
+        )
+
+        if (
+            master_node_acc
+        ):  # * When there's a count then we can prohibit others from registering unless the blockchain itself is ready.
+            raise HTTPException(
+                detail="Blockchain instance is not yet fully initialized. Please try again later.",
+                status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+
+        print(
+            type(get_master_node_acc_query),
+            type(master_node_acc),
+            get_master_node_acc_query,
+            master_node_acc,
         )
 
     # - Since we are going to record this in blockchain, which requires the `acceptor_address`, validate if it contains something.
