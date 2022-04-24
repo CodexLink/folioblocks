@@ -573,7 +573,6 @@ class EnsureAuthorized:
 
         # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
         if self.__blockchain_related and x_certificate_token is not None:
-            print("JUST GOT HERE.")
             certificate_token_query: Select = select([func.count()]).where(
                 associated_nodes.c.certificate == x_certificate_token
             )

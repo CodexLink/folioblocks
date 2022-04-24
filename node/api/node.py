@@ -734,7 +734,7 @@ async def certify_miner(
                         return JSONResponse(
                             content={
                                 "initial_consensus_sleep_seconds": proposed_consensus_sleep_time,
-                                "certificate_token": authored_token.decode("utf-8"),
+                                "certificate_token": encrypted_authored_token.decode("utf-8"),
                             },
                             status_code=HTTPStatus.OK,
                         )
