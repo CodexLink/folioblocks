@@ -221,13 +221,19 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
                     )
                     while True:
-                        if await self.establish() is True:
+                        consensus_establish_ref: float | None = await self.establish_node_certification()  # type: ignore # ! ConsensusMechanism has established this method.
+
+                        if isinstance(consensus_establish_ref, float):
+                            self.__consensus_calculate_sleep_time(
+                                hashing_duration=consensus_establish_ref, add_on=True
+                            )
                             break
 
                         logger.error(
                             f"Establishment to the {NodeType.MASTER_NODE.name} failed, cannot continue other blockchain operations, retrying after 10 seconds ..."
                         )
                         await sleep(10)
+
                 else:
                     logger.info(
                         "Association certificate token exists. Ignoring establishment from the `MASTER_NODE`."
@@ -237,7 +243,12 @@ class BlockchainMechanism(ConsensusMechanism):
                 f"Running the update method to validate the local hash of the blockchain against the {NodeType.MASTER_NODE.name} blockchain."
             )
 
+            # - We update the blockchain upstream.
             await self.__update_chain()
+
+            # - And, we sleep initially. Bypassing this is impossible even on instance restart. The master node knows when's the time you are sleeping and when is not.
+            # - Though, if there's a possibility that the archival miner node has started with delay, the master node respects that (by looking at the public/private state of this node).
+            await self.__consensus_sleeping_phase()
 
     @restrict_call(on=NodeType.MASTER_NODE)
     async def insert_external_transaction(
@@ -678,6 +689,78 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return HTTPException(detail=exception_message, status_code=exception_status)
 
+    @restrict_call(on=NodeType.MASTER_NODE)
+    async def insert_internal_transaction(
+        self, action: TransactionActions, data: NodeTransaction
+    ) -> None:
+
+        if not isinstance(data, NodeTransaction) or action not in TransactionActions:
+            logger.error(
+                f"Parameters for the `action` and `data` is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
+            )
+            return None
+
+        # @o Since we can see some patterns for the Node-based Transaction's Enum Members (TransactionActions), instead of explicitly declaring them, we are going to use classify them by matching their prefixes.
+        if not action.name.startswith("NODE_GENERAL_"):
+            logger.error(
+                "The parameter `action` is invalid. Please invoke `TransactionActions` with enum members prefixes starts with `NODE_GENERAL_`."
+            )
+            return None
+
+        # - Resolve addresses.
+        resolved_from_address: str
+        resolved_to_address: str | None
+
+        # - Resolve `from_address` as well as the `to_address`.
+        if isinstance(data.context, NodeRegisterTransaction):
+            resolved_from_address, resolved_to_address = (
+                data.context.new_address,
+                data.context.acceptor_address,
+            )
+
+        elif isinstance(data.context, NodeGenesisTransaction):
+            # ! Even though we know that it would be the instance, respecfully respect the model variable xd.
+            resolved_from_address, resolved_to_address = (
+                data.context.generator_address,
+                None,
+            )
+
+        elif isinstance(data.context, NodeCertificateTransaction | NodeSyncTransaction):
+            resolved_from_address, resolved_to_address = (
+                self.node_identity[0],
+                data.context.requestor_address,
+            )
+
+        elif isinstance(data.context, NodeConfirmMineConsensusTransaction):
+            resolved_from_address, resolved_to_address = (
+                data.context.master_address,
+                data.context.miner_address,
+            )
+
+        elif isinstance(data.context, NodeMineConsensusSuccessProofTransaction):
+            resolved_from_address, resolved_to_address = (
+                data.context.receiver_address,
+                data.context.miner_address,
+            )
+
+        else:
+            resolved_from_address, resolved_to_address = self.node_identity[0], None
+
+        if await self.__resolve_transaction_payload(
+            action=action,
+            from_address=AddressUUID(
+                resolved_to_address
+                if resolved_to_address is not None
+                else self.node_identity[0]
+            ),
+            to_address=AddressUUID(resolved_from_address),
+            is_internal_payload=True,
+            payload=data,
+        ):
+            return
+
+        unconventional_terminate(message="Cannot resolve transaction.")
+
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
         if self.node_role is NodeType.MASTER_NODE:
@@ -701,7 +784,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return NodeConsensusInformation(
             consensus_timer_expiration=self.__consensus_sleep_date_expiration,
-            is_mining=not self.blockchain_ready,
+            is_hashing=not self.blockchain_ready,
             is_sleeping=self.__node_ready and self.blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
             node_role=self.node_role,
@@ -727,7 +810,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return data
 
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
-    async def mine_and_store_given_block(
+    async def hash_and_store_given_block(
         self,
         *,
         block: Block,
@@ -743,11 +826,11 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.warning(
-            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to consume all necessary requests from the {NodeType.MASTER_NODE} API-side before deadlocking-self to mine the block."
+            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to consume all necessary requests from the {NodeType.MASTER_NODE} API-side before deadlocking-self to hash the block."
         )
         await sleep(BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER)
 
-        mined_block: Block | None = await self.__miner_block_processor(
+        mined_block: Block | None = await self.__hash_block_processor(
             block=block, return_hashed=True
         )
 
@@ -832,7 +915,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # - Sum the mined_timer sleep phase + given random sleep timer.
                 self.__consensus_calculate_sleep_time(
-                    mining_duration=payload_master_response_ref.addon_consensus_sleep_seconds,
+                    hashing_duration=payload_master_response_ref.addon_consensus_sleep_seconds,
                     add_on=True,
                 )
 
@@ -980,7 +1063,7 @@ class BlockchainMechanism(ConsensusMechanism):
             # - Sleep first due to block timer.
             await sleep(self.block_timer_seconds)
 
-            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can mine the block.
+            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can hash the block.
             available_node_info: ArchivalMinerNodeInformation | None = (
                 await self.__get_available_archival_miner_nodes()
             )
@@ -1012,14 +1095,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
             elif len(self.__unsent_block_container):
                 logger.info(
-                    f"Block {self.__unsent_block_container[0]} has been left-out from mining due to previous miner unable to respond in time. Using this block for the mining process instead."
+                    f"Block {self.__unsent_block_container[0]} has been left-out from hashing due to previous miner unable to respond in time. Using this block for the hashing process instead."
                 )
 
                 generated_block = self.__unsent_block_container.pop(0)
 
             else:
                 logger.warning(
-                    f"There isn't enough transactions to create a block. Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
@@ -1070,14 +1153,14 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                     )
 
-                    # - And remember that this node was in the state of `CURRENTLY_MINING`.
-                    set_miner_state_as_mining_query: Update = (
+                    # - And remember that this node was in the state of `CURRENTLY_HASHING`.
+                    set_miner_state_as_hashing_query: Update = (
                         associated_nodes.update()
                         .where(
                             associated_nodes.c.user_address
                             == available_node_info.miner_address
                         )
-                        .values(status=AssociatedNodeStatus.CURRENTLY_MINING)
+                        .values(status=AssociatedNodeStatus.CURRENTLY_HASHING)
                     )
 
                     await gather(
@@ -1085,14 +1168,15 @@ class BlockchainMechanism(ConsensusMechanism):
                             save_in_progress_negotiation_query
                         ),
                         self.__database_instance.execute(
-                            set_miner_state_as_mining_query
+                            set_miner_state_as_hashing_query
                         ),
                     )
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
                     self.confirming_block_container.append(generated_block)
 
-                    # - And save this that the negotiation consensus to mine a block has been confirmed.
+                    # - And save this that the negotiation consensus to hash a block has been confirmed.
+                    # - Basically this transaction shows who won from hashing a block.
                     await self.insert_internal_transaction(
                         action=TransactionActions.NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START,
                         data=NodeTransaction(
@@ -1108,7 +1192,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     logger.info(
-                        f"Block {generated_block.id} has been sent and is in process for mining! (By Miner Node: {available_node_info.miner_address})"
+                        f"Block {generated_block.id} has been sent and is in process of hashing! (By Miner Node: {available_node_info.miner_address})"
                     )
                     continue
 
@@ -1130,15 +1214,15 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
     def __consensus_calculate_sleep_time(
-        self, *, mining_duration: int | float, add_on: bool
+        self, *, hashing_duration: int | float, add_on: bool
     ) -> None:
 
         if not self.__new_master_instance:
 
             if add_on:
-                self.__mine_duration += timedelta(seconds=mining_duration)
+                self.__mine_duration += timedelta(seconds=hashing_duration)
             else:
-                self.__mine_duration = timedelta(seconds=mining_duration)
+                self.__mine_duration = timedelta(seconds=hashing_duration)
 
             logger.info(f"Consensus sleep timer were set to {self.__mine_duration}.")
             return
@@ -1150,7 +1234,7 @@ class BlockchainMechanism(ConsensusMechanism):
             self.__sleeping_from_consensus = True
 
             logger.info(
-                f"Block mining is finished. Sleeping for seconds. until {datetime.now() + self.__mine_duration}."
+                f"Block hashing is finished. Sleeping for seconds. until {datetime.now() + self.__mine_duration}."
             )
 
             await sleep(self.__mine_duration.total_seconds())
@@ -1160,7 +1244,7 @@ class BlockchainMechanism(ConsensusMechanism):
             self.__set_node_state()
 
             logger.info(
-                "Woke up from the consensus timer! Ready to take blocks to mine."
+                "Woke up from the consensus timer! Ready to take blocks to hash."
             )
             return
 
@@ -1199,7 +1283,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 else "0" * BLOCK_HASH_LENGTH
             ),
             contents=HashableBlock(
-                nonce=None,  # - This are determined during the process of mining.
+                nonce=None,  # - This was determined during the process of hashing.
                 validator=self.node_identity[0],
                 transactions=shadow_transaction_container,
                 timestamp=datetime.now(),
@@ -1244,7 +1328,7 @@ class BlockchainMechanism(ConsensusMechanism):
         generated_block_w_genesis: Block | None = await self.__create_block()
 
         if isinstance(generated_block_w_genesis, Block):
-            await self.__miner_block_processor(
+            await self.__hash_block_processor(
                 block=generated_block_w_genesis, return_hashed=False
             )
         else:
@@ -1270,7 +1354,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if not len(available_nodes):
             logger.info(
-                f"There are no available nodes to mine the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
+                f"There are no available nodes to hash the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
             )
             return None
 
@@ -1294,7 +1378,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 ]
 
                 logger.info(
-                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the mining request!"
+                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
                 )
 
                 last_selected_node_consensus_sleep_datetime_query: Select = select(
@@ -1304,6 +1388,8 @@ class BlockchainMechanism(ConsensusMechanism):
                     == resolved_candidate_state_info["owner"]
                 )
 
+                # - Use backend time referene instead of relying from the archival miner instead.
+                # * This implementation is surely fool-proof.
                 selected_node_last_consensus_sleep_datetime = (
                     await self.__database_instance.fetch_one(
                         last_selected_node_consensus_sleep_datetime_query
@@ -1320,7 +1406,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                 if (
-                    not resolved_candidate_state_info["is_mining"]
+                    not resolved_candidate_state_info["is_hashing"]
                     and NodeType(resolved_candidate_state_info["node_role"])
                     is NodeType.ARCHIVAL_MINER_NODE
                     and (datetime.now() >= resolved_last_consensus_sleep_datetime)
@@ -1333,7 +1419,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                 logger.warning(
-                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be mining but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
+                    f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be currently hashing but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
                 )
 
         logger.warning(
@@ -1372,86 +1458,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return
 
-    @restrict_call(on=NodeType.MASTER_NODE)
-    async def insert_internal_transaction(
-        self, action: TransactionActions, data: NodeTransaction
-    ) -> None:
-
-        if not isinstance(data, NodeTransaction) or action not in TransactionActions:
-            logger.error(
-                f"Parameters for the `action` and `data` is invalid. Please ensure that `data` is instance of `{NodeTransaction}` and `action` has an enum member candidate to `{TransactionActions}`"
-            )
-            return None
-
-        # @o Since we can see some patterns for the Node-based Transaction's Enum Members (TransactionActions), instead of explicitly declaring them, we are going to use classify them by matching their prefixes.
-        if not action.name.startswith("NODE_GENERAL_"):
-            logger.error(
-                "The parameter `action` is invalid. Please invoke `TransactionActions` with enum members prefixes starts with `NODE_GENERAL_`."
-            )
-            return None
-
-        # - Resolve addresses.
-        resolved_from_address: str
-        resolved_to_address: str | None
-
-        # - Resolve `from_address` as well as the `to_address`.
-        if isinstance(data.context, NodeRegisterTransaction):
-            resolved_from_address, resolved_to_address = (
-                data.context.new_address,
-                data.context.acceptor_address,
-            )
-
-        elif isinstance(data.context, NodeGenesisTransaction):
-            # ! Even though we know that it would be the instance, respecfully respect the model variable xd.
-            resolved_from_address, resolved_to_address = (
-                data.context.generator_address,
-                None,
-            )
-
-        elif isinstance(data.context, NodeCertificateTransaction | NodeSyncTransaction):
-            resolved_from_address, resolved_to_address = (
-                self.node_identity[0],
-                data.context.requestor_address,
-            )
-
-        elif isinstance(data.context, NodeConfirmMineConsensusTransaction):
-            resolved_from_address, resolved_to_address = (
-                data.context.master_address,
-                data.context.miner_address,
-            )
-
-        elif isinstance(data.context, NodeMineConsensusSuccessProofTransaction):
-            resolved_from_address, resolved_to_address = (
-                data.context.receiver_address,
-                data.context.miner_address,
-            )
-
-        else:
-            resolved_from_address, resolved_to_address = self.node_identity[0], None
-
-        if await self.__resolve_transaction_payload(
-            action=action,
-            from_address=AddressUUID(
-                resolved_to_address
-                if resolved_to_address is not None
-                else self.node_identity[0]
-            ),
-            to_address=AddressUUID(resolved_from_address),
-            is_internal_payload=True,
-            payload=data,
-        ):
-            return
-
-        unconventional_terminate(message="Cannot resolve transaction.")
-
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
-    async def __mine_block(self, block: Block) -> Block:
+    async def __hash_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
         self.blockchain_ready = False
         prev: float = time()
         nth: int = 1
 
-        logger.info(f"Attempting to mine a Block #{block.id} ...")
+        logger.info(f"Attempting to hash a Block #{block.id} ...")
 
         while True:
             # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
@@ -1470,25 +1484,25 @@ class BlockchainMechanism(ConsensusMechanism):
                     f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
                 self.__consensus_calculate_sleep_time(
-                    mining_duration=time() - prev, add_on=False
+                    hashing_duration=time() - prev, add_on=False
                 )
                 self.blockchain_ready = True
                 return block
 
             nth += 1
 
-    async def __miner_block_processor(
+    async def __hash_block_processor(
         self, *, block: Block, return_hashed: bool
     ) -> Block | None:
-        block_mining_processor = await (
+        block_hashing_processor = await (
             get_event_loop().run_in_executor(
                 None,
-                self.__mine_block,
+                self.__hash_block,
                 block,
             )
         )
 
-        mined_block: Block = await block_mining_processor
+        mined_block: Block = await block_hashing_processor
 
         logger.info(f"Block {block.id} has been mined.")
         await self.append_block(context=mined_block)
@@ -1837,7 +1851,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 encrypter_key = urlsafe_b64encode(constructed_context_to_key)
 
             else:
-                error_message = "Payload is not internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
+                error_message = "Payload is not a internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
 
                 logger.error(error_message)
                 return HTTPException(
@@ -1853,7 +1867,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # - Hash the content of the payload.
         if not isinstance(payload_to_encrypt.context, str):
-            print("END RESULT PAYLOAD", payload_to_encrypt.context.dict())
             payload_to_encrypt.context = HashUUID(
                 (
                     encrypter_payload.encrypt(
@@ -1863,6 +1876,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 ).decode("utf-8")
             )
+
+        print(
+            "\n\n\n\n\n",
+            payload_to_encrypt.dict(),
+            type(payload_to_encrypt),
+            end="\n\n\n\n",
+        )
 
         # - Build the transaction
         try:
@@ -1890,6 +1910,7 @@ class BlockchainMechanism(ConsensusMechanism):
             error_message = (
                 f"There was an error during payload transformation. Info: {e}"
             )
+
             return HTTPException(
                 detail=error_message, status_code=HTTPStatus.UNPROCESSABLE_ENTITY
             )
@@ -1982,7 +2003,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if not master_hash_valid_response.ok:
                 # - If that's the case then fetch the blockchain file.
-                blockchain_content: ClientResponse = await self.__http_instance.enqueue_request(
+                upstream_chain_content: ClientResponse = await self.__http_instance.enqueue_request(
                     url=URLAddress(
                         f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/pull_chain_upstream"  # type: ignore
                     ),
@@ -1996,8 +2017,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.
-                if blockchain_content.ok:
-                    dict_blockchain_content = await blockchain_content.json()
+                if upstream_chain_content.ok:
+                    dict_blockchain_content = await upstream_chain_content.json()
 
                     in_memory_chain: frozendict | None = (
                         self.__process_deserialize_to_load_blockchain_in_memory(
@@ -2007,7 +2028,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     if not isinstance(in_memory_chain, frozendict):
                         logger.error(
-                            "There was an error duing loading the blockchain from file to in-memory. It should not be possible to get on this condition as the method already handles it. But since we are in async state, please wait for it to terminate."
+                            "There was an error loading the blockchain from file to in-memory."
                         )
                         await sleep(INFINITE_TIMER)
 

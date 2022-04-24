@@ -29,6 +29,11 @@ from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import and_, false, func, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
+from core.blockchain import get_blockchain_instance
+from core.constants import (
+    BLOCKCHAIN_CONSENSUS_SLEEP_CEILING_VALUE,
+    BLOCKCHAIN_CONSENSUS_SLEEP_FLOOR_VALUE,
+)
 from utils.http import get_http_client_instance
 from blueprint.models import associated_nodes
 
@@ -124,6 +129,17 @@ def generate_auth_token() -> str:
         f"Auth token generated with the following constraints: Min Length is {AUTH_CODE_MIN_CONTEXT}, Max Length is {AUTH_CODE_MAX_CONTEXT}. | Context: {generated}"
     )
     return generated
+
+
+def generate_consensus_sleep_time(*, block_timer: int) -> float:
+    return (
+        random_generator.uniform(
+            BLOCKCHAIN_CONSENSUS_SLEEP_FLOOR_VALUE,
+            BLOCKCHAIN_CONSENSUS_SLEEP_CEILING_VALUE,
+        )
+        * block_timer
+        / 2
+    )  # * `block_timer` can be used as a multiplier. Though this is completely random.
 
 
 def generate_uuid_user() -> AddressUUID:
@@ -243,8 +259,6 @@ async def authenticate_node_client(
                             unused_code_email is not None
                             and datetime.now() > unused_code_email.expiration
                         ):
-                            generated_token = generate_auth_token()
-
                             from utils.email import get_email_instance
 
                             create_task(

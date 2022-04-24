@@ -56,7 +56,7 @@ class ConsensusMechanism:
         self.__identity = ref_node_identity_instance
 
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
-    async def establish(self) -> bool:
+    async def establish_node_certification(self) -> float | None:
         """Make `ARCHIVAL_MINER_NODE` to call master's `acknowledge` endpoint providing certains credentials as a proof of registration."""
         master_origin_address, master_origin_port = self.__master_target(
             key=REF_MASTER_BLOCKCHAIN_ADDRESS
@@ -72,14 +72,14 @@ class ConsensusMechanism:
         auth_session: JWTToken = self.__identity[1]
 
         while True:
+            load_env()
             auth_acceptance: str | None = env.get("AUTH_ACCEPTANCE_CODE", None)
 
             if auth_acceptance is None:
-                load_env()
-
                 logger.error(
                     f"Auth Acceptance Code does not exists, yet you were able to login, have you modified `{AUTH_ENV_FILE_NAME}`? Retrying in 5 seconds."
                 )
+
                 await sleep(5)
                 continue
             break
@@ -119,14 +119,15 @@ class ConsensusMechanism:
             await self.__database_instance.execute(insert_fetched_certificate_query)
 
             logger.info("Generation of Association certificate token were successful!")
-            return True
+
+            return association_certificate["initial_consensus_sleep_seconds"]
 
         else:
             logger.error(
                 f"Generation of association certificate is not successful due to rejection or no reply from the {NodeType.MASTER_NODE.name}"
             )
 
-            return False
+            return None
 
     async def _get_consensus_certificate(
         self, *, address_ref: AddressUUID | None = None
