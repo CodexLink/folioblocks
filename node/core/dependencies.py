@@ -516,9 +516,8 @@ class EnsureAuthorized:
 
     async def __call__(
         self,
-        x_token: JWTToken = Header(
-            ..., description="The token that is inferred for validation."
-        ),
+        x_token: JWTToken
+        | None = Header(..., description="The token that is inferred for validation."),
         x_certificate_token: str
         | None = Header(
             None,
@@ -527,7 +526,7 @@ class EnsureAuthorized:
         database_instance: Database = Depends(get_database_instance),
     ) -> JWTToken | None:
 
-        if len(x_token):
+        if x_token is not None:
             req_ref_token: Select = select([tokens.c.from_user]).where(
                 (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
             )
@@ -574,6 +573,7 @@ class EnsureAuthorized:
 
         # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
         if self.__blockchain_related and x_certificate_token is not None:
+            print("JUST GOT HERE.")
             certificate_token_query: Select = select([func.count()]).where(
                 associated_nodes.c.certificate == x_certificate_token
             )

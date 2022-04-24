@@ -1130,7 +1130,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             address_ref=available_node_info.miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
-                        "x-token": self.node_identity[1],
                     },
                     data={
                         # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
@@ -1200,7 +1199,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 else:
                     logger.warning(
-                        "After multiple retries, the generated block will be stored and will find archival miner node candidates who doesn't disconnect."
+                        "After multiple retries, the generated block will be stored and will find other archival miner node candidate who doesn't disconnect."
                     )
                     self.__unsent_block_container.append(generated_block)
 
@@ -1233,7 +1232,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def __consensus_sleeping_phase(self) -> None:
         if not self.__new_master_instance:
-            self.__sleeping_from_consensus = True
+            self.__sleeping_from_consensupogiw24387@idurse.coms = True
 
             logger.info(
                 f"Sleeping for {self.__hashing_duration} seconds. Waking up after {datetime.now() + self.__hashing_duration}."
@@ -1360,7 +1359,7 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
-        logger.info(f"There are {len(available_nodes)} candidates available!")
+        logger.info(f"{len(available_nodes)} Archival Miner Node Candidate/s found!")
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
             candidate_response: ClientResponse = await self.__http_instance.enqueue_request(
