@@ -221,7 +221,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Association certificate token does not exists! Fetching a certificate by establishing connection with the {NodeType.MASTER_NODE.name} blockchain."
                     )
                     while True:
-                        if self.establish() is True:
+                        if await self.establish() is True:
                             break
 
                         logger.error(
