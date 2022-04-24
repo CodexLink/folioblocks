@@ -74,9 +74,9 @@ users = Table(
         primary_key=True,
         autoincrement=False,
     ),
-    Column("avatar", Text, nullable=False, unique=False),
-    Column("description", Text, nullable=False, unique=False),
-    Column("skills", Text, nullable=False, unique=False),
+    Column("avatar", Text, nullable=True, unique=False),
+    Column("description", Text, nullable=True, unique=False),
+    Column("skills", Text, nullable=True, unique=False),
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
     Column(

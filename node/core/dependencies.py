@@ -29,7 +29,6 @@ from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import and_, false, func, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
-from core.blockchain import get_blockchain_instance
 from core.constants import (
     BLOCKCHAIN_CONSENSUS_SLEEP_CEILING_VALUE,
     BLOCKCHAIN_CONSENSUS_SLEEP_FLOOR_VALUE,
