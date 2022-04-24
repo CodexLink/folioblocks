@@ -47,7 +47,7 @@ async def get_data_to_dashboard(*, context: DashboardContext) -> None:
 
 @dashboard_router.get(
     "/applicants",
-    tags=[DashboardAPI.EMPLOYER_API.value],
+    # tags=[DashboardAPI.EMPLOYER_API.value],
     description="An API-exclusive to employers that obtains a list of individuals (applicants) who applies to them.",
 )
 async def get_applicants(
@@ -70,7 +70,7 @@ async def get_applicants(
 
 @dashboard_router.get(
     "/applicant/{applicant_id}",
-    tags=[DashboardAPI.EMPLOYER_API.value],
+    # tags=[DashboardAPI.EMPLOYER_API.value],
     # response_model=Applicant,
     summary="Obtain a certain individual.",
     description="An API-exclusive to employers that obtains a particular individual, which displays their information.",
@@ -83,7 +83,7 @@ async def get_applicant(*, applicant_id: AddressUUID) -> None:
     "/requests",
     tags=[
         DashboardAPI.APPLICANT_API.value,
-        DashboardAPI.EMPLOYER_API.value,
+        # DashboardAPI.EMPLOYER_API.value,
         DashboardAPI.INSTITUTION_API.value,
     ],
     description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
@@ -96,7 +96,7 @@ async def get_all_requests() -> None:  # TODO.
     "/request/{request_id}",
     tags=[
         DashboardAPI.APPLICANT_API.value,
-        DashboardAPI.EMPLOYER_API.value,
+        # DashboardAPI.EMPLOYER_API.value,
         DashboardAPI.INSTITUTION_API.value,
     ],
     # response_model=Request,
@@ -109,7 +109,7 @@ async def get_request(*, request_id: int) -> None:
 
 @dashboard_router.get(
     "/request/{request_id}/request_view/{doc_type}",
-    tags=[DashboardAPI.EMPLOYER_API.value],
+    # tags=[DashboardAPI.EMPLOYER_API.value],
     # response_model = RequestDocView,
     summary="Submit request for viewing a particular document from the applicant.",
     description="An API-exclusive to employers that allows them to make request for documents to be viewed.",
