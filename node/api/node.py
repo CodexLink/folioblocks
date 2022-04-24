@@ -294,7 +294,7 @@ async def receive_hashed_block(
                 action=NodeTransactionInternalActions.CONSENSUS,
                 context=NodeConfirmMineConsensusTransaction(
                     miner_address=context_from_archival_miner.miner_address,
-                    master_address=blockchain_instance.__node_identity[0],
+                    master_address=blockchain_instance.node_identity[0],
                     consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
                 ),
             ),
@@ -303,7 +303,7 @@ async def receive_hashed_block(
         # - Insert transaction from the blockchain for the successful thing.
         return ConsensusSuccessPayload(
             addon_consensus_sleep_seconds=proposed_consensus_addon_timer,
-            reiterate_master_address=blockchain_instance.__node_identity[0],
+            reiterate_master_address=blockchain_instance.node_identity[0],
         )
 
     raise HTTPException(
@@ -745,9 +745,7 @@ async def pull_chain_upstream(
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.SYNC,
                 context=NodeSyncTransaction(
-                    requestor_address=AddressUUID(
-                        blockchain_instance.__node_identity[0]
-                    ),
+                    requestor_address=AddressUUID(blockchain_instance.node_identity[0]),
                     timestamp=datetime.now(),
                 ),
             ),

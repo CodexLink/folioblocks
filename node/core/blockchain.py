@@ -68,6 +68,7 @@ from core.constants import (
     BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
     BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
 )
+from core.constants import BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
@@ -133,7 +134,7 @@ class BlockchainMechanism(ConsensusMechanism):
     def __init__(
         self,
         *,
-        block_timer_seconds: int = 10,
+        block_timer_seconds: int,
         auth_tokens: IdentityTokens,
         node_role: NodeType,
     ) -> None:
@@ -154,7 +155,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self.__database_instance: Database = get_database_instance()
         self.__http_instance: HTTPClient = get_http_client_instance()
         self.__email_service: EmailService = get_email_instance()
-        self.__node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
+        self.node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
         # # Required Variables for the Blockchain Operaetion.
         self.__node_role: NodeType = node_role
@@ -175,7 +176,7 @@ class BlockchainMechanism(ConsensusMechanism):
             role=node_role,
             ref_database_instance=self.__database_instance,
             ref_http_instance=self.__http_instance,
-            ref_node_identity_instance=self.__node_identity,
+            ref_node_identity_instance=self.node_identity,
         )
 
     async def initialize(self) -> None:
@@ -213,7 +214,7 @@ class BlockchainMechanism(ConsensusMechanism):
             print("final", self.__chain)
 
         else:
-            if self.__node_identity is not None:
+            if self.node_identity is not None:
                 existing_certificate = await self._get_consensus_certificate()
 
                 if not existing_certificate:
@@ -787,11 +788,11 @@ class BlockchainMechanism(ConsensusMechanism):
                 method=HTTPQueueMethods.POST,
                 headers={
                     "x-certificate-token": await self._get_consensus_certificate(),
-                    "x-token": self.__node_identity[1],
+                    "x-token": self.node_identity[1],
                 },
                 data={
                     "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
-                    "miner_address": self.__node_identity[0],
+                    "miner_address": self.node_identity[0],
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
@@ -1042,14 +1043,14 @@ class BlockchainMechanism(ConsensusMechanism):
                             address_ref=available_node_info.miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
-                        "x-token": self.__node_identity[1],
+                        "x-token": self.node_identity[1],
                     },
                     data={
                         # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
                         "block": import_raw_json_to_dict(
                             export_to_json(generated_block.dict())
                         ),
-                        "master_address": self.__node_identity[0],
+                        "master_address": self.node_identity[0],
                         "consensus_negotiation_id": generated_consensus_negotiation_id,
                     },
                     retry_attempts=100,
@@ -1062,7 +1063,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         consensus_negotiation.insert().values(
                             block_no_ref=generated_block.id,
                             consensus_negotiation_id=generated_consensus_negotiation_id,
-                            peer_address=self.__node_identity[0],
+                            peer_address=self.node_identity[0],
                             status=ConsensusNegotiationStatus.ON_PROGRESS,
                         )
                     )
@@ -1098,7 +1099,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                 consensus_negotiation_id=RandomUUID(
                                     generated_consensus_negotiation_id
                                 ),
-                                master_address=self.__node_identity[0],
+                                master_address=self.node_identity[0],
                                 miner_address=available_node_info.miner_address,
                             ),
                         ),
@@ -1197,7 +1198,7 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
             contents=HashableBlock(
                 nonce=None,  # - This are determined during the process of mining.
-                validator=self.__node_identity[0],
+                validator=self.node_identity[0],
                 transactions=shadow_transaction_container,
                 timestamp=datetime.now(),
             ),
@@ -1232,7 +1233,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
                         )
                     ),
-                    generator_address=self.__node_identity[0],
+                    generator_address=self.node_identity[0],
                     time_initiated=datetime.now(),
                 ),
             ),
@@ -1408,7 +1409,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         elif isinstance(data.context, NodeCertificateTransaction | NodeSyncTransaction):
             resolved_from_address, resolved_to_address = (
-                self.__node_identity[0],
+                self.node_identity[0],
                 data.context.requestor_address,
             )
 
@@ -1425,14 +1426,14 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
         else:
-            resolved_from_address, resolved_to_address = self.__node_identity[0], None
+            resolved_from_address, resolved_to_address = self.node_identity[0], None
 
         if await self.__resolve_transaction_payload(
             action=action,
             from_address=AddressUUID(
                 resolved_to_address
                 if resolved_to_address is not None
-                else self.__node_identity[0]
+                else self.node_identity[0]
             ),
             to_address=AddressUUID(resolved_from_address),
             is_internal_payload=True,
@@ -1872,7 +1873,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         sha256(export_to_json(payload_to_encrypt.dict())).hexdigest()
                     ),
                 ),
-                from_address=AddressUUID(self.__node_identity[0])
+                from_address=AddressUUID(self.node_identity[0])
                 if isinstance(payload_to_encrypt, NodeTransaction)
                 else AddressUUID(from_address),
                 to_address=AddressUUID(to_address) if to_address is not None else None,
@@ -1964,7 +1965,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 method=HTTPQueueMethods.POST,
                 await_result_immediate=True,
                 headers={
-                    "x-token": self.__node_identity[1],
+                    "x-token": self.node_identity[1],
                     "x-certificate-token": await self._get_consensus_certificate(),
                     "x-hash": await self.get_chain_hash(),
                 },
@@ -1981,7 +1982,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     headers={
-                        "x-token": self.__node_identity[1],
+                        "x-token": self.node_identity[1],
                         "x-certificate-token": await self._get_consensus_certificate(),
                     },
                     name="fetch_upstream_from_master_node",
@@ -2065,6 +2066,7 @@ def get_blockchain_instance(
     if role and blockchain_service is None and token_ref is not None:
         # # Note that this will create an issue later when we tried ARCHIVAL_MINER_NODE node mode later on.
         blockchain_service = BlockchainMechanism(
+            block_timer_seconds=BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS,
             auth_tokens=token_ref,
             node_role=role,
         )
