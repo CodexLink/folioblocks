@@ -1083,22 +1083,19 @@ class BlockchainMechanism(ConsensusMechanism):
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
             # - Since we already have a node, do not let this one go.
-            print(
-                BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
-                available_node_info,
-                BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE,
-            )
-            if (
-                len(self.__transaction_container)
-                >= BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
+
+            required_transactions: int = (
+                BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
                 if not available_node_info[0]
                 else (
                     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
                     + (available_node_info[0] * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
                 )
-                and not len(self.__unsent_block_container)
-            ):
+            )
 
+            if (len(self.__transaction_container) > required_transactions) and not len(
+                self.__unsent_block_container
+            ):
                 logger.info(
                     f"Number of required transactions were sufficient! There are {len(self.__transaction_container)} transactions that will be converted to a block for processing."
                 )
@@ -1115,7 +1112,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             else:
                 logger.warning(
-                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
@@ -1223,7 +1220,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     continue
 
             logger.error(
-                f"Cannot proceed when block generated returned {generated_block}! This is probably a developer-logic error issue. Please contact the developer regarding this."
+                f"Cannot proceed when block generated returned {generated_block}!"
             )
 
     def __consensus_calculate_sleep_time(
@@ -1436,8 +1433,9 @@ class BlockchainMechanism(ConsensusMechanism):
                                 source_port=each_candidate["source_port"],
                             ),
                         )  # type: ignore # * I don't know how to type this.
+
                     logger.warning(
-                        f"Archival Miner Candidate {resolved_candidate_state_info['owner']} seem to be currently hashing but it was not labelled from the database? Please contact the developer as this may evolve as a potential problem sooner or later!"
+                        f"Archival Miner Candidate {resolved_candidate_state_info['owner']} may be sleeping from consensus."
                     )
 
             except AttributeError:
