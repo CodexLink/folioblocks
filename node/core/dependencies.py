@@ -27,9 +27,10 @@ from databases import Database
 from fastapi import Depends, Header, HTTPException
 from pydantic import EmailStr
 from pyotp import TOTP
-from sqlalchemy import and_, false, select, true
+from sqlalchemy import and_, false, func, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
 from utils.http import get_http_client_instance
+from blueprint.models import associated_nodes
 
 from core.constants import (
     ADDRESS_UUID_KEY_PREFIX,
@@ -498,9 +499,9 @@ class EnsureAuthorized:
         blockchain_related: bool = False,
         return_token: bool = False,
     ) -> None:
-        self._as: UserEntity | list[UserEntity] = _as
-        self._blockchain_related: Final[bool] = blockchain_related
-        self._return_token: bool = return_token
+        self.__as: UserEntity | list[UserEntity] = _as
+        self.__blockchain_related: Final[bool] = blockchain_related
+        self.__return_token: bool = return_token
 
     async def __call__(
         self,
@@ -533,17 +534,17 @@ class EnsureAuthorized:
                 user_role: Mapping = await database_instance.fetch_val(user_role_ref)
 
                 # * Exception variables, for use later.
-                condition_unmet_message: str = f"The role of this user is prohibited from running this method. | Allowed roles: {self._as}"
+                condition_unmet_message: str = f"The role of this user is prohibited from running this method. | Allowed roles: {self.__as}"
                 condition_unmet_http_code: HTTPStatus = HTTPStatus.FORBIDDEN
 
                 user_role_sufficient: bool = False
-                if isinstance(self._as, list):
-                    for each_role in self._as:
+                if isinstance(self.__as, list):
+                    for each_role in self.__as:
                         if user_role is each_role:  # type: ignore
                             user_role_sufficient = True
 
                 else:
-                    if user_role is self._as:  # type: ignore
+                    if user_role is self.__as:  # type: ignore
                         user_role_sufficient = True
 
                 if not user_role_sufficient:
@@ -552,13 +553,23 @@ class EnsureAuthorized:
                         status_code=condition_unmet_http_code,
                     )
 
-                if self._return_token and isinstance(user_role, UserEntity):  # type: ignore
+                # - This condition checks if the instance of `user_role` is `UserEntity` and _return_token is invoked.
+                if self.__return_token and isinstance(user_role, UserEntity):  # type: ignore
                     return x_token
 
-        # * I'm not quite sure if this is a right thing to do.
-        # * Something's missing, I can feel it.
-        if self._blockchain_related and x_certificate_token is not None:
-            return None
+                # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.
+                if self.__blockchain_related and x_certificate_token is not None:
+                    certificate_token_query: Select = select([func.count()]).where(
+                        associated_nodes.c.certificate == x_certificate_token
+                    )
+                    certificate_count_count = await database_instance.fetch_val(certificate_token_query)
+
+                    if certificate_count_count:
+                        return None
+
+                # - If no other specific conditions have been specified, ensure that we return if the token has been matched.
+                if req_token is not None:
+                    return
 
         raise HTTPException(
             detail="You are unauthorized to access this endpoint.",

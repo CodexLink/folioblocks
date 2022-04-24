@@ -608,7 +608,7 @@ async def receive_file_from_dashboard(
     summary=f"Receives echo from the {NodeType.ARCHIVAL_MINER_NODE} for establishment of their connection to the blockchain.",
     description=f"An API endpoint that is only accessile to {UserEntity.MASTER_NODE_USER.name}, where it accepts ECHO request to fetch a certificate before they ({UserEntity.ARCHIVAL_MINER_NODE_USER}) start doing blockchain operations. This will return a certificate as an acknowledgement response from the requestor.",
     dependencies=[
-        Depends(EnsureAuthorized(_as=[UserEntity.ARCHIVAL_MINER_NODE_USER])),
+        Depends(EnsureAuthorized(_as=UserEntity.ARCHIVAL_MINER_NODE_USER)),
     ],  # - This is blockchain-related but not internally related, it was under consensus category. Therefore seperate the contents of the method below from the handler of the <class 'EnsureAuthorized'>.
 )
 async def certify_miner(
@@ -728,7 +728,9 @@ async def certify_miner(
     description=f"A special API endpoint that allows '{NodeType.ARCHIVAL_MINER_NODE.name}' to fetch the latest version of the blockchain file from the '{NodeType.MASTER_NODE.name}'. This is mandatory before allowing the node to mine or participate from the blockchain.",
     dependencies=[
         Depends(
-            EnsureAuthorized(_as=UserEntity.MASTER_NODE_USER, blockchain_related=True)
+            EnsureAuthorized(
+                _as=UserEntity.ARCHIVAL_MINER_NODE_USER, blockchain_related=True
+            )
         )
     ],
 )

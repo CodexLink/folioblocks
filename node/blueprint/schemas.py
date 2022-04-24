@@ -38,6 +38,7 @@ from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field
 
 from core.constants import TransactionContextMappingType
+from core.constants import NodeType
 
 # # Dashboard API — START
 
@@ -311,7 +312,7 @@ class NodeConsensusInformation(BaseModel):
     owner: AddressUUID  # * Same as validator.
     is_sleeping: bool
     is_mining: bool
-    node_role: str
+    node_role: NodeType
     consensus_timer_expiration: datetime
     last_mined_block: int
 

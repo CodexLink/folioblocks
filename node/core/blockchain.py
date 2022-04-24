@@ -701,7 +701,7 @@ class BlockchainMechanism(ConsensusMechanism):
             is_mining=not self.blockchain_ready,
             is_sleeping=self.__node_ready and self.blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
-            node_role=self.node_role.name,
+            node_role=self.node_role,
             owner=self.__auth_token[0],
         )
 
@@ -1308,7 +1308,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 # @o Type-hint.
-
                 resolved_last_consensus_sleep_datetime: datetime
                 if selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration is None:  # type: ignore
                     resolved_last_consensus_sleep_datetime = datetime.now()
