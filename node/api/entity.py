@@ -269,7 +269,7 @@ async def register_entity(
                     is UserEntity.ARCHIVAL_MINER_NODE_USER
                     and blockchain_instance.__node_role is NodeType.MASTER_NODE
                 ):
-                    await blockchain_instance._insert_internal_transaction(
+                    await blockchain_instance.insert_internal_transaction(
                         action=TransactionActions.NODE_GENERAL_REGISTER_INIT,
                         data=NodeTransaction(
                             action=NodeTransactionInternalActions.INIT,

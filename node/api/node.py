@@ -288,7 +288,7 @@ async def receive_hashed_block(
 
         # - Insert an internal transaction.
         # @o This was seperated from the consolidated internal transaction handler due to the need of handling extra variables as `ARCHIVAL_MINER_NODE` sent a payload.
-        await blockchain_instance._insert_internal_transaction(
+        await blockchain_instance.insert_internal_transaction(
             action=TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.CONSENSUS,
@@ -694,7 +694,7 @@ async def certify_miner(
                     )
 
                     if isinstance(blockchain_instance, BlockchainMechanism):
-                        await blockchain_instance._insert_internal_transaction(
+                        await blockchain_instance.insert_internal_transaction(
                             action=TransactionActions.NODE_GENERAL_CONSENSUS_INIT,
                             data=NodeTransaction(
                                 action=NodeTransactionInternalActions.INIT,
@@ -740,7 +740,7 @@ async def pull_chain_upstream(
 ) -> JSONResponse:
 
     if isinstance(blockchain_instance, BlockchainMechanism):
-        await blockchain_instance._insert_internal_transaction(
+        await blockchain_instance.insert_internal_transaction(
             action=TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.SYNC,

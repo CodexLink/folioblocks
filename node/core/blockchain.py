@@ -1090,7 +1090,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     self.__confirming_block_container.append(generated_block)
 
                     # - And save this that the negotiation consensus to mine a block has been confirmed.
-                    await self.__insert_internal_transaction(
+                    await self.insert_internal_transaction(
                         action=TransactionActions.NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START,
                         data=NodeTransaction(
                             action=NodeTransactionInternalActions.CONSENSUS,
@@ -1218,7 +1218,7 @@ class BlockchainMechanism(ConsensusMechanism):
         """
 
         # * Create a transaction for the generation of the genesis block.
-        await self.__insert_internal_transaction(
+        await self.insert_internal_transaction(
             action=TransactionActions.NODE_GENERAL_GENESIS_BLOCK_INIT,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.INIT,
@@ -1371,7 +1371,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return
 
     @restrict_call(on=NodeType.MASTER_NODE)
-    async def __insert_internal_transaction(
+    async def insert_internal_transaction(
         self, action: TransactionActions, data: NodeTransaction
     ) -> None:
 
