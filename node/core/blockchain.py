@@ -166,7 +166,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self.__consensus_sleep_date_expiration: datetime = datetime.now()
 
         # # State and Variable References
-        self.__blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
+        self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
         self.__new_master_instance: bool = False  # * This bool property will be used whenever when the context of the blockchain file is empty or not. Sets to true when its empty.
         self.__node_ready: bool = False  # * This bool property is used for determining if this node is ready in terms of participating from the master node, this is where the consensus will be used.
         self.__sleeping_from_consensus: bool = False  # * This bool property is used for determining if the node is under consensus sleep or not. This property is used as a dependency to state whether the node is ready or is the blockchain for other operations.
@@ -194,7 +194,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     await self.__create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
 
                 # @o When on initial instance, we need to handle the property for the blockchain system to run. Otherwise we just lock out the system even we already created.
-                self.__blockchain_ready = True
+                self.blockchain_ready = True
                 self.__new_master_instance = False
 
                 logger.info(
@@ -202,7 +202,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
             else:
-                self.__blockchain_ready = True
+                self.blockchain_ready = True
                 logger.info("Blockchain system is ready.")
 
             create_task(
@@ -698,8 +698,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
         return NodeConsensusInformation(
             consensus_timer_expiration=self.__consensus_sleep_date_expiration,
-            is_mining=not self.__blockchain_ready,
-            is_sleeping=self.__node_ready and self.__blockchain_ready,
+            is_mining=not self.blockchain_ready,
+            is_sleeping=self.__node_ready and self.blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
             node_role=self.node_role.name,
             owner=self.__auth_token[0],
@@ -1445,7 +1445,7 @@ class BlockchainMechanism(ConsensusMechanism):
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
     async def __mine_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
-        self.__blockchain_ready = False
+        self.blockchain_ready = False
         prev: float = time()
         nth: int = 1
 
@@ -1470,7 +1470,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 self.__consensus_calculate_sleep_time(
                     mining_duration=time() - prev, add_on=False
                 )
-                self.__blockchain_ready = True
+                self.blockchain_ready = True
                 return block
 
             nth += 1
@@ -1657,7 +1657,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         logger.critical(
                             "Due to potential fraudalent local blockchain file, please wait for the `MASTER_NODE` node to acknowledge your replacement of blockchain file."
                         )
-                        self.__blockchain_ready = False
+                        self.blockchain_ready = False
 
                         # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
@@ -1707,7 +1707,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
                 )
 
-            self.__blockchain_ready = True
+            self.blockchain_ready = True
             return frozendict(context)
 
         unconventional_terminate(
@@ -1934,7 +1934,7 @@ class BlockchainMechanism(ConsensusMechanism):
     def __set_node_state(self) -> None:
         self.__node_ready = (
             True
-            if not self.__sleeping_from_consensus and self.__blockchain_ready
+            if not self.__sleeping_from_consensus and self.blockchain_ready
             else False
         )
 
@@ -2034,7 +2034,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
                 break
 
-            self.__blockchain_ready = True
+            self.blockchain_ready = True
             return
 
     async def __update_chain_hash(self, *, new_hash: str) -> None:

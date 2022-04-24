@@ -18,7 +18,7 @@ def ensure_blockchain_ready(
         def instance(
             self: Any, *args: list[Any], **kwargs: dict[Any, Any]
         ) -> Callable | None:
-            if self.is_blockchain_ready:
+            if self.blockchain_ready:
                 return fn(self, *args, **kwargs)
 
             if terminate_on_call:
