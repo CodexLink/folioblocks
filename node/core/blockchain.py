@@ -141,12 +141,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # # Containers
         self.__transaction_container: list[Transaction] = []
-        self.__already_hashed_block_container: list[Block] = []
-        self.__confirming_block_container: list[Block] = []
+        self.confirming_block_container: list[Block] = []
         self.__unsent_block_container: list[Block] = []
 
         # # Counters
-        self.__cached_block_id: int = (
+        self.cached_block_id: int = (
             1  # * The current ID of the block to be rendered from the blockchain.
         )
         self.__cached_total_transactions: int = 0
@@ -158,11 +157,11 @@ class BlockchainMechanism(ConsensusMechanism):
         self.node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
         # # Required Variables for the Blockchain Operaetion.
-        self.__node_role: NodeType = node_role
+        self.node_role: NodeType = node_role
         self.__auth_token: IdentityTokens = auth_tokens
 
         # # Timer Containers
-        self.__block_timer_seconds: Final[int] = block_timer_seconds
+        self.block_timer_seconds: Final[int] = block_timer_seconds
         self.__mine_duration: timedelta = timedelta(seconds=0)
         self.__consensus_sleep_date_expiration: datetime = datetime.now()
 
@@ -189,7 +188,7 @@ class BlockchainMechanism(ConsensusMechanism):
             )
         )
 
-        if self.__node_role is NodeType.MASTER_NODE:
+        if self.node_role is NodeType.MASTER_NODE:
             if self.__new_master_instance:
                 for _ in range(0, BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS):
                     await self.__create_genesis_block()  # * We can only afford to do per block since async will not detect other variable changes. I think we don't have a variable classifier that is meant to change dramatically without determined time. And that is 'volatile'.
@@ -208,7 +207,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             create_task(
                 self.__block_timer_executor(),
-                name=f"{BlockchainMechanism.__name__}_{self.__node_role.name}_instance_{self.__block_timer_executor.__name__}",
+                name=f"{BlockchainMechanism.__name__}_{self.node_role.name}_instance_{self.__block_timer_executor.__name__}",
             )
 
             print("final", self.__chain)
@@ -618,7 +617,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     insert_transaction_content_map_query: Insert = (
                         tx_content_mappings.insert().values(
                             address_ref=to_address,
-                            block_no_ref=self.__cached_block_id,
+                            block_no_ref=self.cached_block_id,
                             tx_ref=transaction_context["tx_hash"],
                             content_type=data.content_type,
                             timestamp=datetime.now(),
@@ -678,18 +677,18 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     def get_blockchain_public_state(self) -> NodeMasterInformation | None:
-        if self.__node_role is NodeType.MASTER_NODE:
+        if self.node_role is NodeType.MASTER_NODE:
 
             # # This may not be okay.
             return NodeMasterInformation(
-                chain_block_timer=self.__block_timer_seconds,
+                chain_block_timer=self.block_timer_seconds,
                 total_blocks=len(self.__chain["chain"])
                 if self.__chain is not None
                 else 0,
                 total_transactions=self.__cached_total_transactions,
             )
         logger.warning(
-            f"This client node requests for the `public_state` when their role is {self.__node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
+            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
         )
         return None
 
@@ -702,7 +701,7 @@ class BlockchainMechanism(ConsensusMechanism):
             is_mining=not self.__blockchain_ready,
             is_sleeping=self.__node_ready and self.__blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
-            node_role=self.__node_role.name,
+            node_role=self.node_role.name,
             owner=self.__auth_token[0],
         )
 
@@ -751,7 +750,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if not isinstance(mined_block, Block):
             logger.info(
-                f"Block given is {type(mined_block)} This should not occur as a {self.__node_role.name}, please contact the developer regarding this issue."
+                f"Block given is {type(mined_block)} This should not occur as a {self.node_role.name}, please contact the developer regarding this issue."
             )
             return None
 
@@ -889,7 +888,7 @@ class BlockchainMechanism(ConsensusMechanism):
         if self.__chain is not None:
             pass
 
-    async def __append_block(
+    async def append_block(
         self,
         *,
         context: Block,
@@ -909,7 +908,7 @@ class BlockchainMechanism(ConsensusMechanism):
             block_context["contents"] = frozendict(block_context["contents"])
 
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            if block_context["id"] != self.__cached_block_id:
+            if block_context["id"] != self.cached_block_id:
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
@@ -952,7 +951,7 @@ class BlockchainMechanism(ConsensusMechanism):
             self.__chain["chain"].append(frozendict(block_context))
 
             # ! Hit the next block for the allocation as we finished processing a block!
-            self.__cached_block_id += 1
+            self.cached_block_id += 1
 
             await self.__process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
@@ -967,16 +966,16 @@ class BlockchainMechanism(ConsensusMechanism):
     @restrict_call(on=NodeType.MASTER_NODE)
     async def __block_timer_executor(self) -> None:
         logger.info(
-            f"Block timer has been executed. Refreshes at {self.__block_timer_seconds} seconds."
+            f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
         )
 
         while True:
             logger.warning(
-                f"Sleeping for {self.__block_timer_seconds} seconds while collecting real-time transactions."
+                f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions."
             )
 
             # - Sleep first due to block timer.
-            await sleep(self.__block_timer_seconds)
+            await sleep(self.block_timer_seconds)
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can mine the block.
             available_node_info: ArchivalMinerNodeInformation | None = (
@@ -1088,7 +1087,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
-                    self.__confirming_block_container.append(generated_block)
+                    self.confirming_block_container.append(generated_block)
 
                     # - And save this that the negotiation consensus to mine a block has been confirmed.
                     await self.insert_internal_transaction(
@@ -1174,9 +1173,9 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self.__get_last_block()
 
         if last_block is not None:
-            if last_block.id >= self.__cached_block_id:
+            if last_block.id >= self.cached_block_id:
                 logger.critical(
-                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.__cached_block_id}"
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.cached_block_id}"
                 )
                 return None
         else:
@@ -1188,7 +1187,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self.__transaction_container.clear()
 
         _block: Block = Block(
-            id=self.__cached_block_id,
+            id=self.cached_block_id,
             block_size_bytes=None,  # * To be resolved on the later process.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
             prev_hash_block=HashUUID(
@@ -1224,7 +1223,7 @@ class BlockchainMechanism(ConsensusMechanism):
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.INIT,
                 context=NodeGenesisTransaction(
-                    block_genesis_no=self.__cached_block_id,
+                    block_genesis_no=self.cached_block_id,
                     data=HashUUID(
                         token_hex(
                             random_generator.randint(
@@ -1268,7 +1267,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if not len(available_nodes):
             logger.info(
-                f"There are no available nodes to mine the block. Retrying again the after interval of the block timer. ({self.__block_timer_seconds} seconds)"
+                f"There are no available nodes to mine the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
             )
             return None
 
@@ -1336,7 +1335,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
         logger.warning(
-            f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.__block_timer_seconds} seconds)"
+            f"All archival miner nodes seem to be busy. Attempting to find available nodes after the interval of the block timer. ({self.block_timer_seconds} seconds)"
         )
         return None
 
@@ -1490,7 +1489,7 @@ class BlockchainMechanism(ConsensusMechanism):
         mined_block: Block = await block_mining_processor
 
         logger.info(f"Block {block.id} has been mined.")
-        await self.__append_block(context=mined_block)
+        await self.append_block(context=mined_block)
 
         return mined_block if return_hashed else None
 
@@ -1671,16 +1670,16 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                 # - If cached_block_id is equal to dict_data["id"]. Then increment it easily.
-                if self.__cached_block_id == block_data["id"]:
-                    self.__cached_block_id += 1
+                if self.cached_block_id == block_data["id"]:
+                    self.cached_block_id += 1
                     logger.debug(
-                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.__cached_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
+                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.cached_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
                     )
 
                 # - However, when its not equal then then something is wrong.
                 else:
                     unconventional_terminate(
-                        message=f"Blockchain is currently unchained! (Currently Cached: {self.__cached_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
+                        message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
                     )
                     return None
 
@@ -1689,7 +1688,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if (
                 required_genesis_blocks
-                and self.__node_role is NodeType.MASTER_NODE
+                and self.node_role is NodeType.MASTER_NODE
                 and not self.__new_master_instance
             ):
                 unconventional_terminate(
@@ -1698,14 +1697,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
             elif (
                 required_genesis_blocks
-                and self.__node_role is NodeType.ARCHIVAL_MINER_NODE
+                and self.node_role is NodeType.ARCHIVAL_MINER_NODE
             ):
                 logger.error(
                     "This node's blockchain may be incomplete from the previous update, note that it will get updated after communicating with the master node."
                 )
             else:
                 logger.info(
-                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.__cached_block_id}."
+                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
                 )
 
             self.__blockchain_ready = True
