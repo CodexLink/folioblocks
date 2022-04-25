@@ -194,6 +194,98 @@ class BlockchainMechanism(ConsensusMechanism):
             ref_node_identity_instance=self.node_identity,
         )
 
+    async def append_block(self, *, context: Block, follow_up: bool) -> None:
+        """
+        A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
+
+        Args:
+                context (Block | Transaction): The context of the block as is.
+                auth_context (IdentityTokens): Authentication attribute, not sure what to do on this one yet.
+
+        TODO
+        * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
+        """
+        if self.__chain is not None:
+            block_context: dict = context.dict()
+            block_context["contents"] = frozendict(block_context["contents"])
+
+            # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
+            if block_context["id"] != self.main_block_id:
+                logger.error(
+                    f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
+                )
+                return
+
+            # - Apply immutability on other `dict` objects from the block context.
+            # @o As per the approach indicated from the `self.__process_serialize_to_blockchain_file`. We are going to do this in descending form.
+
+            if len(block_context["contents"]["transactions"]):
+
+                # # Iteration method is the same as from the method `self.__process_deserialize_to_load_blockchain_in_memory'.
+                # @o I cannot DRY this one out due to its nature of the condition.
+                # @o Also to reduce the fatigue of going through method after method, I will retain this one since it is confusing to read, it needs the context as a whole or otherwise it will be disregarded.
+                for transaction_idx, transaction_data in enumerate(
+                    block_context["contents"]["transactions"]
+                ):
+
+                    # - [1] Apply immutability on the transactions -> `payload`
+                    block_context["contents"]["transactions"][transaction_idx][
+                        "payload"
+                    ] = frozendict(transaction_data["payload"])
+
+                    # - [2] Apply immutability on the transactions -> `signatures`
+                    block_context["contents"]["transactions"][transaction_idx][
+                        "signatures"
+                    ] = frozendict(transaction_data["signatures"])
+
+                    # - [3] Apply immutability on the transaction/s set.
+                    block_context["contents"]["transactions"][
+                        transaction_idx
+                    ] = frozendict(transaction_data)
+
+                    # @o Increment transaction by one as it was loaded in memory.
+                    self.__cached_total_transactions += 1
+
+                # - [4] Apply immutability on the contents, contaning a set of transaction/s.
+                block_context["contents"] = frozendict(block_context["contents"])
+
+            # - [5] Apply immutability from the whole block and then append it.
+            self.__chain["chain"].append(frozendict(block_context))
+
+            # ! Hit the next block for the allocation as we finished processing a block!
+            self.main_block_id += 1
+
+            # - Let leading block sync with the main block when there's no block collision issue, where the `lead_block_id` increments itself.
+            if self.leading_block_id < self.main_block_id:
+                self.leading_block_id = self.main_block_id
+
+            await self.__process_blockchain_file_to_current_state(
+                operation=BlockchainIOAction.TO_WRITE
+            )
+            logger.info(f"Block #{context.id} has been appended from the blockchain!")
+
+            # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
+            if len(self.hashed_block_container) and follow_up:
+                logger.info(
+                    f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
+                )
+
+                for each_hashed_block in self.hashed_block_container:
+                    if each_hashed_block.id == self.main_block_id:
+                        logger.info(
+                            f"Follow-up appending block #{each_hashed_block} from the chain ..."
+                        )
+                        await self.append_block(
+                            context=each_hashed_block, follow_up=True
+                        )
+
+                logger.info("Follow-up chaining is finished!")
+
+        else:
+            unconventional_terminate(
+                message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
+            )
+
     async def initialize(self) -> None:
         """# A method that initialize resources needed for the blockchain system to work."""
 
@@ -1001,98 +1093,6 @@ class BlockchainMechanism(ConsensusMechanism):
         if self.__chain is not None:
             pass
 
-    async def append_block(self, *, context: Block, follow_up: bool) -> None:
-        """
-        A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
-
-        Args:
-                context (Block | Transaction): The context of the block as is.
-                auth_context (IdentityTokens): Authentication attribute, not sure what to do on this one yet.
-
-        TODO
-        * Implement security of some sort, use `auth_context` or something. | We may use this and compute its hash for comparing context and also length.
-        """
-        if self.__chain is not None:
-            block_context: dict = context.dict()
-            block_context["contents"] = frozendict(block_context["contents"])
-
-            # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            if block_context["id"] != self.main_block_id:
-                logger.error(
-                    f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
-                )
-                return
-
-            # - Apply immutability on other `dict` objects from the block context.
-            # @o As per the approach indicated from the `self.__process_serialize_to_blockchain_file`. We are going to do this in descending form.
-
-            if len(block_context["contents"]["transactions"]):
-
-                # # Iteration method is the same as from the method `self.__process_deserialize_to_load_blockchain_in_memory'.
-                # @o I cannot DRY this one out due to its nature of the condition.
-                # @o Also to reduce the fatigue of going through method after method, I will retain this one since it is confusing to read, it needs the context as a whole or otherwise it will be disregarded.
-                for transaction_idx, transaction_data in enumerate(
-                    block_context["contents"]["transactions"]
-                ):
-
-                    # - [1] Apply immutability on the transactions -> `payload`
-                    block_context["contents"]["transactions"][transaction_idx][
-                        "payload"
-                    ] = frozendict(transaction_data["payload"])
-
-                    # - [2] Apply immutability on the transactions -> `signatures`
-                    block_context["contents"]["transactions"][transaction_idx][
-                        "signatures"
-                    ] = frozendict(transaction_data["signatures"])
-
-                    # - [3] Apply immutability on the transaction/s set.
-                    block_context["contents"]["transactions"][
-                        transaction_idx
-                    ] = frozendict(transaction_data)
-
-                    # @o Increment transaction by one as it was loaded in memory.
-                    self.__cached_total_transactions += 1
-
-                # - [4] Apply immutability on the contents, contaning a set of transaction/s.
-                block_context["contents"] = frozendict(block_context["contents"])
-
-            # - [5] Apply immutability from the whole block and then append it.
-            self.__chain["chain"].append(frozendict(block_context))
-
-            # ! Hit the next block for the allocation as we finished processing a block!
-            self.main_block_id += 1
-
-            # - Let leading block sync with the main block when there's no block collision issue, where the `lead_block_id` increments itself.
-            if self.leading_block_id < self.main_block_id:
-                self.leading_block_id = self.main_block_id
-
-            await self.__process_blockchain_file_to_current_state(
-                operation=BlockchainIOAction.TO_WRITE
-            )
-            logger.info(f"Block #{context.id} has been appended from the blockchain!")
-
-            # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
-            if len(self.hashed_block_container) and follow_up:
-                logger.info(
-                    f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
-                )
-
-                for each_hashed_block in self.hashed_block_container:
-                    if each_hashed_block.id == self.main_block_id:
-                        logger.info(
-                            f"Follow-up appending block #{each_hashed_block} from the chain ..."
-                        )
-                        await self.append_block(
-                            context=each_hashed_block, follow_up=True
-                        )
-
-                logger.info("Follow-up chaining is finished!")
-
-        else:
-            unconventional_terminate(
-                message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
-            )
-
     @restrict_call(on=NodeType.MASTER_NODE)
     async def __block_timer_executor(self) -> None:
         logger.info(
@@ -1195,6 +1195,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 if attempt_deliver_payload.ok:
+                    # - Increment the counter when the payload delivery is finished.
+                    self.leading_block_id += 1
+
                     # - Save this consensus negotiation ID as well for the retrieval verification of the hashed/mined block.
                     save_in_progress_negotiation_query: Insert = (
                         consensus_negotiation.insert().values(
