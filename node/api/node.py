@@ -42,6 +42,7 @@ from blueprint.schemas import (
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ASYNC_TARGET_LOOP,
+    BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
     AddressUUID,
     ApplicantLogContentType,
     AssociatedNodeStatus,
@@ -58,7 +59,11 @@ from core.constants import (
     UserEntity,
     random_generator,
 )
-from core.dependencies import EnsureAuthorized, get_database_instance
+from core.dependencies import (
+    EnsureAuthorized,
+    generate_consensus_sleep_time,
+    get_database_instance,
+)
 from cryptography.fernet import Fernet
 from databases import Database
 from fastapi import (
@@ -75,9 +80,10 @@ from fastapi.responses import JSONResponse
 from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select, Update
-from core.dependencies import generate_consensus_sleep_time
-from core.constants import BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
-from utils.processors import validate_source_and_origin_associates
+from utils.processors import (
+    validate_previous_consensus_negotiation,
+    validate_source_and_origin_associates,
+)
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -344,29 +350,11 @@ async def receive_raw_block(
 ) -> Response:
 
     if isinstance(blockchain_instance, BlockchainMechanism):
-
-        previous_negotiation_sql_ref: ClauseElement = (
-            consensus_negotiation.c.block_no_ref == context_from_master.block.id
-        ) & (consensus_negotiation.c.status == ConsensusNegotiationStatus.ON_PROGRESS)
-
-        # - Check for existing incomplete negotiation.
-        existing_negotiation_query: Select = select([consensus_negotiation.c.id]).where(
-            previous_negotiation_sql_ref
+        # - Validate any previous consensus negotiation and delete it as possible.
+        await validate_previous_consensus_negotiation(
+            database_instance_ref=database_instance,
+            block_reference=context_from_master.block,
         )
-
-        # - Chea
-        existing_negotiation = await database_instance.fetch_val(
-            existing_negotiation_query
-        )
-
-        if existing_negotiation is not None:
-            # - Assume this is incomplete, we delete it to insert a new consensus negotiation.
-            delete_previous_negotiation_query: Delete = (
-                consensus_negotiation.delete().where(
-                    previous_negotiation_sql_ref
-                )
-            )
-            await database_instance.execute(delete_previous_negotiation_query)
 
         # - Record the Consensus Negotiation ID.
         save_generated_consensus_negotiation_id_query: Insert = (

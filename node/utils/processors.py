@@ -49,6 +49,9 @@ from core.dependencies import set_master_node_properties
 from fastapi import HTTPException
 from sqlalchemy.sql.expression import Select
 
+from blueprint.schemas import Block
+from core.constants import ConsensusNegotiationStatus
+
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
 else:
@@ -61,6 +64,7 @@ from aioconsole import ainput
 from aiofiles import open as aopen
 from blueprint.models import (
     associations,
+    consensus_negotiation,
     file_signatures,
     model_metadata,
     tx_content_mappings,
@@ -92,7 +96,7 @@ from dotenv import find_dotenv, load_dotenv
 from email_validator import EmailNotValidError, EmailSyntaxError, validate_email
 from passlib.context import CryptContext
 from sqlalchemy import create_engine, func, select
-from sqlalchemy.sql.expression import Insert, Select
+from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select
 
 from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 from utils.http import get_http_client_instance
@@ -807,6 +811,114 @@ def mask(data: bytes | int | str) -> str:
 # # Output Filters — END
 
 # # API DRY Handler — START
+async def validate_applicant_user_address(
+    *, supplied_address: AddressUUID, expected_type: UserEntity
+) -> None:
+
+    if isinstance(supplied_address, str):
+        address_existence_checker_query: Select = select([func.count()]).where(
+            (users.c.unique_address == supplied_address)
+            & (users.c.type == expected_type)
+        )
+
+        address: Mapping | None = await get_database_instance().fetch_one(
+            address_existence_checker_query
+        )
+
+        if not address.count:  # type: ignore
+            raise HTTPException(
+                detail="Supplied address reference does not exist. Please check your input and try again.",
+                status_code=HTTPStatus.NOT_FOUND,
+            )
+
+        return None
+
+    raise HTTPException(
+        detail=f"Supplied address is an invalid object. Please ensure that the address is a type of {type(str)}.",
+        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+    )
+
+
+# # -----------------------------------------------------
+
+
+async def validate_organization_existence(
+    *, org_identity: OrganizationIdentityValidator, scoped_to_applicants: bool
+) -> Mapping | None:
+
+    # - Specific instances of whether the organization is classified as non-educational or otherwise, each cases of it requires a different parameter or query to validate the existence of the association/organization.
+    # @o For the instance of `OrganizationUserTransaction` it checks the `association_address` if given (in the scenario that the association/organiaztion does exists), or it was checked by `association_name` and `association_group_type.` (in the scenario where the association/organization does not exists and requires a new one)
+    # ! Therefore, the way its variables are declared is when the organization does not exists or not.
+
+    # @d The switch `scope_to_applicants` forces to resolve the given parameter in 'org_identity', which is an address from the user, NOT a reference address from the association, by setting `scope_to_applicants` to `True`, it queries that address if the association exists based from the address of source.
+    # @d It does not forces to query along both types along with the address, when the instance is `ApplicantUserTransacion`.
+
+    database_instance: Database = get_database_instance()
+    resolved_association_ref_from_user: Mapping | str | None = (
+        org_identity.association_address
+    )
+
+    if scoped_to_applicants:
+        get_association_query: Select = select([users.c.association]).where(
+            users.c.unique_address == org_identity.association_address
+        )
+
+        resolved_association_ref_from_user = await database_instance.fetch_val(
+            get_association_query
+        )
+
+    validate_association_existence_query: Select = select(
+        [associations.c.address]
+    ).where(
+        (
+            (associations.c.address == resolved_association_ref_from_user)
+            if scoped_to_applicants
+            else (
+                (associations.c.address == resolved_association_ref_from_user)
+                | (
+                    (associations.c.name == org_identity.association_name)
+                    & (
+                        (associations.c.group == OrganizationType.INSTITUTION)
+                        | (associations.c.group == OrganizationType.ORGANIZATION)
+                    )
+                )
+            )
+        )
+    )
+
+    existing_association: Mapping | None = await database_instance.fetch_val(
+        validate_association_existence_query
+    )
+
+    return existing_association
+
+
+async def validate_previous_consensus_negotiation(
+    *,
+    database_instance_ref: Database,
+    block_reference: Block,
+) -> None:
+    previous_negotiation_sql_ref: ClauseElement = (
+        consensus_negotiation.c.block_no_ref == block_reference.id
+    ) & (consensus_negotiation.c.status == ConsensusNegotiationStatus.ON_PROGRESS)
+
+    # - Check for existing incomplete negotiation.
+    existing_negotiation_query: Select = select([consensus_negotiation.c.id]).where(
+        previous_negotiation_sql_ref
+    )
+
+    existing_negotiation = await database_instance_ref.fetch_val(
+        existing_negotiation_query
+    )
+
+    if existing_negotiation is not None:
+        # - Assume this is incomplete, we delete it to insert a new consensus negotiation.
+        delete_previous_negotiation_query: Delete = (
+            consensus_negotiation.delete().where(previous_negotiation_sql_ref)
+        )
+        await database_instance_ref.execute(delete_previous_negotiation_query)
+
+
 async def validate_source_and_origin_associates(
     database_instance_ref: Database,
     source_session_token: JWTToken,
@@ -953,108 +1065,6 @@ async def validate_source_and_origin_associates(
     return AddressUUID(resolved_source_address) if return_resolved_source_address else None  # type: ignore
 
 
-# # API DRY Handler — END
-
-# # Blockchain DRY Handlers — START
-async def validate_organization_existence(
-    *, org_identity: OrganizationIdentityValidator, scoped_to_applicants: bool
-) -> Mapping | None:
-
-    # - Specific instances of whether the organization is classified as non-educational or otherwise, each cases of it requires a different parameter or query to validate the existence of the association/organization.
-    # @o For the instance of `OrganizationUserTransaction` it checks the `association_address` if given (in the scenario that the association/organiaztion does exists), or it was checked by `association_name` and `association_group_type.` (in the scenario where the association/organization does not exists and requires a new one)
-    # ! Therefore, the way its variables are declared is when the organization does not exists or not.
-
-    # @d The switch `scope_to_applicants` forces to resolve the given parameter in 'org_identity', which is an address from the user, NOT a reference address from the association, by setting `scope_to_applicants` to `True`, it queries that address if the association exists based from the address of source.
-    # @d It does not forces to query along both types along with the address, when the instance is `ApplicantUserTransacion`.
-
-    database_instance: Database = get_database_instance()
-    resolved_association_ref_from_user: Mapping | str | None = (
-        org_identity.association_address
-    )
-
-    if scoped_to_applicants:
-        get_association_query: Select = select([users.c.association]).where(
-            users.c.unique_address == org_identity.association_address
-        )
-
-        resolved_association_ref_from_user = await database_instance.fetch_val(
-            get_association_query
-        )
-
-    validate_association_existence_query: Select = select(
-        [associations.c.address]
-    ).where(
-        (
-            (associations.c.address == resolved_association_ref_from_user)
-            if scoped_to_applicants
-            else (
-                (associations.c.address == resolved_association_ref_from_user)
-                | (
-                    (associations.c.name == org_identity.association_name)
-                    & (
-                        (associations.c.group == OrganizationType.INSTITUTION)
-                        | (associations.c.group == OrganizationType.ORGANIZATION)
-                    )
-                )
-            )
-        )
-    )
-
-    existing_association: Mapping | None = await database_instance.fetch_val(
-        validate_association_existence_query
-    )
-
-    return existing_association
-
-
-async def validate_applicant_user_address(
-    *, supplied_address: AddressUUID, expected_type: UserEntity
-) -> None:
-
-    if isinstance(supplied_address, str):
-        address_existence_checker_query: Select = select([func.count()]).where(
-            (users.c.unique_address == supplied_address)
-            & (users.c.type == expected_type)
-        )
-
-        address: Mapping | None = await get_database_instance().fetch_one(
-            address_existence_checker_query
-        )
-
-        if not address.count:  # type: ignore
-            raise HTTPException(
-                detail="Supplied address reference does not exist. Please check your input and try again.",
-                status_code=HTTPStatus.NOT_FOUND,
-            )
-
-        return None
-
-    raise HTTPException(
-        detail=f"Supplied address is an invalid object. Please ensure that the address is a type of {type(str)}.",
-        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-    )
-
-
-async def validate_user_existence(
-    *, user_identity: AgnosticCredentialValidator
-) -> bool:
-    validate_existence_user_query: Select = select([func.count()]).where(
-        (users.c.first_name == user_identity.first_name)
-        & (users.c.last_name == user_identity.last_name)
-        & (users.c.username == user_identity.username)
-        & (users.c.email == user_identity.email)
-    )
-
-    existing_user: Mapping | None = await get_database_instance().fetch_one(
-        validate_existence_user_query
-    )
-
-    if not existing_user.count:  # type: ignore
-        return False
-
-    return True
-
-
 async def validate_transaction_mapping_exists(
     *, user_address: AddressUUID | str, content_type: TransactionContextMappingType
 ) -> bool:
@@ -1091,6 +1101,26 @@ async def validate_transaction_mapping_exists(
         detail="There was an error regarding transaction validation mappin, please report this to the administrators to fix this issue.",
         status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
     )
+
+
+async def validate_user_existence(
+    *, user_identity: AgnosticCredentialValidator
+) -> bool:
+    validate_existence_user_query: Select = select([func.count()]).where(
+        (users.c.first_name == user_identity.first_name)
+        & (users.c.last_name == user_identity.last_name)
+        & (users.c.username == user_identity.username)
+        & (users.c.email == user_identity.email)
+    )
+
+    existing_user: Mapping | None = await get_database_instance().fetch_one(
+        validate_existence_user_query
+    )
+
+    if not existing_user.count:  # type: ignore
+        return False
+
+    return True
 
 
 # # Blockchain DRY Handlers — END

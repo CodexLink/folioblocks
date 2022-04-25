@@ -34,6 +34,7 @@ from blueprint.schemas import (
     Block,
     BlockOverview,
     ConsensusSuccessPayload,
+    ConsensusToMasterPayload,
     GroupTransaction,
     HashableBlock,
     NodeCertificateTransaction,
@@ -64,14 +65,13 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
-from core.constants import BLOCKCHAIN_NODE_JSON_TEMPLATE
-from blueprint.schemas import ConsensusToMasterPayload
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
     unconventional_terminate,
     validate_organization_existence,
+    validate_previous_consensus_negotiation,
     validate_transaction_mapping_exists,
     validate_user_existence,
 )
@@ -88,6 +88,7 @@ from core.constants import (
     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
     BLOCKCHAIN_NAME,
     BLOCKCHAIN_NEGOTIATION_ID_LENGTH,
+    BLOCKCHAIN_NODE_JSON_TEMPLATE,
     BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
@@ -1194,6 +1195,12 @@ class BlockchainMechanism(ConsensusMechanism):
                 if attempt_deliver_payload.ok:
                     # - Increment the counter when the payload delivery is finished.
                     self.leading_block_id += 1
+
+                    # - Validate any previous consensus negotiation.
+                    await validate_previous_consensus_negotiation(
+                        database_instance_ref=self.__database_instance,
+                        block_reference=generated_block,
+                    )
 
                     # - Save this consensus negotiation ID as well for the retrieval verification of the hashed/mined block.
                     save_in_progress_negotiation_query: Insert = (
