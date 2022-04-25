@@ -98,6 +98,7 @@ class ConsensusMechanism:
             method=HTTPQueueMethods.POST,
             await_result_immediate=True,
             name="get_echo_from_master",
+            return_on_error=False,
             retry_attempts=99,
         )
 

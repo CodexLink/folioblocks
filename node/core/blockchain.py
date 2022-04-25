@@ -910,6 +910,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     "consensus_sleep_expiration": self.__consensus_sleep_date_expiration.isoformat(),
                 },
                 retry_attempts=100,
+                return_on_error=False,
                 name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
             )
 
@@ -1188,6 +1189,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         "master_address": self.node_identity[0],
                         "consensus_negotiation_id": generated_consensus_negotiation_id,
                     },
+                    return_on_error=False,
                     retry_attempts=100,
                     name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info[1].miner_address[-6:]}",
                 )
@@ -2090,7 +2092,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     in_memory_chain: frozendict | None = (
                         self.__process_deserialize_to_load_blockchain_in_memory(
                             import_raw_json_to_dict(dict_blockchain_content["content"]),
-                            update=True
+                            update=True,
                         )
                     )
 

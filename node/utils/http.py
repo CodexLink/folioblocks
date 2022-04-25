@@ -68,6 +68,7 @@ class HTTPClient:
         do_not_retry: bool = False,
         name: str | None = None,
         retry_attempts: int = 5,
+        return_on_error: bool = True,
         use_secure_protocol: bool = False,
     ) -> Any:
         """
@@ -181,7 +182,11 @@ class HTTPClient:
                         await self.get_finished_request(request_name=name)
                     )
 
-                    if isinstance(returned_response, ClientResponse):
+                    if isinstance(returned_response, ClientResponse) and (
+                        returned_response.ok
+                        or not returned_response.ok
+                        and return_on_error
+                    ):
                         return returned_response
 
                     if not do_not_retry:
