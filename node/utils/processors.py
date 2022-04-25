@@ -771,10 +771,7 @@ async def look_for_archival_nodes() -> None:
 
 # # Input Stoppers — START
 def supress_exceptions_and_warnings() -> None:
-    from contextlib import suppress
-
-    with suppress(BaseException, DatabaseError, RuntimeError, SMTPException, SystemExit):
-        sys.tracebacklimit = 0
+    sys.tracebacklimit = 0
 
 
 def unconventional_terminate(*, message: str, early: bool = False) -> None:
