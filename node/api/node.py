@@ -363,7 +363,7 @@ async def receive_raw_block(
             # - Assume this is incomplete, we delete it to insert a new consensus negotiation.
             delete_previous_negotiation_query: Delete = (
                 consensus_negotiation.delete().where(
-                    whereclause=previous_negotiation_sql_ref
+                    previous_negotiation_sql_ref
                 )
             )
             await database_instance.execute(delete_previous_negotiation_query)
