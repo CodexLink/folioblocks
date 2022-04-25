@@ -179,7 +179,6 @@ class BlockchainMechanism(ConsensusMechanism):
         # # Timer Containers
         self.block_timer_seconds: Final[int] = block_timer_seconds
         self.__hashing_duration: timedelta = timedelta(seconds=0)
-        self.__consensus_sleep_date_expiration: datetime = datetime.now()
 
         # # State and Variable References
         self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
@@ -901,7 +900,7 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self.__get_last_block()
 
         return NodeConsensusInformation(
-            consensus_timer_expiration=self.__consensus_sleep_date_expiration,
+            consensus_sleep_timer_seconds=self.__hashing_duration,
             is_hashing=not self.blockchain_ready,
             is_sleeping=self.__node_ready and self.blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
@@ -980,10 +979,6 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         if recorded_consensus_negotiation is not None:
-            self.__consensus_sleep_date_expiration = (
-                datetime.now() + self.__hashing_duration
-            )
-
             payload_to_master: ClientResponse = await self.__http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_origin_source_host}:{master_origin_source_port}/node/receive_hashed_block"
@@ -999,7 +994,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
-                    "consensus_sleep_expiration": self.__consensus_sleep_date_expiration.isoformat(),
+                    "hashing_finished_duration": self.__hashing_duration,
                 },
                 retry_attempts=100,
                 return_on_error=False,

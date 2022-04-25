@@ -322,7 +322,7 @@ class NodeConsensusInformation(BaseModel):
     is_sleeping: bool
     is_hashing: bool
     node_role: NodeType
-    consensus_timer_expiration: datetime
+    consensus_sleep_timer_seconds: datetime
     last_mined_block: int
 
 
