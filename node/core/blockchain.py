@@ -1721,13 +1721,19 @@ class BlockchainMechanism(ConsensusMechanism):
                         != context["chain"][block_idx - 1]["hash_block"]
                     ):
                         logger.critical(
-                            f"Block #{block_data['id']}'s backward reference to Block #{block_data['id'] - 1} is invalid! | Expects (from Current Block): {block_data['hash_block']}, got {context['chain'][block_idx - 1]['prev_hash_block']} instead."
+                            f"Block #{block_data['id']}'s backward reference to Block #{block_data['id'] - 1} is invalid! | Expects (from Current Block): '{block_data['prev_hash_block']}', got '{context['chain'][block_idx - 1]['hash_block']}' instead."
                         )
 
-                        logger.critical(
-                            "Due to potential fraudalent local blockchain file, please wait for the `MASTER_NODE` node to acknowledge your replacement of blockchain file."
-                        )
-                        self.blockchain_ready = False
+                        if self.node_role is NodeType.MASTER_NODE:
+                            unconventional_terminate(
+                                message="There is a potential fraudalent local blockchain file. Please check any backups and restore them as possible! Fetching from another `MASTER_NODE` is not yet implemented!"
+                            )
+
+                        else:
+                            logger.critical(
+                                "Due to potential fraudalent local blockchain file, please wait for the `MASTER_NODE` node to acknowledge your replacement of blockchain file."
+                            )
+                            self.blockchain_ready = False
 
                         # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
