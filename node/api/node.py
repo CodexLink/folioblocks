@@ -238,7 +238,7 @@ async def receive_hashed_block(
             )
             .values(
                 status=AssociatedNodeStatus.CURRENTLY_AVAILABLE,
-                consensus_sleep_expiration=context_from_archival_miner.consensus_sleep_expiration
+                consensus_sleep_expiration=context_from_archival_miner.hashing_duration_finished
                 + timedelta(seconds=proposed_consensus_addon_timer),
             )
         )

@@ -65,6 +65,7 @@ from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import BLOCKCHAIN_NODE_JSON_TEMPLATE
+from node.blueprint.schemas import ConsensusToMasterPayload
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -316,8 +317,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 self.__block_timer_executor(),
                 name=f"{BlockchainMechanism.__name__}_{self.node_role.name}_instance_{self.__block_timer_executor.__name__}",
             )
-
-            print("final", self.__chain)
 
         else:
             if self.node_identity is not None:
@@ -609,8 +608,6 @@ class BlockchainMechanism(ConsensusMechanism):
                                 data.context = OrganizationUserBaseTransaction(
                                     **data.context.dict()
                                 )
-
-                        print("FINAL PAYLOAD", data.context, data.context.dict())
 
             # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
             # @o This needs special handling due to the fact that it may contain an actual file.
@@ -979,6 +976,7 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         if recorded_consensus_negotiation is not None:
+
             payload_to_master: ClientResponse = await self.__http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_origin_source_host}:{master_origin_source_port}/node/receive_hashed_block"
@@ -994,7 +992,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
-                    "hashing_finished_duration": self.__hashing_duration,
+                    "hashing_duration_finished": str(self.__hashing_duration.total_seconds()),
                 },
                 retry_attempts=100,
                 return_on_error=False,
@@ -1247,6 +1245,8 @@ class BlockchainMechanism(ConsensusMechanism):
                     logger.info(
                         f"Block {generated_block.id} has been sent and is in process of hashing! (By: {available_node_info[1].miner_address})"
                     )
+
+                    first_instance = True
                     continue
 
                 else:
@@ -1262,8 +1262,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     continue
 
-                first_instance = True
-
             logger.error(
                 f"Cannot proceed when block generated returned {generated_block}!"
             )
@@ -1273,7 +1271,6 @@ class BlockchainMechanism(ConsensusMechanism):
     ) -> None:
 
         if not self.__new_master_instance:
-
             if add_on:
                 self.__hashing_duration += timedelta(seconds=hashing_duration)
             else:
@@ -1732,10 +1729,6 @@ class BlockchainMechanism(ConsensusMechanism):
                     logger.debug(
                         f"Block #{block_data['id']} doesn't have a prev or leading block to compare reference, probably the latest block."
                     )
-                    print(
-                        block_data["prev_hash_block"],
-                        context["chain"][block_idx - 1]["hash_block"],
-                    )
 
                 # - If cached_block_id is equal to dict_data["id"]. Then increment it easily.
                 if self.main_block_id == block_data["id"]:
@@ -1925,13 +1918,6 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 ).decode("utf-8")
             )
-
-        print(
-            "\n\n\n\n\n",
-            payload_to_encrypt.dict(),
-            type(payload_to_encrypt),
-            end="\n\n\n\n",
-        )
 
         # - Build the transaction
         try:
