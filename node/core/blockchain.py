@@ -974,7 +974,7 @@ class BlockchainMechanism(ConsensusMechanism):
             & (consensus_negotiation.c.peer_address == master_address_ref)
         )
 
-        recorded_consensus_negotiation = await self.__database_instance.fetch_one(
+        recorded_consensus_negotiation = await self.__database_instance.fetch_val(
             recorded_consensus_negotiation_query
         )
 
@@ -989,7 +989,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     "x-token": self.node_identity[1],
                 },
                 data={
-                    "consensus_negotiation_id": recorded_consensus_negotiation.consensus_negotiation_id,  # type: ignore # - For some reason it doesn't detect the mapping.
+                    "consensus_negotiation_id": recorded_consensus_negotiation,
                     "miner_address": self.node_identity[0],
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
@@ -1011,7 +1011,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     .where(
                         (
                             consensus_negotiation.c.consensus_negotiation_id
-                            == recorded_consensus_negotiation.consensus_negotiation_id  # type: ignore
+                            == recorded_consensus_negotiation
                         )
                         & (
                             consensus_negotiation.c.status
@@ -1025,7 +1025,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     update_completed_consensus_negotiation_query
                 )
 
-                logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation.consensus_negotiation_id} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
+                logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
 
                 # - Sum the mined_timer sleep phase + given random sleep timer.
                 self.__consensus_calculate_sleep_time(
@@ -1094,6 +1094,8 @@ class BlockchainMechanism(ConsensusMechanism):
             f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
         )
 
+        first_instance: bool = True
+
         while True:
             logger.warning(
                 f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions."
@@ -1122,7 +1124,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             required_transactions: int = (
                 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                if not available_node_info[0]
+                if not available_node_info[0] or first_instance
                 else (
                     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
                     + (available_node_info[0] * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
@@ -1133,7 +1135,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 self.__unsent_block_container
             ):
                 logger.info(
-                    f"Number of required transactions were sufficient! There are {len(self.__transaction_container)} transactions that will be converted to a block for processing."
+                    f"Number of required transactions {len(self.__transaction_container)} were sufficient!"
                 )
 
                 # - Create a block from all of the transactions.
@@ -1141,14 +1143,14 @@ class BlockchainMechanism(ConsensusMechanism):
 
             elif len(self.__unsent_block_container):
                 logger.info(
-                    f"Block {self.__unsent_block_container[0]} has been left-out from hashing due to previous miner unable to respond in time. Using this block for the hashing process instead."
+                    f"Block {self.__unsent_block_container[0]} has been left-out from hashing due to previous miner unable to respond in time."
                 )
 
                 generated_block = self.__unsent_block_container.pop(0)
 
             else:
                 logger.warning(
-                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                    f"Notenough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s)."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
@@ -1243,13 +1245,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     logger.info(
-                        f"Block {generated_block.id} has been sent and is in process of hashing! (By Miner Node: {available_node_info[1].miner_address})"
+                        f"Block {generated_block.id} has been sent and is in process of hashing! (By: {available_node_info[1].miner_address})"
                     )
                     continue
 
                 else:
                     logger.warning(
-                        "After multiple retries, the generated block will be stored and will find other archival miner node candidate who doesn't disconnect."
+                        "After multiple retries, the generated block will be stored and will find other candidates."
                     )
                     self.__unsent_block_container.append(generated_block)
 
@@ -1259,6 +1261,8 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     continue
+
+                first_instance = True
 
             logger.error(
                 f"Cannot proceed when block generated returned {generated_block}!"
@@ -1436,15 +1440,14 @@ class BlockchainMechanism(ConsensusMechanism):
                         "properties"
                     ]
 
-                    logger.info(
-                        f"Archival miner candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
-                    )
-
                     if (
                         not resolved_candidate_state_info["is_hashing"]
                         and NodeType(resolved_candidate_state_info["node_role"])
                         is NodeType.ARCHIVAL_MINER_NODE
                     ):
+                        logger.info(
+                            f"Archival miner candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
+                        )
                         return (
                             len(available_nodes),
                             ArchivalMinerNodeInformation(

@@ -74,7 +74,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import PydanticValueError
 from sqlalchemy import func, select
-from sqlalchemy.sql.expression import Insert, Select, Update
+from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select, Update
 from core.dependencies import generate_consensus_sleep_time
 from core.constants import BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
 from utils.processors import validate_source_and_origin_associates
@@ -340,9 +340,34 @@ async def receive_hashed_block(
 async def receive_raw_block(
     context_from_master: ConsensusFromMasterPayload,
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+    database_instance: Database = Depends(get_database_instance),
 ) -> Response:
 
     if isinstance(blockchain_instance, BlockchainMechanism):
+
+        previous_negotiation_sql_ref: ClauseElement = (
+            consensus_negotiation.c.block_no_ref == context_from_master.block.id
+        ) & (consensus_negotiation.c.status == ConsensusNegotiationStatus.ON_PROGRESS)
+
+        # - Check for existing incomplete negotiation.
+        existing_negotiation_query: Select = select([consensus_negotiation.c.id]).where(
+            previous_negotiation_sql_ref
+        )
+
+        # - Chea
+        existing_negotiation = await database_instance.fetch_val(
+            existing_negotiation_query
+        )
+
+        if existing_negotiation is not None:
+            # - Assume this is incomplete, we delete it to insert a new consensus negotiation.
+            delete_previous_negotiation_query: Delete = (
+                consensus_negotiation.delete().where(
+                    whereclause=previous_negotiation_sql_ref
+                )
+            )
+            await database_instance.execute(delete_previous_negotiation_query)
+
         # - Record the Consensus Negotiation ID.
         save_generated_consensus_negotiation_id_query: Insert = (
             consensus_negotiation.insert().values(
@@ -352,9 +377,7 @@ async def receive_raw_block(
                 status=ConsensusNegotiationStatus.ON_PROGRESS,
             )
         )
-        await get_database_instance().execute(
-            save_generated_consensus_negotiation_id_query
-        )
+        await database_instance.execute(save_generated_consensus_negotiation_id_query)
         logger.info(
             f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
         )
