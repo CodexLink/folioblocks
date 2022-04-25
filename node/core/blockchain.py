@@ -1402,7 +1402,10 @@ class BlockchainMechanism(ConsensusMechanism):
                 associated_nodes.c.source_address,
                 associated_nodes.c.source_port,
             ]
-        ).where(associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE)
+        ).where(
+            (associated_nodes.c.status == AssociatedNodeStatus.CURRENTLY_AVAILABLE)
+            & (associated_nodes.c.consensus_sleep_expiration < datetime.now())
+        )
 
         available_nodes: list[Mapping] = await self.__database_instance.fetch_all(
             available_nodes_query
@@ -1419,7 +1422,6 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.info(f"{len(available_nodes)} archival miner node candidate/s found!")
-        print("YEAH ", available_nodes, len(available_nodes))
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
             try:
@@ -1443,35 +1445,10 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Archival miner candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
                     )
 
-                    last_selected_node_consensus_sleep_datetime_query: Select = select(
-                        [associated_nodes.c.consensus_sleep_expiration]
-                    ).where(
-                        associated_nodes.c.user_address
-                        == resolved_candidate_state_info["owner"]
-                    )
-
-                    # - Use backend time referene instead of relying from the archival miner instead.
-                    # * This implementation is surely fool-proof.
-                    selected_node_last_consensus_sleep_datetime = (
-                        await self.__database_instance.fetch_one(
-                            last_selected_node_consensus_sleep_datetime_query
-                        )
-                    )
-
-                    # @o Type-hint.
-                    resolved_last_consensus_sleep_datetime: datetime
-                    if selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration is None:  # type: ignore
-                        resolved_last_consensus_sleep_datetime = datetime.now()
-                    else:
-                        resolved_last_consensus_sleep_datetime = (
-                            selected_node_last_consensus_sleep_datetime.consensus_sleep_expiration  # type: ignore
-                        )
-
                     if (
                         not resolved_candidate_state_info["is_hashing"]
                         and NodeType(resolved_candidate_state_info["node_role"])
                         is NodeType.ARCHIVAL_MINER_NODE
-                        and (datetime.now() >= resolved_last_consensus_sleep_datetime)
                     ):
                         return (
                             len(available_nodes),
