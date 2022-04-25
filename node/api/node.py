@@ -76,7 +76,7 @@ from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from core.dependencies import generate_consensus_sleep_time
-from node.core.constants import BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
+from core.constants import BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
 from utils.processors import validate_source_and_origin_associates
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
