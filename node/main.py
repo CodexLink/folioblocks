@@ -10,13 +10,14 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 import logging
 from argparse import Namespace
-from asyncio import create_task, sleep
+from asyncio import create_task, gather, sleep
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
 from logging.config import dictConfig
 from os import environ as env
 from socket import AF_INET, SOCK_STREAM, error, socket
 from typing import Any, Final, Mapping
+from databases import Database
 
 import uvicorn
 from fastapi import FastAPI
@@ -140,7 +141,7 @@ api_handler.add_middleware(
 
 @api_handler.on_event("startup")
 async def pre_initialize() -> None:
-    logger.info(f"Role Detected as {parsed_args.node_role} ...")
+    logger.info(f"Role detected as {parsed_args.node_role.name}.")
 
     # - Validate by checking if the email service would run.
     if (
@@ -212,7 +213,7 @@ async def post_initialize() -> None:
 
 @api_handler.on_event("shutdown")
 async def terminate() -> None:
-    # Supress exceptions and warnings.
+    # - Supress exceptions and warnings.
     # @o Why? Because there are some sessions and asyncio-related exceptions and warnings are technically polluting the console even though everything is resolved.
     # @o With that, it is expected that this is unethical as ignoring messages and other stuff is indeed ignorant from the errors.
     # @o But trust me, this is needed in the context of some errors that can't be handled because they are in internal and is not directly affecting components who uses it.
@@ -220,6 +221,7 @@ async def terminate() -> None:
 
     identity_tokens: IdentityTokens | None = get_identity_tokens()
     http_instance: HTTPClient = get_http_client_instance()
+    database_instance: Database = get_database_instance()
     # blockchain_instance: BlockchainMechanism = get_blockchain_instance()
 
     if parsed_args.node_role is NodeType.MASTER_NODE:
@@ -230,27 +232,40 @@ async def terminate() -> None:
 
         # * Remove the token related to this master, as well as, change the state of this master account to Offline.
         if identity_tokens is not None:
-
-            master_state: Update = (
+            # - Update state to `Offline`.
+            master_state_to_down_query: Update = (
                 users.update()
                 .where(users.c.unique_address == identity_tokens[0])
                 .values(activity=UserActivityState.OFFLINE)
             )
 
-            await get_database_instance().execute(master_state)
+            # - Invalidate its own token.
+            # @o We cannot use our own endpoint when the server is shutting down, meaning we cannot communicate with its own API any longer.
+            master_token_to_expired_query: Update = (
+                tokens.update()
+                .where(tokens.c.token == identity_tokens[1])
+                .values(state=TokenStatus.LOGGED_OUT)
+            )
+
+            await gather(
+                database_instance.execute(master_token_to_expired_query),
+                database_instance.execute(master_state_to_down_query),
+            )
+
             logger.info(
-                f"Master Node's token has been invalidated due to Logout session."
+                f"Master node's token has been invalidated due to logout session."
             )
 
     else:
+        # - Ignore this if this node wasn't logged on.
         if identity_tokens is not None:
-            # - Ignore this if this node wasn't logged on.
             await http_instance.enqueue_request(
                 url=URLAddress(
                     f"{parsed_args.target_host}:{parsed_args.target_port}/entity/logout"
                 ),
                 method=HTTPQueueMethods.POST,
                 do_not_retry=True,
+                await_result_immediate=True,
                 headers={"X-Token": JWTToken(identity_tokens[1])},
                 name=f"request_logout_node_as_{parsed_args.node_role.name.lower()}",
             )

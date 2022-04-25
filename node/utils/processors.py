@@ -54,7 +54,7 @@ if sys.platform == "win32":
 else:
     from signal import SIGTERM as CALL_TERMINATE_EVENT
 
-from sqlite3 import Connection, OperationalError, connect
+from sqlite3 import Connection, DatabaseError, OperationalError, connect
 from typing import Any, Final, Mapping
 
 from aioconsole import ainput
@@ -773,7 +773,7 @@ async def look_for_archival_nodes() -> None:
 def supress_exceptions_and_warnings() -> None:
     from contextlib import suppress
 
-    with suppress(BaseException, RuntimeError, SMTPException, SystemExit):
+    with suppress(BaseException, DatabaseError, RuntimeError, SMTPException, SystemExit):
         sys.tracebacklimit = 0
 
 
