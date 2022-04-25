@@ -544,7 +544,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         # * Since this project is under repository, we will keep it this way.
                         # * In actual real world, we ain't gonna be doing this.
 
-                        # @o Create the key based from the Transaction Action (2 characters) + the user address (`target` or `to`), truncated the first 3 characters and the last 14 characters of the target address + datetime in custom format, please see the variable `current_date` below.
+                        # @o Create the key based from the Transaction Action (1 to 2 characters) + the user address (`target` or `to`), truncated the first 3 characters and the last 13 to 14 characters of the target address + datetime in custom format, please see the variable `current_date` below.
                         # # Documentation regarding custom format: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
 
                         timestamp: datetime = datetime.now()
@@ -552,11 +552,19 @@ class BlockchainMechanism(ConsensusMechanism):
                             "%y%m%d%H%M%S"
                         )  # @o datetime.now() produces "datetime.datetime(2022, 4, 16, 19, 45, 36, 724779)" and when called with datetime.now().isoformat() produces "2022-04-16T19:45:36.724779'", when we used datetime.now().strftime() with parameters "%y%m%d%H%M%S", will produce "'220416194536'"
 
-                        encrypter_key: bytes = f"{str(action.value)}{to_address[3:-14]}{current_date}".encode(
+                        # # Regarding dynamic values adjusting offset from its enumeration.
+                        # - For the sake of stupidity, I will be handling the length truncation of the address when the action.value has a length of 1 or 2.
+                        transaction_action_ref: str = str(action.value)
+
+                        # TODO: Make this constant non-magic number.
+                        to_address_truncation_char: int = (
+                            14 if transaction_action_ref == 2 else 13
+                        )
+
+                        encrypter_key: bytes = f"{str(action.value)}{to_address[3:-to_address_truncation_char]}{current_date}".encode(
                             "utf-8"
                         )
 
-                        print("key", encrypter_key)
                         file_encrypter: Fernet = Fernet(
                             urlsafe_b64encode(encrypter_key)
                         )
@@ -1052,6 +1060,10 @@ class BlockchainMechanism(ConsensusMechanism):
             # ! Hit the next block for the allocation as we finished processing a block!
             self.main_block_id += 1
 
+            # - Let leading block sync with the main block when there's no block collision issue, where the `lead_block_id` increments itself.
+            if self.leading_block_id < self.main_block_id:
+                self.leading_block_id = self.main_block_id
+
             await self.__process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
@@ -1300,7 +1312,7 @@ class BlockchainMechanism(ConsensusMechanism):
         if last_block is not None:
             if last_block.id >= self.leading_block_id:
                 logger.critical(
-                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently (leading) cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.main_block_id}"
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently (leading) cached available-to-allocate block. | Last Block ID: {last_block.id} | Main Cached: {self.main_block_id} | Leading Cached: {self.leading_block_id}"
                 )
                 return None
         else:
@@ -1400,7 +1412,7 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
-        logger.info(f"{len(available_nodes)} Archival Miner Node Candidate/s found!")
+        logger.info(f"{len(available_nodes)} archival miner node candidate/s found!")
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
             try:
@@ -1556,7 +1568,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         mined_block: Block = await block_hashing_processor
 
-        logger.info(f"Block {block.id} has been mined.")
+        logger.info(f"Block #{block.id} has been mined.")
         await self.append_block(context=mined_block, follow_up=False)
 
         return mined_block if return_hashed else None

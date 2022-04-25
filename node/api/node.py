@@ -172,7 +172,7 @@ async def receive_hashed_block(
                 == context_from_archival_miner.block.block_size_bytes
                 and each_confirming_block.prev_hash_block
                 == context_from_archival_miner.block.prev_hash_block
-                and context_from_archival_miner.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY] == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY  # type: ignore # ! This should contain something.
+                and context_from_archival_miner.block.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY] == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY  # type: ignore # ! This should contain something.
                 and each_confirming_block.contents.timestamp
                 == context_from_archival_miner.block.contents.timestamp
             ):

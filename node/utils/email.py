@@ -19,12 +19,12 @@ from os import environ as env
 
 from aiosmtplib import (
     SMTP,
-    SMTPConnectTimeoutError,
     SMTPException,
-    SMTPReadTimeoutError,
     SMTPRecipientRefused,
     SMTPRecipientsRefused,
     SMTPResponseException,
+    SMTPSenderRefused,
+    SMTPServerDisconnected,
     SMTPTimeoutError,
 )
 from pydantic import EmailStr
@@ -178,17 +178,14 @@ class EmailService:
                 SMTPRecipientRefused,
                 SMTPRecipientsRefused,
                 SMTPResponseException,
+                SMTPSenderRefused,
             ) as e:
                 logger.critical(
                     f"Cannot send email due to error in the process. Info: {e} | From: {message_instance['From']} | To: {to[:5]}"
                 )
                 break
 
-            except (
-                SMTPTimeoutError,
-                SMTPReadTimeoutError,
-                SMTPConnectTimeoutError,
-            ) as e:
+            except (SMTPTimeoutError, SMTPServerDisconnected) as e:
                 logger.warning(
                     f"Cannot send email due to disruption of service. Re-attempting... | Info: {e}"
                 )
