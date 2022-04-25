@@ -65,7 +65,7 @@ from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import BLOCKCHAIN_NODE_JSON_TEMPLATE
-from node.blueprint.schemas import ConsensusToMasterPayload
+from blueprint.schemas import ConsensusToMasterPayload
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -992,7 +992,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
-                    "hashing_duration_finished": str(self.__hashing_duration.total_seconds()),
+                    "hashing_duration_finished": str(
+                        self.__hashing_duration.total_seconds()
+                    ),
                 },
                 retry_attempts=100,
                 return_on_error=False,
