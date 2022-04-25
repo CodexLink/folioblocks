@@ -314,7 +314,7 @@ class ConsensusToMasterPayload(BaseModel):
     consensus_negotiation_id: RandomUUID
     miner_address: AddressUUID
     block: Block
-    hashing_duration_finished: timedelta
+    hashing_duration_finished: datetime
 
 
 class NodeConsensusInformation(BaseModel):
@@ -322,7 +322,7 @@ class NodeConsensusInformation(BaseModel):
     is_sleeping: bool
     is_hashing: bool
     node_role: NodeType
-    consensus_sleep_timer_seconds: timedelta
+    current_consensus_sleep_timer: timedelta
     last_mined_block: int
 
 

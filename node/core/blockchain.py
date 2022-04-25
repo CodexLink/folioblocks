@@ -897,7 +897,7 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self.__get_last_block()
 
         return NodeConsensusInformation(
-            consensus_sleep_timer_seconds=self.__hashing_duration,
+            current_consensus_sleep_timer=self.__hashing_duration,
             is_hashing=not self.blockchain_ready,
             is_sleeping=self.__node_ready and self.blockchain_ready,
             last_mined_block=last_block.id if last_block is not None else 0,
@@ -940,7 +940,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.warning(
-            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to consume all necessary requests from the {NodeType.MASTER_NODE} API-side before deadlocking-self to hash the block."
+            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to properly consume requests from {NodeType.MASTER_NODE.name}'s API-side before softlocking-self to hash the block."
         )
         await sleep(BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER)
 
@@ -992,9 +992,9 @@ class BlockchainMechanism(ConsensusMechanism):
                     "block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
-                    "hashing_duration_finished": str(
-                        self.__hashing_duration.total_seconds()
-                    ),
+                    "hashing_duration_finished": (
+                        datetime.now() + self.__hashing_duration
+                    ).isoformat(),
                 },
                 retry_attempts=100,
                 return_on_error=False,
