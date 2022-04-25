@@ -64,6 +64,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from core.constants import BLOCKCHAIN_NODE_JSON_TEMPLATE
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -1413,6 +1414,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.info(f"{len(available_nodes)} archival miner node candidate/s found!")
+        print("YEAH ", available_nodes, len(available_nodes))
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
             try:
@@ -1433,7 +1435,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     ]
 
                     logger.info(
-                        f"Archival Miner Candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
+                        f"Archival miner candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
                     )
 
                     last_selected_node_consensus_sleep_datetime_query: Select = select(
@@ -1667,6 +1669,8 @@ class BlockchainMechanism(ConsensusMechanism):
         # *  Ensure that the wrapped object is 'dict' regardless of their recent forms.
         if isinstance(context, dict):
             if update:
+                self.__chain = frozendict(BLOCKCHAIN_NODE_JSON_TEMPLATE)
+                self.main_block_id = 1
                 self.__cached_total_transactions = 0  # ! This means that we are resetting count back to zero because we are loading a new blockchain file.
 
             required_genesis_blocks: int = BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS  # ! We need to validate that there should be a set of required gensis blocks. If there are insufficient, then this blockchain as a whole is fraudalent.
@@ -2048,9 +2052,7 @@ class BlockchainMechanism(ConsensusMechanism):
         master_node_props = get_master_node_properties()
 
         while True:
-
             # - Fetch from the master first by checking the hash, let the endpoint compare it.
-
             master_hash_valid_response: ClientResponse = await self.__http_instance.enqueue_request(
                 url=URLAddress(
                     f"{master_node_props[REF_MASTER_BLOCKCHAIN_ADDRESS]}:{master_node_props[REF_MASTER_BLOCKCHAIN_PORT]}/node/verify_chain_hash"  # type: ignore
@@ -2087,7 +2089,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     in_memory_chain: frozendict | None = (
                         self.__process_deserialize_to_load_blockchain_in_memory(
-                            import_raw_json_to_dict(dict_blockchain_content["content"])
+                            import_raw_json_to_dict(dict_blockchain_content["content"]),
+                            update=True
                         )
                     )
 
