@@ -8,7 +8,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
@@ -322,7 +322,7 @@ class NodeConsensusInformation(BaseModel):
     is_sleeping: bool
     is_hashing: bool
     node_role: NodeType
-    consensus_sleep_timer_seconds: float
+    consensus_sleep_timer_seconds: timedelta
     last_mined_block: int
 
 
