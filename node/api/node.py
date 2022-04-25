@@ -76,6 +76,7 @@ from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from core.dependencies import generate_consensus_sleep_time
+from node.core.constants import BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
 from utils.processors import validate_source_and_origin_associates
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
@@ -166,38 +167,47 @@ async def receive_hashed_block(
             )
 
             if (
-                (
-                    each_confirming_block.id == context_from_archival_miner.block.id
-                    and blockchain_instance.cached_block_id
-                    == context_from_archival_miner.block.id
-                )
+                (each_confirming_block.id == context_from_archival_miner.block.id)
                 and each_confirming_block.block_size_bytes
                 == context_from_archival_miner.block.block_size_bytes
                 and each_confirming_block.prev_hash_block
                 == context_from_archival_miner.block.prev_hash_block
+                and context_from_archival_miner.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY] == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY  # type: ignore # ! This should contain something.
                 and each_confirming_block.contents.timestamp
                 == context_from_archival_miner.block.contents.timestamp
             ):
+
+                if (
+                    blockchain_instance.main_block_id
+                    > context_from_archival_miner.block.id
+                ):
+                    blockchain_instance.hashed_block_container.append(
+                        context_from_archival_miner.block
+                    )
+                    logger.warning(
+                        f"Received-hashed Block #{context_from_archival_miner.block.id} seem to be way to early to get here. Therefore, save it in the hashed block container to assess when `append_block` is called."
+                    )
+
+                    # - After appending the block from the `hashed_block_container`, sort it.
+                    blockchain_instance.hashed_block_container.sort(
+                        key=lambda block_context: block_context.id
+                    )
+
+                # - For equal block id, just remove it from the confirming block container and set that the block has been confirmed.
+
                 blockchain_instance.confirming_block_container.remove(
                     each_confirming_block
                 )  # - Remove from the container as it was already confirmed.
 
                 block_confirmed = True
+
                 break
 
             if not block_confirmed:
                 raise HTTPException(
-                    detail="Cannot confirm any confirming blocks from the received mined blocks.",
+                    detail="Cannot confirm any confirming blocks from the received mined block.",
                     status_code=HTTPStatus.NO_CONTENT,
                 )
-
-        # * Regardless of who receives it, append it from their context_from_archival_miner.block.
-        # - For MASTER_NODE, this may be a redundant check, but its fine.
-        if blockchain_instance.cached_block_id != context_from_archival_miner.block.id:
-            raise HTTPException(
-                detail="The given block seem to be out of sync! This is not possible in terms of implementation, contact the developers to investigate this issue.",
-                status_code=HTTPStatus.NOT_ACCEPTABLE,
-            )
 
         proposed_consensus_addon_timer: float = generate_consensus_sleep_time(
             block_timer=blockchain_instance.block_timer_seconds
@@ -279,10 +289,14 @@ async def receive_hashed_block(
                     f"Transaction {context_from_archival_miner.block.contents.transactions[transaction_idx].tx_hash} payload cannot be casted with the following enumeration classes: {NodeTransaction} and {GroupTransaction}. This is going to be problematic on fetching data, but carry on. But please report this to the developer."
                 )
 
-        # - Insert the block.
-        await blockchain_instance.append_block(
-            context=context_from_archival_miner.block
-        )
+        # - Insert the block, if the condition where the `main_block_id` is the same from the payload's block id.
+        if blockchain_instance.main_block_id == context_from_archival_miner.block.id:
+            await blockchain_instance.append_block(
+                context=context_from_archival_miner.block, follow_up=False
+            )
+            logger.info(
+                f"Block #{context_from_archival_miner.block.id} is qualified to be processed immediately by appending it in the blockchain."
+            )
 
         # - Insert an internal transaction.
         # @o This was seperated from the consolidated internal transaction handler due to the need of handling extra variables as `ARCHIVAL_MINER_NODE` sent a payload.
@@ -734,7 +748,9 @@ async def certify_miner(
                         return JSONResponse(
                             content={
                                 "initial_consensus_sleep_seconds": proposed_consensus_sleep_time,
-                                "certificate_token": encrypted_authored_token.decode("utf-8"),
+                                "certificate_token": encrypted_authored_token.decode(
+                                    "utf-8"
+                                ),
                             },
                             status_code=HTTPStatus.OK,
                         )

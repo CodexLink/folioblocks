@@ -139,14 +139,30 @@ class BlockchainMechanism(ConsensusMechanism):
     ) -> None:
 
         # # Containers
-        self.__transaction_container: list[Transaction] = []
-        self.confirming_block_container: list[Block] = []
-        self.__unsent_block_container: list[Block] = []
+        self.confirming_block_container: list[
+            Block
+        ] = (
+            []
+        )  # * A container that contains generated blocks that were sent from the `ARCHIVAL_MINER_NODE`. It is used to verify the block given from the archival miner nodes, wherein specific attributes are being compared to ensure that the block received is not altered.
+        self.hashed_block_container: list[
+            Block
+        ] = (
+            []
+        )  # * A container that contains hashed blocks from the `ARCHIVAL_MINER_NODE`. It is stored from this container to ensure that the order of blocks is properly managed.
+        self.__transaction_container: list[
+            Transaction
+        ] = (
+            []
+        )  # * A container that contains a set of transactions that is going to be invoked from a generated block.
+        self.__unsent_block_container: list[
+            Block
+        ] = (
+            []
+        )  # * A container that contains geenrated blocks that were unsuccessfully sent to the archival miner node candidates. It is being used only when there's a connection disruption between each other.
 
         # # Counters
-        self.cached_block_id: int = (
-            1  # * The current ID of the block to be rendered from the blockchain.
-        )
+        self.main_block_id: int = 1  # * The ID of the block that allocatable and appendable from the blockchain.
+        self.leading_block_id: int = 0  # * The current block ID that is available to assign from a block. It initially refers to the value of `self.main_block_id`, wherein this leads to ensure that while the master node waits for `self.main_block_id` to return, it will render other blocks to avoid congestion.
         self.__cached_total_transactions: int = 0
 
         # # Instances
@@ -632,7 +648,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     insert_transaction_content_map_query: Insert = (
                         tx_content_mappings.insert().values(
                             address_ref=to_address,
-                            block_no_ref=self.cached_block_id,
+                            block_no_ref=self.leading_block_id,
                             tx_ref=transaction_context["tx_hash"],
                             content_type=data.content_type,
                             timestamp=datetime.now(),
@@ -975,11 +991,7 @@ class BlockchainMechanism(ConsensusMechanism):
         if self.__chain is not None:
             pass
 
-    async def append_block(
-        self,
-        *,
-        context: Block,
-    ) -> None:
+    async def append_block(self, *, context: Block, follow_up: bool) -> None:
         """
         A method that is callad whenever a new block is ready to be inserted from the blockchain, both in-memory and to the file.
 
@@ -995,7 +1007,7 @@ class BlockchainMechanism(ConsensusMechanism):
             block_context["contents"] = frozendict(block_context["contents"])
 
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            if block_context["id"] != self.cached_block_id:
+            if block_context["id"] != self.main_block_id:
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
@@ -1038,12 +1050,29 @@ class BlockchainMechanism(ConsensusMechanism):
             self.__chain["chain"].append(frozendict(block_context))
 
             # ! Hit the next block for the allocation as we finished processing a block!
-            self.cached_block_id += 1
+            self.main_block_id += 1
 
             await self.__process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
             logger.info(f"Block #{context.id} has been appended from the blockchain!")
+
+            # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
+            if len(self.hashed_block_container) and follow_up:
+                logger.info(
+                    f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
+                )
+
+                for each_hashed_block in self.hashed_block_container:
+                    if each_hashed_block.id == self.main_block_id:
+                        logger.info(
+                            f"Follow-up appending block #{each_hashed_block} from the chain ..."
+                        )
+                        await self.append_block(
+                            context=each_hashed_block, follow_up=True
+                        )
+
+                logger.info("Follow-up chaining is finished!")
 
         else:
             unconventional_terminate(
@@ -1091,7 +1120,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
             )
 
-            if (len(self.__transaction_container) > required_transactions) and not len(
+            if (len(self.__transaction_container) >= required_transactions) and not len(
                 self.__unsent_block_container
             ):
                 logger.info(
@@ -1110,7 +1139,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             else:
                 logger.warning(
-                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions + 1} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
+                    f"There isn't enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s). Awaiting for new transactions in {BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION} seconds."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
@@ -1181,9 +1210,10 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
+                    # @o We will be using this to refer from the hashed block that will be sent by a archival miner node.
                     self.confirming_block_container.append(generated_block)
 
-                    # - And save this that the negotiation consensus to hash a block has been confirmed.
+                    # - And save the negotiation consensus where a block getting hashed has been confirmed.
                     # - Basically this transaction shows who won from hashing a block.
                     await self.insert_internal_transaction(
                         action=TransactionActions.NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START,
@@ -1268,9 +1298,9 @@ class BlockchainMechanism(ConsensusMechanism):
         last_block: Block | None = self.__get_last_block()
 
         if last_block is not None:
-            if last_block.id >= self.cached_block_id:
+            if last_block.id >= self.leading_block_id:
                 logger.critical(
-                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.cached_block_id}"
+                    f"Cannot create a block! Last block is greater than or equal to the ID of the currently (leading) cached available-to-allocate block. | Last Block ID: {last_block.id} | Currently Cached: {self.main_block_id}"
                 )
                 return None
         else:
@@ -1282,7 +1312,7 @@ class BlockchainMechanism(ConsensusMechanism):
         self.__transaction_container.clear()
 
         _block: Block = Block(
-            id=self.cached_block_id,
+            id=self.leading_block_id,
             block_size_bytes=None,  # * To be resolved on the later process.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
             prev_hash_block=HashUUID(
@@ -1318,7 +1348,7 @@ class BlockchainMechanism(ConsensusMechanism):
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.INIT,
                 context=NodeGenesisTransaction(
-                    block_genesis_no=self.cached_block_id,
+                    block_genesis_no=self.main_block_id,
                     data=HashUUID(
                         token_hex(
                             random_generator.randint(
@@ -1527,7 +1557,7 @@ class BlockchainMechanism(ConsensusMechanism):
         mined_block: Block = await block_hashing_processor
 
         logger.info(f"Block {block.id} has been mined.")
-        await self.append_block(context=mined_block)
+        await self.append_block(context=mined_block, follow_up=False)
 
         return mined_block if return_hashed else None
 
@@ -1711,19 +1741,17 @@ class BlockchainMechanism(ConsensusMechanism):
                         context["chain"][block_idx - 1]["hash_block"],
                     )
 
-                print(self.cached_block_id, block_data["id"])
-
                 # - If cached_block_id is equal to dict_data["id"]. Then increment it easily.
-                if self.cached_block_id == block_data["id"]:
-                    self.cached_block_id += 1
+                if self.main_block_id == block_data["id"]:
+                    self.main_block_id += 1
                     logger.debug(
-                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.cached_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
+                        f"Block has a valid recent reference. | Currently (Incremented) Cached ID: {self.main_block_id}, Recent Block ID (Decremented by 1): {block_data['id']}"
                     )
 
                 # - However, when its not equal then then something is wrong.
                 else:
                     unconventional_terminate(
-                        message=f"Blockchain is currently unchained! (Currently Cached: {self.cached_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
+                        message=f"Blockchain is currently unchained! (Currently Cached: {self.main_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
                     )
                     return None
 
@@ -1748,8 +1776,11 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
             else:
                 logger.info(
-                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.cached_block_id}."
+                    f"The blockchain context from the file (via deserialiation) has been loaded in-memory and is secured by immutability! | Next Block ID is Block #{self.main_block_id}."
                 )
+
+                # - On load, ensure that this was the same as `self.main_block_id`.
+                self.leading_block_id = self.main_block_id
 
             self.blockchain_ready = True
             return frozendict(context)
