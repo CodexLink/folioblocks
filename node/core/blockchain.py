@@ -1595,7 +1595,9 @@ class BlockchainMechanism(ConsensusMechanism):
         mined_block: Block = await block_hashing_processor
 
         logger.info(f"Block #{block.id} has been mined.")
-        await self.append_block(context=mined_block, process_container=False)
+
+        # - Since this is a NodeType.ARCHIVAL_MINER_NODE, force this block to be invoked since there's no need of tracking and should only contain proof of block skipping due to asynchronous nature.
+        await self.append_block(context=mined_block, process_container=True)
 
         return mined_block if return_hashed else None
 

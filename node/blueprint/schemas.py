@@ -237,6 +237,8 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
     miner_address: HashUUID
     receiver_address: HashUUID
     consensus_negotiation_id: RandomUUID
+    block_received: int
+    local_block_id: int
     block_hash: HashUUID
     time_delivery: datetime
 
