@@ -233,13 +233,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 for each_hashed_block in self.hashed_block_container:
                     if each_hashed_block.id == self.main_block_id:
-                        # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
-
-                        # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
-                        each_hashed_block.prev_hash_block = self.__chain[
-                            self.main_block_id - 1
-                        ]["hash_block"]
-
                         logger.info(
                             f"Follow-up appending block #{each_hashed_block} from the chain ..."
                         )
@@ -260,6 +253,13 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                     else:
                         unconventional_terminate(message=too_far_block_message)
+
+                # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
+
+                # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
+                context.prev_hash_block = self.__chain[self.main_block_id - 1][
+                    "hash_block"
+                ]
 
                 # - Apply immutability on other `dict` objects from the block context.
                 # @o As per the approach indicated from the `self.__process_serialize_to_blockchain_file`. We are going to do this in descending form.
