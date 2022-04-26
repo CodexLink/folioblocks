@@ -191,7 +191,7 @@ async def receive_hashed_block(
                         context_from_archival_miner.block
                     )
                     logger.warning(
-                        f"Received-hashed Block #{context_from_archival_miner.block.id} seem to be way to early to get here. Therefore, save it in the hashed block container to assess when `append_block` is called."
+                        f"Received-hashed block #{context_from_archival_miner.block.id} seem to be way to early to get here. Therefore, save it in the hashed block container to assess when `append_block` is called."
                     )
 
                     # - After appending the block from the `hashed_block_container`, sort it.

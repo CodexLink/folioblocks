@@ -93,7 +93,6 @@ from core.constants import (
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
     BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE,
-    BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION,
     INFINITE_TIMER,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
@@ -180,8 +179,15 @@ class BlockchainMechanism(ConsensusMechanism):
         self.__auth_token: IdentityTokens = auth_tokens
 
         # # Timer Containers
-        self.block_timer_seconds: Final[int] = block_timer_seconds
-        self.__hashing_duration: timedelta = timedelta(seconds=0)
+        self.__time_elapsed_from_tx_collection: float = (
+            time()
+        )  # * The time elapsed ever since a block has been generated, alternatively, it used to track the time elapsed since it was collecting transactions until a number of sufficient transaction was met.
+        self.block_timer_seconds: Final[
+            int
+        ] = block_timer_seconds  # * The timer from where the block should be generated.
+        self.__hashing_duration: timedelta = timedelta(
+            seconds=0
+        )  # * The time it takes to hash the block, this is exclusive for NodeType.ARCHIVAL_MINER_NODE.
 
         # # State and Variable References
         self.blockchain_ready: bool = False  # * This bool property is used for determining if the blockchain is ready to take its request from its master or side nodes.
@@ -216,6 +222,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
+
+                if self.node_role is NodeType.ARCHIVAL_MINER_NODE:
+                    logger.warning(f"Though, since this {NodeType.ARCHIVAL_MINER_NODE.name}, ignore this message as other nodes may be prompted to hash the missing blocks.")
                 return
 
             # - Apply immutability on other `dict` objects from the block context.
@@ -1000,6 +1009,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 },
                 retry_attempts=100,
                 return_on_error=False,
+                await_result_immediate=True,
                 name=f"send_hashed_payload_at_{NodeType.MASTER_NODE.name.lower()}_block_{mined_block.id}",
             )
 
@@ -1097,14 +1107,19 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         # @o Added for type-hints.
-        time_elapsed_from_tx_collection: float = time()
+        self.__time_elapsed_from_tx_collection = (
+            time()
+        )  # * Reset the timer from this point of execution.
         first_instance: bool = True
         generated_block: Block | None = None
 
         while True:
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions. | Elapsed since last block generation: {time() - time_elapsed_from_tx_collection} seconds/s."
+                f"Sleeping for {self.block_timer_seconds} seconds while gathering transactions. | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-13]} seconds/s."
             )
+
+            # - Sleep first due to block timer.
+            await sleep(self.block_timer_seconds)
 
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
@@ -1112,7 +1127,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
             required_transactions: int = (
                 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                if not first_instance or not self.__n_available_nodes
+                if first_instance
+                or not self.__n_available_nodes  # - If blockchain is in its first instance or doesn't have any available nodes.
                 else (
                     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
                     + (self.__n_available_nodes * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
@@ -1141,15 +1157,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     f"Not enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s)."
                 )
 
-                await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
                 continue
-
-            # - Sleep first due to block timer.
-            await sleep(self.block_timer_seconds)
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can hash the block.
             # @o When there's a miner, do a closed-loop process.
-            available_node_info: ArchivalMinerNodeInformation | None = await self.__get_available_archival_miner_nodes()
+            available_node_info: ArchivalMinerNodeInformation | None = (
+                await self.__get_available_archival_miner_nodes()
+            )
 
             # @o When there's no miner active, sleep for a while and requeue again.
             if available_node_info is None:
@@ -1175,7 +1189,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             address_ref=available_node_info.miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
-                        "x-token": self.node_identity,
+                        "x-token": self.node_identity[1],
                     },
                     data={
                         # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
@@ -1253,7 +1267,10 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Block {generated_block.id} has been sent and is in the process of hashing! (By: {available_node_info.miner_address})"
                     )
 
-                    first_instance = True
+                    first_instance = False  # * Remove the limit and conform to the number of transactions required based on active nodes.
+                    self.__time_elapsed_from_tx_collection = (
+                        time()
+                    )  # * Reset the timer.
                     continue
 
                 else:
@@ -1455,17 +1472,12 @@ class BlockchainMechanism(ConsensusMechanism):
                         logger.info(
                             f"Archival miner candidate {resolved_candidate_state_info['owner']} has responded from the block hashing request!"
                         )
-                        return (
-                            len(available_nodes),
-                            ArchivalMinerNodeInformation(
-                                candidate_no=candidate_idx,
-                                miner_address=resolved_candidate_state_info["owner"],
-                                source_host=URLAddress(
-                                    each_candidate["source_address"]
-                                ),
-                                source_port=each_candidate["source_port"],
-                            ),
-                        )  # type: ignore # * I don't know how to type this.
+                        return ArchivalMinerNodeInformation(
+                            candidate_no=candidate_idx,
+                            miner_address=resolved_candidate_state_info["owner"],
+                            source_host=URLAddress(each_candidate["source_address"]),
+                            source_port=each_candidate["source_port"],
+                        )
 
                     logger.warning(
                         f"Archival Miner Candidate {resolved_candidate_state_info['owner']} may be sleeping from consensus."
