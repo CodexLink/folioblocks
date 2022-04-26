@@ -165,6 +165,8 @@ async def receive_hashed_block(
 
     if isinstance(blockchain_instance, BlockchainMechanism):
         block_confirmed: bool = False
+        block_equal_from_main: bool = True
+
         # - Validate the given block by checking its id and other fields that is outside from the context.
         for each_confirming_block in blockchain_instance.confirming_block_container:
 
@@ -172,6 +174,7 @@ async def receive_hashed_block(
                 f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {context_from_archival_miner.block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {context_from_archival_miner.block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
             )
 
+            # - From the current selected block, check if it match from the received block from the confirming blocks.
             if (
                 (each_confirming_block.id == context_from_archival_miner.block.id)
                 and each_confirming_block.block_size_bytes
@@ -183,10 +186,14 @@ async def receive_hashed_block(
                 == context_from_archival_miner.block.contents.timestamp
             ):
 
+                block_confirmed = True  # - Unlock the path after the iterator to ensure that the block will be processed, based on its condition.
+
+                # - When it matches, check if the received block's id is higher than the main_block_id.
                 if (
                     blockchain_instance.main_block_id
                     > context_from_archival_miner.block.id
                 ):
+                    # - Append from the container.
                     blockchain_instance.hashed_block_container.append(
                         context_from_archival_miner.block
                     )
@@ -200,20 +207,20 @@ async def receive_hashed_block(
                     )
 
                 # - For equal block id, just remove it from the confirming block container and set that the block has been confirmed.
+                else:
+                    blockchain_instance.confirming_block_container.remove(
+                        each_confirming_block
+                    )  # - Remove from the container as it was already confirmed.
 
-                blockchain_instance.confirming_block_container.remove(
-                    each_confirming_block
-                )  # - Remove from the container as it was already confirmed.
+                    block_equal_from_main = True
 
-                block_confirmed = True
+                    break
 
-                break
-
-            if not block_confirmed:
-                raise HTTPException(
-                    detail="Cannot confirm any confirming blocks from the received mined block.",
-                    status_code=HTTPStatus.NO_CONTENT,
-                )
+        if not block_confirmed:
+            raise HTTPException(
+                detail="Cannot confirm any confirming blocks from the received mined block.",
+                status_code=HTTPStatus.NO_CONTENT,
+            )
 
         proposed_consensus_addon_timer: float = generate_consensus_sleep_time(
             block_timer=blockchain_instance.block_timer_seconds
@@ -296,7 +303,7 @@ async def receive_hashed_block(
                 )
 
         # - Insert the block, if the condition where the `main_block_id` is the same from the payload's block id.
-        if blockchain_instance.main_block_id == context_from_archival_miner.block.id:
+        if block_equal_from_main:
             await blockchain_instance.append_block(
                 context=context_from_archival_miner.block, follow_up=False
             )
@@ -326,7 +333,7 @@ async def receive_hashed_block(
 
     raise HTTPException(
         detail="Blockchain instance is not yet initialized. Please try again later.",
-        status_code=HTTPStatus.NO_CONTENT,
+        status_code=HTTPStatus.SERVICE_UNAVAILABLE,
     )
 
 

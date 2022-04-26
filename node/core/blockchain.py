@@ -1435,6 +1435,8 @@ class BlockchainMechanism(ConsensusMechanism):
             available_nodes
         )  # ! Note that this does not create a new copy of the referred object, but rather mutates the referred object!
 
+        print("DEBUG WHY ITS 9 TOTAL AND SOMETIMES 6 TX", available_nodes)
+
         if not len(available_nodes):
             logger.info(
                 f"There are no available nodes to hash the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
@@ -1530,7 +1532,7 @@ class BlockchainMechanism(ConsensusMechanism):
         prev: float = time()
         nth: int = 1
 
-        logger.info(f"Attempting to hash a Block #{block.id} ...")
+        logger.info(f"Attempting to hash block #{block.id} ...")
 
         while True:
             # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
