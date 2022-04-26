@@ -105,7 +105,7 @@ BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
 BLOCKCHAIN_GENESIS_MIN_CHAR_DATA: Final[int] = 16
 BLOCKCHAIN_GENESIS_MAX_CHAR_DATA: Final[int] = 32
 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK: Final[int] = 3
-BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE: Final[int] = 3
+BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE: Final[int] = 4
 BLOCKCHAIN_NEGOTIATION_ID_LENGTH: Final[int] = 8
 BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS: Final[int] = 15
 BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER: Final[int] = 2
@@ -367,7 +367,7 @@ class TransactionActions(IntEnum):
     # - https://softwareengineering.stackexchange.com/questions/266582/is-it-better-to-use-strings-or-int-to-reference-enums-outside-the-java-part-of-t
 
     # - Node-based Transactions: General
-    NODE_GENERAL_CONSENSUS_INIT = auto()
+    NODE_GENERAL_CONSENSUS_INIT = auto()  # #.
     NODE_GENERAL_REGISTER_INIT = auto()
     NODE_GENERAL_GENESIS_BLOCK_INIT = auto()
 

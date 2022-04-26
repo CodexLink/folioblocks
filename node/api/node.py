@@ -80,6 +80,7 @@ from fastapi.responses import JSONResponse
 from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select, Update
+from blueprint.schemas import NodeMineConsensusSuccessProofTransaction
 from utils.processors import (
     validate_previous_consensus_negotiation,
     validate_source_and_origin_associates,
@@ -171,28 +172,31 @@ async def receive_hashed_block(
         for each_confirming_block in blockchain_instance.confirming_block_container:
 
             logger.debug(
-                f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.content_bytes_size} | {context_from_archival_miner.block.content_bytes_size}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
+                f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.hashed_block.id}), Block Size Bytes: ({each_confirming_block.content_bytes_size} | {context_from_archival_miner.hashed_block.content_bytes_size}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.hashed_block.contents.timestamp})"
             )
 
             # - From the current selected block, check if it match from the received block from the confirming blocks.
             if (
-                (each_confirming_block.id == context_from_archival_miner.block.id)
+                (
+                    each_confirming_block.id
+                    == context_from_archival_miner.hashed_block.id
+                )
                 and each_confirming_block.content_bytes_size
-                == context_from_archival_miner.block.content_bytes_size
-                and context_from_archival_miner.block.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY] == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY  # type: ignore # ! This should contain something.
+                == context_from_archival_miner.hashed_block.content_bytes_size
+                and context_from_archival_miner.hashed_block.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY] == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY  # type: ignore # ! This should contain something.
                 and each_confirming_block.contents.timestamp
-                == context_from_archival_miner.block.contents.timestamp
+                == context_from_archival_miner.hashed_block.contents.timestamp
             ):
 
                 block_confirmed = True  # - Unlock the path after the iterator to ensure that the block will be processed, based on its condition.
 
                 # - When it matches, check if the received block's id is higher than the main_block_id.
                 if (
-                    context_from_archival_miner.block.id
+                    context_from_archival_miner.hashed_block.id
                     > blockchain_instance.main_block_id
                 ):
                     logger.warning(
-                        f"Received-hashed block #{context_from_archival_miner.block.id} seem to be way to early to get here. Therefore, save it in the hashed block container to assess when `append_block` is called."
+                        f"Received-hashed block #{context_from_archival_miner.hashed_block.id} seem to be way to early to get here. Therefore, save it in the hashed block container to assess when `append_block` is called."
                     )
                     # - The variable `block_equal_from_main` is already set by default as `False` so don't do anything from it.
 
@@ -254,22 +258,22 @@ async def receive_hashed_block(
 
         # - Since we lost the identity value of the enums from the fields, we need to re-bind them so that the loaded block from memory has a referrable enum when called.
         for transaction_idx, transaction_context in enumerate(
-            context_from_archival_miner.block.contents.transactions
+            context_from_archival_miner.hashed_block.contents.transactions
         ):
 
             # - Resolve `action` field with `TransactionActions`.
-            context_from_archival_miner.block.contents.transactions[
+            context_from_archival_miner.hashed_block.contents.transactions[
                 transaction_idx
             ].action = TransactionActions(transaction_context.action)
 
             # - Resolve the `action` field from the payload's action `NodeTransaction`.
             if isinstance(
-                context_from_archival_miner.block.contents.transactions[
+                context_from_archival_miner.hashed_block.contents.transactions[
                     transaction_idx
                 ].payload,
                 NodeTransaction,
             ):
-                context_from_archival_miner.block.contents.transactions[  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
+                context_from_archival_miner.hashed_block.contents.transactions[  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
                     transaction_idx
                 ].payload.action = NodeTransactionInternalActions(
                     transaction_context.payload.action  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
@@ -277,12 +281,12 @@ async def receive_hashed_block(
 
             # - Resolve the `content_type` field from the payload's action `GroupTransaction`.
             elif isinstance(
-                context_from_archival_miner.block.contents.transactions[
+                context_from_archival_miner.hashed_block.contents.transactions[
                     transaction_idx
                 ].payload,
                 GroupTransaction,
             ):
-                context_from_archival_miner.block.contents.transactions[  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
+                context_from_archival_miner.hashed_block.contents.transactions[  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
                     transaction_idx
                 ].payload.content_type = TransactionContextMappingType(
                     transaction_context.payload.content_type  # type: ignore # ! Condition already resolved the issue of an attribute is missing.
@@ -290,21 +294,22 @@ async def receive_hashed_block(
 
             else:
                 logger.warning(
-                    f"Transaction {context_from_archival_miner.block.contents.transactions[transaction_idx].tx_hash} payload cannot be casted with the following enumeration classes: {NodeTransaction} and {GroupTransaction}. This is going to be problematic on fetching data, but carry on. But please report this to the developer."
+                    f"Transaction {context_from_archival_miner.hashed_block.contents.transactions[transaction_idx].tx_hash} payload cannot be casted with the following enumeration classes: {NodeTransaction} and {GroupTransaction}. This is going to be problematic on fetching data, but carry on. But please report this to the developer."
                 )
 
         # - Insert the block, if the condition where the `main_block_id` is the same from the payload's block id.
         if block_equal_from_main:
             await blockchain_instance.append_block(
-                context=context_from_archival_miner.block, process_container=False
+                context=context_from_archival_miner.hashed_block,
+                process_container=False,
             )
             logger.info(
-                f"Block #{context_from_archival_miner.block.id} is qualified to be processed immediately by appending it in the blockchain."
+                f"Block #{context_from_archival_miner.hashed_block.id} is qualified to be processed immediately by appending it in the blockchain."
             )
         else:
             # - Append from the container.
             blockchain_instance.hashed_block_container.append(
-                context_from_archival_miner.block
+                context_from_archival_miner.hashed_block
             )
             # - After appending the block from the `hashed_block_container`, sort it.
             blockchain_instance.hashed_block_container.sort(
@@ -317,10 +322,14 @@ async def receive_hashed_block(
             action=TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING,
             data=NodeTransaction(
                 action=NodeTransactionInternalActions.CONSENSUS,
-                context=NodeConfirmMineConsensusTransaction(
+                context=NodeMineConsensusSuccessProofTransaction(
                     miner_address=context_from_archival_miner.miner_address,
-                    master_address=blockchain_instance.node_identity[0],
+                    receiver_address=blockchain_instance.node_identity[0],
                     consensus_negotiation_id=context_from_archival_miner.consensus_negotiation_id,
+                    block_received_id=context_from_archival_miner.hashed_block.id,
+                    local_block_id=context_from_archival_miner.local_block_id,
+                    block_hash=context_from_archival_miner.hashed_block.hash_block,
+                    time_delivery=datetime.now(),
                 ),
             ),
         )

@@ -234,12 +234,12 @@ class NodeConfirmMineConsensusTransaction(BaseModel):
 
 
 class NodeMineConsensusSuccessProofTransaction(BaseModel):
-    miner_address: HashUUID
-    receiver_address: HashUUID
+    miner_address: AddressUUID
+    receiver_address: AddressUUID
     consensus_negotiation_id: RandomUUID
-    block_received: int
+    block_received_id: int
     local_block_id: int
-    block_hash: HashUUID
+    block_hash: HashUUID | None
     time_delivery: datetime
 
 
@@ -315,7 +315,8 @@ class ConsensusFromMasterPayload(BaseModel):
 class ConsensusToMasterPayload(BaseModel):
     consensus_negotiation_id: RandomUUID
     miner_address: AddressUUID
-    block: Block
+    hashed_block: Block
+    local_block_id: int
     hashing_duration_finished: datetime
 
 

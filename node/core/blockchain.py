@@ -65,6 +65,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from core.constants import SECRET_KEY
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -127,6 +128,7 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
+from os import environ as env
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -220,7 +222,7 @@ class BlockchainMechanism(ConsensusMechanism):
             # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
             if not process_container:
                 logger.info(
-                    f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
+                    f"Detected {len(self.hashed_block_container)} hashed block/s from the container."
                 )
 
                 # - When this was triggered, insert the current block from the hashed block container.
@@ -236,7 +238,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
 
                         # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
-                        context.prev_hash_block = self.__chain["chain"][
+                        each_hashed_block.prev_hash_block = self.__chain["chain"][
                             self.main_block_id - 2  # ! Remember the gap!
                         ]["hash_block"]
 
@@ -310,7 +312,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 if process_container:
                     logger.info(
-                        f"Follow-up chaining for block {context.id} is finished!"
+                        f"Follow-up chaining for block #{context.id} is finished!"
                     )
 
                 else:
@@ -1457,8 +1459,6 @@ class BlockchainMechanism(ConsensusMechanism):
             available_nodes
         )  # ! Note that this does not create a new copy of the referred object, but rather mutates the referred object!
 
-        print("DEBUG WHY ITS 9 TOTAL AND SOMETIMES 6 TX", available_nodes)
-
         if not len(available_nodes):
             logger.info(
                 f"There are no available nodes to hash the block. Retrying again the after interval of the block timer. ({self.block_timer_seconds} seconds)"
@@ -1902,7 +1902,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if not isinstance(payload, GroupTransaction | NodeTransaction):
 
-            error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."
+            error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."  # type: ignore # I can be stupid sometimes.
 
             logger.error(error_message)
             return HTTPException(
@@ -1919,7 +1919,10 @@ class BlockchainMechanism(ConsensusMechanism):
 
         timestamp: str = datetime.now().strftime("%m%y%d%H%M%S")
         if is_internal_payload:
-            encrypter_key = Fernet.generate_key()
+
+            secret_code: str | None = env.get(SECRET_KEY, None)
+
+            encrypter_key = secret_code[: len(secret_code) / 2].encode("utf-8") if secret_code is not None else Fernet.generate_key()  # type: ignore
 
         else:  # * Resolves to `NOT` an internal payload.
 
