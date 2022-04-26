@@ -167,12 +167,13 @@ class BlockchainMechanism(ConsensusMechanism):
         self.main_block_id: int = 1  # * The ID of the block that allocatable and appendable from the blockchain.
         self.leading_block_id: int = 0  # * The current block ID that is available to assign from a block. It initially refers to the value of `self.main_block_id`, wherein this leads to ensure that while the master node waits for `self.main_block_id` to return, it will render other blocks to avoid congestion.
         self.__cached_total_transactions: int = 0
+        self.__n_available_nodes: int = 0
 
         # # Instances
+        self.node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
         self.__database_instance: Database = get_database_instance()
         self.__http_instance: HTTPClient = get_http_client_instance()
         self.__email_service: EmailService = get_email_instance()
-        self.node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
 
         # # Required Variables for the Blockchain Operaetion.
         self.node_role: NodeType = node_role
@@ -1095,29 +1096,15 @@ class BlockchainMechanism(ConsensusMechanism):
             f"Block timer has been executed. Refreshes at {self.block_timer_seconds} seconds."
         )
 
+        # @o Added for type-hints.
+        time_elapsed_from_tx_collection: float = time()
         first_instance: bool = True
+        generated_block: Block | None = None
 
         while True:
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions."
+                f"Sleeping for {self.block_timer_seconds} seconds while collecting real-time transactions. | Elapsed since last block generation: {time() - time_elapsed_from_tx_collection} seconds/s."
             )
-
-            # - Sleep first due to block timer.
-            await sleep(self.block_timer_seconds)
-
-            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can hash the block.
-            available_node_info: tuple[
-                int, ArchivalMinerNodeInformation
-            ] | None = await self.__get_available_archival_miner_nodes()
-
-            # @o When there's no miner active, sleep for a while and requeue again.
-            if available_node_info is None:
-                continue
-
-            # @o Added for type-hints.
-            generated_block: Block | None = None
-
-            # @o When there's a miner, do a closed-loop process.
 
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
@@ -1125,10 +1112,10 @@ class BlockchainMechanism(ConsensusMechanism):
 
             required_transactions: int = (
                 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                if not available_node_info[0] or first_instance
+                if not first_instance or not self.__n_available_nodes
                 else (
                     BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                    + (available_node_info[0] * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
+                    + (self.__n_available_nodes * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
                 )
             )
 
@@ -1151,10 +1138,21 @@ class BlockchainMechanism(ConsensusMechanism):
 
             else:
                 logger.warning(
-                    f"Notenough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s)."
+                    f"Not enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s)."
                 )
 
                 await sleep(BLOCKCHAIN_WAIT_TIME_REFRESH_FOR_TRANSACTION)
+                continue
+
+            # - Sleep first due to block timer.
+            await sleep(self.block_timer_seconds)
+
+            # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can hash the block.
+            # @o When there's a miner, do a closed-loop process.
+            available_node_info: ArchivalMinerNodeInformation | None = await self.__get_available_archival_miner_nodes()
+
+            # @o When there's no miner active, sleep for a while and requeue again.
+            if available_node_info is None:
                 continue
 
             # - Create a Consensus Negotiation ID out of `urlsafe_b64encode`.
@@ -1168,16 +1166,16 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 attempt_deliver_payload: ClientResponse = await self.__http_instance.enqueue_request(
                     url=URLAddress(
-                        f"{available_node_info[1].source_host}:{available_node_info[1].source_port}/node/receive_raw_block"
+                        f"{available_node_info.source_host}:{available_node_info.source_port}/node/receive_raw_block"
                     ),
                     method=HTTPQueueMethods.POST,
                     await_result_immediate=True,
                     headers={
                         "x-certificate-token": await self._get_consensus_certificate(
-                            address_ref=available_node_info[1].miner_address
+                            address_ref=available_node_info.miner_address
                         ),
                         "x-hash": await self.get_chain_hash(),
-                        "x-token": self.node_identity[1],
+                        "x-token": self.node_identity,
                     },
                     data={
                         # - Load the dictionary version and export it via `orjson` and import it again to get dictionary for the aiohttp to process on request.
@@ -1189,7 +1187,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     },
                     return_on_error=False,
                     retry_attempts=100,
-                    name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info[1].miner_address[-6:]}",
+                    name=f"send_raw_payload_at_{NodeType.ARCHIVAL_MINER_NODE.name.lower()}_{available_node_info.miner_address[-6:]}",
                 )
 
                 if attempt_deliver_payload.ok:
@@ -1217,7 +1215,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         associated_nodes.update()
                         .where(
                             associated_nodes.c.user_address
-                            == available_node_info[1].miner_address
+                            == available_node_info.miner_address
                         )
                         .values(status=AssociatedNodeStatus.CURRENTLY_HASHING)
                     )
@@ -1246,13 +1244,13 @@ class BlockchainMechanism(ConsensusMechanism):
                                     generated_consensus_negotiation_id
                                 ),
                                 master_address=self.node_identity[0],
-                                miner_address=available_node_info[1].miner_address,
+                                miner_address=available_node_info.miner_address,
                             ),
                         ),
                     )
 
                     logger.info(
-                        f"Block {generated_block.id} has been sent and is in process of hashing! (By: {available_node_info[1].miner_address})"
+                        f"Block {generated_block.id} has been sent and is in the process of hashing! (By: {available_node_info.miner_address})"
                     )
 
                     first_instance = True
@@ -1399,7 +1397,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     async def __get_available_archival_miner_nodes(
         self,
-    ) -> tuple[int, ArchivalMinerNodeInformation] | None:
+    ) -> ArchivalMinerNodeInformation | None:
 
         available_nodes_query = select(
             [
@@ -1427,6 +1425,9 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.info(f"{len(available_nodes)} archival miner node candidate/s found!")
+
+        # - Assign currently online nodes.
+        self.__n_available_nodes = len(available_nodes)
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
             try:
