@@ -218,7 +218,7 @@ class BlockchainMechanism(ConsensusMechanism):
             block_context["contents"] = frozendict(block_context["contents"])
 
             # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
-            if len(self.hashed_block_container) and not process_container:
+            if not process_container:
                 logger.info(
                     f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
                 )
@@ -236,10 +236,9 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
 
                         # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
-                        print(self.main_block_id)
-                        context.prev_hash_block = self.__chain["chain"][self.main_block_id - 1][
-                            "hash_block"
-                        ]
+                        context.prev_hash_block = self.__chain["chain"][
+                            self.main_block_id - 2  # ! Remember the gap!
+                        ]["hash_block"]
 
                         logger.info(
                             f"Follow-up appending block #{each_hashed_block} from the chain ..."
@@ -1379,12 +1378,8 @@ class BlockchainMechanism(ConsensusMechanism):
         _block: Block = Block(
             id=self.leading_block_id,
             content_bytes_size=None,  # * To be resolved on the later process.
-            hash_block=None,  # ! Unsolvable, mine_block will handle it.
-            prev_hash_block=HashUUID(
-                last_block.hash_block
-                if last_block is not None and last_block.hash_block is not None
-                else "0" * BLOCK_HASH_LENGTH
-            ),
+            hash_block=None,  # ! Unsolvable, hash_block will handle it.
+            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH),
             contents=HashableBlock(
                 nonce=None,  # - This was determined during the process of hashing.
                 validator=self.node_identity[0],
@@ -1799,9 +1794,8 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - However, when its not equal then then something is wrong.
                 else:
                     unconventional_terminate(
-                        message=f"Blockchain is currently unchained! (Currently Cached: {self.main_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified. This a developer-issue.",
+                        message=f"Blockchain is currently unchained! (Currently Cached: {self.main_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified.",
                     )
-                    return None
 
                 if genesis_transaction_identifier and required_genesis_blocks:
                     required_genesis_blocks -= 1
