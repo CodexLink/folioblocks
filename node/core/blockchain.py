@@ -217,8 +217,30 @@ class BlockchainMechanism(ConsensusMechanism):
             block_context: dict = context.dict()
             block_context["contents"] = frozendict(block_context["contents"])
 
+            # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
+            if len(self.hashed_block_container) and not follow_up:
+                logger.info(
+                    f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
+                )
+
+                for each_hashed_block in self.hashed_block_container:
+                    if each_hashed_block.id == self.main_block_id:
+                        # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
+
+                        # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
+                        each_hashed_block.prev_hash_block = self.__chain[
+                            self.main_block_id - 1
+                        ]["hash_block"]
+
+                        logger.info(
+                            f"Follow-up appending block #{each_hashed_block} from the chain ..."
+                        )
+                        await self.append_block(
+                            context=each_hashed_block, follow_up=True
+                        )
+
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            if block_context["id"] != self.main_block_id and not follow_up:
+            if block_context["id"] != self.main_block_id:
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
@@ -275,31 +297,14 @@ class BlockchainMechanism(ConsensusMechanism):
             await self.__process_blockchain_file_to_current_state(
                 operation=BlockchainIOAction.TO_WRITE
             )
-            logger.info(f"Block #{context.id} has been appended from the blockchain!")
 
-            # - The way this was handled may turn this method into a recursive method, but we will stop it with a `follow_up` switch, preventing it to run this method, call-after-call.
-            if len(self.hashed_block_container) and follow_up:
+            if follow_up:
+                logger.info(f"Follow-up chaining for block {context.id} is finished!")
+
+            else:
                 logger.info(
-                    f"Detected a {len(self.hashed_block_container)} hashed block/s from the container."
+                    f"Block #{context.id} has been appended from the blockchain!"
                 )
-
-                for each_hashed_block in self.hashed_block_container:
-                    if each_hashed_block.id == self.main_block_id:
-                        # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
-
-                        # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
-                        each_hashed_block.prev_hash_block = self.__chain[
-                            self.main_block_id - 1
-                        ]["hash_block"]
-
-                        logger.info(
-                            f"Follow-up appending block #{each_hashed_block} from the chain ..."
-                        )
-                        await self.append_block(
-                            context=each_hashed_block, follow_up=True
-                        )
-
-                logger.info("Follow-up chaining is finished!")
 
         else:
             unconventional_terminate(

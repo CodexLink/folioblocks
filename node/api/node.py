@@ -165,7 +165,7 @@ async def receive_hashed_block(
 
     if isinstance(blockchain_instance, BlockchainMechanism):
         block_confirmed: bool = False
-        block_equal_from_main: bool = True
+        block_equal_from_main: bool = False
 
         # - Validate the given block by checking its id and other fields that is outside from the context.
         for each_confirming_block in blockchain_instance.confirming_block_container:
@@ -193,18 +193,10 @@ async def receive_hashed_block(
                     context_from_archival_miner.block.id
                     > blockchain_instance.main_block_id
                 ):
-                    # - Append from the container.
-                    blockchain_instance.hashed_block_container.append(
-                        context_from_archival_miner.block
-                    )
                     logger.warning(
                         f"Received-hashed block #{context_from_archival_miner.block.id} seem to be way to early to get here. Therefore, save it in the hashed block container to assess when `append_block` is called."
                     )
-
-                    # - After appending the block from the `hashed_block_container`, sort it.
-                    blockchain_instance.hashed_block_container.sort(
-                        key=lambda block_context: block_context.id
-                    )
+                    # - The variable `block_equal_from_main` is already set by default as `False` so don't do anything from it.
 
                 # - For equal block id, just remove it from the confirming block container and set that the block has been confirmed.
                 else:
@@ -212,6 +204,7 @@ async def receive_hashed_block(
                         each_confirming_block
                     )  # - Remove from the container as it was already confirmed.
 
+                    # - Change the state of this variable, that the block_equal_from_main is `True`.
                     block_equal_from_main = True
 
                     break
@@ -309,6 +302,15 @@ async def receive_hashed_block(
             )
             logger.info(
                 f"Block #{context_from_archival_miner.block.id} is qualified to be processed immediately by appending it in the blockchain."
+            )
+        else:
+            # - Append from the container.
+            blockchain_instance.hashed_block_container.append(
+                context_from_archival_miner.block
+            )
+            # - After appending the block from the `hashed_block_container`, sort it.
+            blockchain_instance.hashed_block_container.sort(
+                key=lambda block_context: block_context.id
             )
 
         # - Insert an internal transaction.
