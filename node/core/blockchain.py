@@ -1044,7 +1044,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - Sum the mined_timer sleep phase + given random sleep timer.
                 self.__consensus_calculate_sleep_time(
                     hashing_duration=payload_master_response_ref.addon_consensus_sleep_seconds,
-                    add_on=True,
+                    add_on=False,
                 )
 
                 # - Run the consensus sleeping phase.
