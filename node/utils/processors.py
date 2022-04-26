@@ -900,7 +900,7 @@ async def validate_previous_consensus_negotiation(
 ) -> None:
     previous_negotiation_sql_ref: ClauseElement = (
         consensus_negotiation.c.block_no_ref == block_reference.id
-    ) & (consensus_negotiation.c.status == ConsensusNegotiationStatus.ON_PROGRESS)
+    )
 
     # - Check for existing incomplete negotiation.
     existing_negotiation_query: Select = select([consensus_negotiation.c.id]).where(
