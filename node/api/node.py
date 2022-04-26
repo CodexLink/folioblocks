@@ -171,14 +171,14 @@ async def receive_hashed_block(
         for each_confirming_block in blockchain_instance.confirming_block_container:
 
             logger.debug(
-                f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.block_size_bytes} | {context_from_archival_miner.block.block_size_bytes}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {context_from_archival_miner.block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
+                f"Block Compare (Confirming Block | Mined Block) |> ID: ({each_confirming_block.id} | {context_from_archival_miner.block.id}), Block Size Bytes: ({each_confirming_block.content_bytes_size} | {context_from_archival_miner.block.content_bytes_size}), Prev Hash Block: ({each_confirming_block.prev_hash_block} | {context_from_archival_miner.block.prev_hash_block}), Timestamp: ({each_confirming_block.contents.timestamp} | {context_from_archival_miner.block.contents.timestamp})"
             )
 
             # - From the current selected block, check if it match from the received block from the confirming blocks.
             if (
                 (each_confirming_block.id == context_from_archival_miner.block.id)
-                and each_confirming_block.block_size_bytes
-                == context_from_archival_miner.block.block_size_bytes
+                and each_confirming_block.content_bytes_size
+                == context_from_archival_miner.block.content_bytes_size
                 and each_confirming_block.prev_hash_block
                 == context_from_archival_miner.block.prev_hash_block
                 and context_from_archival_miner.block.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY] == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY  # type: ignore # ! This should contain something.

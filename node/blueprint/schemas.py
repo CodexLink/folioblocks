@@ -274,7 +274,7 @@ class HashableBlock(BaseModel):
 
 class BaseBlock(BaseModel):
     id: int
-    block_size_bytes: int | None
+    content_bytes_size: int | None
 
 
 class Block(BaseBlock):

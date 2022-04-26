@@ -218,14 +218,14 @@ class BlockchainMechanism(ConsensusMechanism):
             block_context["contents"] = frozendict(block_context["contents"])
 
             # @o If a certain block has been inserted in a way that it is way over far or less than the current self.cached_block_id, then disregard this block.
-            if block_context["id"] != self.main_block_id:
+            if block_context["id"] != self.main_block_id and not follow_up:
                 logger.error(
                     f"This block #{block_context['id']} is way too far or behind than the one that is saved in the local blockchain file. Will attempt to fetch a new blockchain file from the MASTER_NODE node. This block will be DISREGARDED."
                 )
 
                 if self.node_role is NodeType.ARCHIVAL_MINER_NODE:
-                    logger.warning(
-                        f"Though, since this {NodeType.ARCHIVAL_MINER_NODE.name}, ignore this message as other nodes may be prompted to hash the missing blocks."
+                    logger.error(
+                        f"Though, since this an {NodeType.ARCHIVAL_MINER_NODE.name}, ignore this message as other nodes may be prompted to hash the missing blocks."
                     )
                 return
 
@@ -285,6 +285,13 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 for each_hashed_block in self.hashed_block_container:
                     if each_hashed_block.id == self.main_block_id:
+                        # - Since blocks that were developed without the block + 1 (which is the main_block_id + 1, equivalent to 'leading_block_id' (for example, received a block 22 while block 21 is currently hashing, or block 21 and 22 were both deployed for the miners to block)), the prev_hash would be the same.
+
+                        # - With that, modify the `prev_hash` of this matched block from the last block inserted, so that the blocks were chained properly.
+                        each_hashed_block.prev_hash_block = self.__chain[
+                            self.main_block_id - 1
+                        ]["hash_block"]
+
                         logger.info(
                             f"Follow-up appending block #{each_hashed_block} from the chain ..."
                         )
@@ -1331,7 +1338,7 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
     async def __create_block(self) -> Block | None:
-        # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, block_size_bytes, and hash_block.
+        # @o When building a block, we first have to consider that there are some properties were undefined. The nonce, content_bytes_size, and hash_block.
         # @o With this, we need to seperate the contents of the block, providing a way from the inside of the block to be hashable and identifiable for hash verification.
         # ! Several properties have to be seperated due to their nature of being able to overide the computed hash block.
 
@@ -1353,7 +1360,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
         _block: Block = Block(
             id=self.leading_block_id,
-            block_size_bytes=None,  # * To be resolved on the later process.
+            content_bytes_size=None,  # * To be resolved on the later process.
             hash_block=None,  # ! Unsolvable, mine_block will handle it.
             prev_hash_block=HashUUID(
                 last_block.hash_block
@@ -1368,10 +1375,10 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
         )
 
-        _block.block_size_bytes = asizeof(_block.contents.json())
+        _block.content_bytes_size = asizeof(_block.contents.json())
 
         logger.info(
-            f"Block #{_block.id} with a size of ({_block.block_size_bytes} bytes) has been created."
+            f"Block #{_block.id} with a size of ({_block.content_bytes_size} bytes) has been created."
         )
 
         return _block
@@ -1540,17 +1547,16 @@ class BlockchainMechanism(ConsensusMechanism):
             # https://stackoverflow.com/questions/869229/why-is-looping-over-range-in-python-faster-than-using-a-while-loop, not sure if this works here as well.
 
             block.contents.nonce = random_generator.randint(0, MAX_INT_PYTHON)
-            computed_hash: HashUUID = HashUUID(
+            block.hash_block = HashUUID(
                 sha256(block.json().encode("utf-8")).hexdigest()
             )
 
             if (
-                computed_hash[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY]
+                block.hash_block[:BLOCKCHAIN_HASH_BLOCK_DIFFICULTY]
                 == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
             ):
-                block.hash_block = computed_hash
                 logger.info(
-                    f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
+                    f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{block.hash_block}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
 
                 self.blockchain_ready = True
