@@ -190,8 +190,8 @@ async def receive_hashed_block(
 
                 # - When it matches, check if the received block's id is higher than the main_block_id.
                 if (
-                    blockchain_instance.main_block_id
-                    > context_from_archival_miner.block.id
+                    context_from_archival_miner.block.id
+                    > blockchain_instance.main_block_id
                 ):
                     # - Append from the container.
                     blockchain_instance.hashed_block_container.append(

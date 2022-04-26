@@ -21,7 +21,7 @@ from typing import Any, Final, Mapping
 from uuid import uuid4
 
 from aiohttp import ClientError, ClientResponse
-from blueprint.models import auth_codes, tokens, users
+from blueprint.models import associated_nodes, auth_codes, tokens, users
 from blueprint.schemas import EntityLoginResult
 from databases import Database
 from fastapi import Depends, Header, HTTPException
@@ -29,12 +29,7 @@ from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import and_, false, func, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
-from core.constants import (
-    BLOCKCHAIN_CONSENSUS_SLEEP_CEILING_VALUE,
-    BLOCKCHAIN_CONSENSUS_SLEEP_FLOOR_VALUE,
-)
 from utils.http import get_http_client_instance
-from blueprint.models import associated_nodes
 
 from core.constants import (
     ADDRESS_UUID_KEY_PREFIX,
@@ -42,6 +37,7 @@ from core.constants import (
     AUTH_CODE_MAX_CONTEXT,
     AUTH_CODE_MIN_CONTEXT,
     AUTH_ENV_FILE_NAME,
+    BLOCKCHAIN_CONSENSUS_SLEEP_BASE_VALUE,
     TOTP_PASSCODE_REFRESH_INTERVAL,
     TOTP_VALID_WINDOW_SECONDS,
     AddressUUID,
@@ -132,13 +128,9 @@ def generate_auth_token() -> str:
 
 def generate_consensus_sleep_time(*, block_timer: int) -> float:
     return (
-        random_generator.uniform(
-            BLOCKCHAIN_CONSENSUS_SLEEP_FLOOR_VALUE,
-            BLOCKCHAIN_CONSENSUS_SLEEP_CEILING_VALUE,
-        )
+        random_generator.uniform(BLOCKCHAIN_CONSENSUS_SLEEP_BASE_VALUE, block_timer)
         * block_timer
-        / 2
-    )  # * `block_timer` can be used as a multiplier. Though this is completely random.
+    )  # * `block_timer` can be used as a multiplier for given other time to participate.
 
 
 def generate_uuid_user() -> AddressUUID:

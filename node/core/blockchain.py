@@ -224,7 +224,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 if self.node_role is NodeType.ARCHIVAL_MINER_NODE:
-                    logger.warning(f"Though, since this {NodeType.ARCHIVAL_MINER_NODE.name}, ignore this message as other nodes may be prompted to hash the missing blocks.")
+                    logger.warning(
+                        f"Though, since this {NodeType.ARCHIVAL_MINER_NODE.name}, ignore this message as other nodes may be prompted to hash the missing blocks."
+                    )
                 return
 
             # - Apply immutability on other `dict` objects from the block context.
@@ -342,7 +344,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         if isinstance(consensus_establish_ref, float):
                             self.__consensus_calculate_sleep_time(
-                                hashing_duration=consensus_establish_ref, add_on=True
+                                hashing_duration=consensus_establish_ref, add_on=False
                             )
                             break
 
@@ -1550,9 +1552,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.info(
                     f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{computed_hash}`, which has been mined for {time() - prev} under {nth} iteration/s!"
                 )
-                self.__consensus_calculate_sleep_time(
-                    hashing_duration=time() - prev, add_on=False
-                )
+
                 self.blockchain_ready = True
                 return block
 
