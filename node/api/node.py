@@ -298,7 +298,7 @@ async def receive_hashed_block(
         # - Insert the block, if the condition where the `main_block_id` is the same from the payload's block id.
         if block_equal_from_main:
             await blockchain_instance.append_block(
-                context=context_from_archival_miner.block, follow_up=False
+                context=context_from_archival_miner.block, process_container=False
             )
             logger.info(
                 f"Block #{context_from_archival_miner.block.id} is qualified to be processed immediately by appending it in the blockchain."
