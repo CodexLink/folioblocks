@@ -1793,9 +1793,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 # - However, when its not equal then then something is wrong.
                 else:
-                    unconventional_terminate(
-                        message=f"Blockchain is currently unchained! (Currently Cached: {self.main_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified.",
-                    )
+                    exception_message: str = f"Blockchain is currently unchained! (Currently Cached: {self.main_block_id} | Block ID: {block_data['id']}) Some blocks are missing or is modified."
+
+                    if self.node_role is NodeType.MASTER_NODE:
+                        unconventional_terminate(message=exception_message)
+                    else:
+                        logger.critical(exception_message)
 
                 if genesis_transaction_identifier and required_genesis_blocks:
                     required_genesis_blocks -= 1
