@@ -11,23 +11,29 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 from http import HTTPStatus
-from http.client import SERVICE_UNAVAILABLE
+from typing import Mapping
 
+from blueprint.models import consensus_negotiation, tx_content_mappings, users
 from blueprint.schemas import (
     Block,
     Blockchain,
     BlockOverview,
-    NodeMasterInformation,
-    Transaction,
+    TransactionDetail,
+    TransactionOverview,
 )
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
-from core.constants import (
-    BaseAPI,
-    ExplorerAPI,
-)
-from fastapi import APIRouter, Depends, HTTPException, Path
+from core.constants import AddressUUID, BaseAPI, ExplorerAPI, HashUUID
+from databases import Database
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from sqlalchemy import Column, Table, func, select
+from sqlalchemy.sql.expression import Select
 
-from core.constants import AddressUUID
+from blueprint.schemas import EntityAddress
+from core.dependencies import get_database_instance
+from core.constants import UserEntity
+from sqlalchemy.orm import Query as SQLQuery
+
+from node.blueprint.schemas import EntityAddressDetail
 
 explorer_router = APIRouter(
     prefix="/explorer",
@@ -86,7 +92,7 @@ async def get_blocks(
 
 
 @explorer_router.get(
-    "/block/{block_id}",
+    "/block/{id}",
     tags=[
         ExplorerAPI.SPECIFIC_FETCH.value,
         ExplorerAPI.BLOCK_FETCH.value,
@@ -96,9 +102,12 @@ async def get_blocks(
     description="An API endpoint that specifically obtains a certain block from the blockchain.",
 )
 async def get_block(
-    *,
-    block_id: int = Path(..., title="The ID of the block."),
-    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance)
+    id: int = Path(
+        ...,
+        title="Block ID",
+        description="The block of the ID to fetch from the chain.",
+    ),
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
 ) -> Block:
 
     if not isinstance(blockchain_instance, BlockchainMechanism):
@@ -121,26 +130,57 @@ async def get_block(
         ExplorerAPI.LIST_FETCH.value,
         ExplorerAPI.TRANSACTION_FETCH.value,
     ],
-    response_model=list[Transaction],
+    response_model=list[TransactionOverview],
     summary="Fetch all transactions for all blocks.",
     description="An API endpoint that returns all transactions that recently entered in the blockchain.",
 )
-async def get_transactions(*, tx_count: int) -> None:
-    return
+async def get_transactions(
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+) -> list[TransactionOverview]:
+    if not isinstance(blockchain_instance, BlockchainMechanism):
+        raise HTTPException(
+            detail="Failed to fetch transactions, please try again later.",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    return await blockchain_instance.fetch_transactions()
 
 
 @explorer_router.get(
-    "/transaction/{tx_id}",
+    "/transaction/{tx_hash}",
     tags=[
         ExplorerAPI.SPECIFIC_FETCH.value,
         ExplorerAPI.TRANSACTION_FETCH.value,
     ],
-    response_model=Transaction,
+    response_model=TransactionDetail,
     summary="Fetches a specific transaction.",
     description="An API endpoint that returns a specific transaction that matches for all block inserted in the blockchain.",
 )
-async def get_particular_transaction() -> None:
-    return
+async def get_particular_transaction(
+    tx_hash: HashUUID = Query(
+        ...,
+        title="Transaction Hash (TX)",
+        description="The hash of the transaction to fetch from the chain.",
+    ),
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+) -> TransactionDetail:
+
+    if not isinstance(blockchain_instance, BlockchainMechanism):
+        raise HTTPException(
+            detail="Failed to fetch a transaction, please try again later.",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    transaction: TransactionDetail | None = await blockchain_instance.fetch_transaction(
+        tx_hash=tx_hash
+    )
+
+    if isinstance(transaction, TransactionDetail):
+        return transaction
+
+    raise HTTPException(
+        detail="Transaction not found.", status_code=HTTPStatus.NOT_FOUND
+    )
 
 
 @explorer_router.get(
@@ -149,42 +189,79 @@ async def get_particular_transaction() -> None:
         ExplorerAPI.LIST_FETCH.value,
         ExplorerAPI.ADDRESS_FETCH.value,
     ],
-    # response_model=Addresses,
+    response_model=list[EntityAddress],
     summary="Fetch all addresses that has been recorded in blockchain.",
     description="An API endpoint that returns all addresses that is recorded in blockchain.",
 )
-async def get_addresses(*, addr_count: int) -> None:
-    return
+async def get_addresses(
+    database_instance: Database = Depends(get_database_instance),
+) -> list[EntityAddress]:
+    entity_addresses: list[EntityAddress] = []
+
+    fetch_entity: Select = select(
+        [users.c.unique_address, users.c.association, users.c.type]
+        # ).where(users.c.type != UserEntity.MASTER_NODE_USER)
+    ).select_from(users)
+
+    fetched_entities: list[Mapping[Table, Column]] = await database_instance.fetch_all(
+        fetch_entity
+    )
+
+    for entity in fetched_entities:
+        tx_bindings_count: int = 0
+        node_negotiations_count: int = 0
+
+        # - Fill other fields based on their role.
+        if entity.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
+            fetch_negotiation_count_query: Select = select([func.count()]).where(
+                consensus_negotiation.c.peer_address == entity.unique_address
+            )
+
+            node_negotiations_count = await database_instance.fetch_val(
+                fetch_negotiation_count_query
+            )
+        else:
+            fetch_tx_bindings_query: Select = select([func.count()]).where(
+                tx_content_mappings.c.address_ref == entity.unique_address
+            )
+
+            tx_bindings_count = await database_instance.fetch_val(
+                fetch_tx_bindings_query
+            )
+
+        entity_addresses.append(
+            EntityAddress(
+                uuid=entity.unique_address,
+                association_uuid=entity.association,
+                entity_type=entity.type,
+                negotiations_count=node_negotiations_count,
+                tx_bindings_count=tx_bindings_count,
+            )
+        )
+
+    return entity_addresses
 
 
 @explorer_router.get(
-    "/address/{address_uuid}",
+    "/address/{uuid}",
     tags=[
         ExplorerAPI.SPECIFIC_FETCH.value,
         ExplorerAPI.ADDRESS_FETCH.value,
     ],
-    # response_model=Address,
+    response_model=EntityAddressDetail,
     summary="Fetch a specific address recorded in blockchain.",
     description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
-async def get_particular_addresses(*, address_uuid: AddressUUID) -> None:
+async def get_particular_addresses(uuid: AddressUUID) -> EntityAddressDetail:
     return
 
 
 @explorer_router.get(
     "/search",
     tags=[ExplorerAPI.GENERAL_FETCH.value],
-    # response_model=SearchContext,
     summary="Search an entity (block, transaction, address) on the blockchain.",
     description="An API endpoint that attempts to search for an entity provided by input. This endpoint enforce length restrictions, as well as returns a singleton data as a redirection link.",
 )
-async def search_in_explorer(
-    # *,
-    # context: str = Query()
-    #     ...,
-    #     title="The context to search in the blockchain.",
-    #     min_length=3,
-    #     max_length=32,
-    # ),
-) -> None:
-    return
+async def search_in_explorer(parameter: str) -> Response:
+    # - Remember about the one that requires classifying the parameter if it was a block, transaction or an address.
+    return Response(status_code=HTTPStatus.ACCEPTED)

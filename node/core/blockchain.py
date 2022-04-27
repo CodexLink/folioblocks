@@ -1,6 +1,6 @@
 from argparse import Namespace
 from asyncio import create_task, gather, get_event_loop, sleep
-from base64 import urlsafe_b64encode
+from base64 import urlsafe_b64decode, urlsafe_b64encode
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256
@@ -66,6 +66,7 @@ from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import SECRET_KEY
 from blueprint.schemas import TransactionOverview
+from blueprint.schemas import TransactionDetail
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -324,6 +325,291 @@ class BlockchainMechanism(ConsensusMechanism):
             unconventional_terminate(
                 message="There's no 'chain' from the root dictionary of blockchain! This is a developer-implementation issue, please report to the developers as soon as possible!",
             )
+
+    @ensure_blockchain_ready()
+    async def fetch_address(self, *, address: AddressUUID) -> Any:
+        pass
+
+    # @ensure_blockchain_ready()
+    # async def fetch_addresses(self) -> list[Address]
+
+    @ensure_blockchain_ready()
+    async def fetch_block(self, *, id: int) -> Block | None:
+        for block in self.__chain["chain"]:
+            if id == block["id"]:
+                return block
+
+        return None
+
+    @ensure_blockchain_ready()
+    async def fetch_blocks(self, *, limit_to: int | None = None) -> list[BlockOverview]:
+
+        latest_blocks: list[BlockOverview] = []
+        limit_to = INF if limit_to is None or not limit_to else limit_to
+        slice_start = (
+            (len(self.__chain["chain"]) - limit_to) if limit_to != INF else None
+        )
+
+        for block in self.__chain["chain"][slice_start:]:
+            proto_block: BlockOverview = BlockOverview(
+                id=block["id"],
+                content_bytes_size=block["content_bytes_size"],
+                validator=block["contents"]["validator"],
+                timestamp=block["contents"]["timestamp"],
+            )
+
+            latest_blocks.append(proto_block)
+
+        # - Once done, return the list.
+        latest_blocks.reverse()  # ! We cannot return this directly as it only modifies the memory and does not return the modified reference (memory).
+        return latest_blocks
+
+    @ensure_blockchain_ready()
+    async def fetch_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
+        block_index: int = self.main_block_id - 2
+
+        # ! This some kind of quadratic iteration, yes o of time, not sure by means of complexity, but all I know is that it will take too long.
+
+        for block_idx, each_block in enumerate(self.__chain["chain"]):
+            for each_transaction in each_block["contents"]["transactions"]:
+                if each_transaction["tx_hash"] == tx_hash:
+
+                    # # Duplicated code snippet from the __process_block_serialization_to_file.
+                    # * That method contains various iteration to the point that I cannot adapt this transaction from imitating the chain payload until block payload.
+                    # ! Therefore, copy that code snippet from here.
+
+                    each_transaction = dict(each_transaction)
+
+                    # * Cast mutability of the transaction's payload.
+                    each_transaction["payload"] = dict(each_transaction["payload"])
+
+                    # * Cast mutability of the transaction's signatures.
+                    each_transaction["signatures"] = dict(
+                        each_transaction["signatures"]
+                    )
+
+                    # ! Assign appropriate types to return from certain fields.
+                    # * Note that we are handling or exposing the contents of transactions that is influenced by internal.
+                    # - This means, we are showing the proof that something happened.
+
+                    # - [1] Identify the base payload.
+                    # * Identify if the transaction payload is a `GroupTransaction`, otherwise it's a `NodeTransaction`.
+
+                    was_external: bool = "content_type" in each_transaction["payload"]
+                    payload_model: str = (
+                        GroupTransaction.__name__
+                        if was_external
+                        else NodeTransaction.__name__
+                    )
+
+                    # - [2] Resolve all candidate fields from the `context` field.
+                    # @o For the case of `GroupTransaction` (where `was_external` was `True`), every context became `HashUUID` wherein they are in encrypted.
+                    payload_context = each_transaction["payload"]["context"]
+
+                    if was_external:
+                        payload_context = HashUUID(payload_context)
+
+                    else:  # * Resolves to `NodeTransaction` as resolution model.
+
+                        # - Parse the content of any of the internal transactions as a proof.
+                        # * By first setting up the decryption key,
+                        secret: str | None = env.get(SECRET_KEY, None)
+
+                        if secret is None:
+                            raise HTTPException(
+                                detail="Failed to parse information, please try again later",
+                                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                            )
+                        else:
+                            decrypter: Fernet = Fernet(
+                                urlsafe_b64encode(secret[: int(len(secret) / 2)].encode("utf-8"))  # type: ignore
+                            )
+
+                            payload_context = import_raw_json_to_dict(
+                                decrypter.decrypt(payload_context.encode("utf-8"))
+                            )
+
+                        # - In `NodeTransactions`, we can determine the context by checking the outside action field (outer part of payload of the block).
+
+                        # - Resolve enums of both actions of inner and outer part of the payload.
+                        each_transaction["action"] = TransactionActions(
+                            each_transaction["action"]
+                        )  # ! Outer
+                        each_transaction["payload"][
+                            "action"
+                        ] = NodeTransactionInternalActions(
+                            each_transaction["payload"]["action"]
+                        )  # ! Inner
+
+                        # - [3] Resolve payloads based on their outer action `TransactionActions`. First, resolve their fields before encapsulating the whole payload.
+
+                        if (
+                            each_transaction["action"]
+                            is TransactionActions.NODE_GENERAL_CONSENSUS_INIT
+                        ):
+                            payload_context["requestor_address"] = HashUUID(
+                                payload_context["requestor_address"]
+                            )
+
+                            each_transaction["payload"][
+                                "context"
+                            ] = NodeCertificateTransaction(**payload_context)
+
+                        elif (
+                            each_transaction["action"]
+                            is TransactionActions.NODE_GENERAL_REGISTER_INIT
+                        ):
+                            payload_context["acceptor_address"] = AddressUUID(
+                                payload_context["acceptor_address"]
+                            )
+                            payload_context["new_address"] = AddressUUID(
+                                payload_context["new_address"]
+                            )
+                            payload_context["role"] = UserEntity(
+                                payload_context["role"]
+                            )
+
+                            each_transaction["payload"][
+                                "context"
+                            ] = NodeRegisterTransaction(**payload_context)
+
+                        elif (
+                            each_transaction["action"]
+                            is TransactionActions.NODE_GENERAL_GENESIS_BLOCK_INIT
+                        ):
+                            payload_context["data"] = HashUUID(payload_context["data"])
+                            payload_context["generator_address"] = AddressUUID(
+                                payload_context["generator_address"]
+                            )
+
+                            each_transaction["payload"][
+                                "context"
+                            ] = NodeGenesisTransaction(**payload_context)
+
+                        elif (
+                            each_transaction["action"]
+                            is TransactionActions.NODE_GENERAL_CONSENSUS_BLOCK_SYNC
+                        ):
+                            payload_context["requestor_address"] = AddressUUID(
+                                payload_context["requestor_address"]
+                            )
+
+                            each_transaction["payload"][
+                                "context"
+                            ] = NodeSyncTransaction(**payload_context)
+
+                        elif (
+                            each_transaction["action"]
+                            is TransactionActions.NODE_GENERAL_CONSENSUS_CONFIRM_NEGOTIATION_START
+                        ):
+                            payload_context["consensus_negotiation_id"] = RandomUUID(
+                                payload_context["consensus_negotiation_id"]
+                            )
+                            payload_context["master_address"] = AddressUUID(
+                                payload_context["master_address"]
+                            )
+                            payload_context["miner_address"] = AddressUUID(
+                                payload_context["miner_address"]
+                            )
+
+                            each_transaction["payload"][
+                                "context"
+                            ] = NodeConfirmMineConsensusTransaction(**payload_context)
+
+                        else:  # * Resolves to `TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING`.
+                            payload_context["miner_address"] = AddressUUID(
+                                payload_context["miner_address"]
+                            )
+                            payload_context["receiver_address"] = AddressUUID(
+                                payload_context["receiver_address"]
+                            )
+                            payload_context["consensus_negotiation_id"] = RandomUUID(
+                                payload_context["consensus)negotiation_ud"]
+                            )
+                            payload_context["block_hash"] = HashUUID(
+                                payload_context["block_hash"]
+                            )
+
+                            each_transaction["payload"][
+                                "context"
+                            ] = NodeMineConsensusSuccessProofTransaction(
+                                **payload_context
+                            )
+
+                        # - [4] Encapsulate the whole `payload`.
+                        each_transaction["payload"] = globals()[payload_model](
+                            **each_transaction["payload"]
+                        )
+
+                        # - [5] Assign appropriate types on `TransactionSignatures`.
+                        each_transaction["signatures"]["raw"] = HashUUID(
+                            each_transaction["signatures"]["raw"]
+                        )
+                        each_transaction["signatures"]["encrypted"] = HashUUID(
+                            each_transaction["signatures"]["encrypted"]
+                        )
+
+                        each_transaction["signatures"] = TransactionSignatures(
+                            **each_transaction["signatures"]
+                        )
+
+                        # - [6] Resolve other properties.
+                        each_transaction["from_address"] = AddressUUID(
+                            each_transaction["from_address"]
+                        )
+
+                        return TransactionDetail(
+                            from_block=block_index,
+                            transaction=Transaction(**each_transaction),
+                        )
+        return None
+
+    @ensure_blockchain_ready()
+    async def fetch_transactions(
+        self, limit_to: int | None = None
+    ) -> list[TransactionOverview]:
+
+        remaining_transactions: int = (
+            INF if limit_to is None or not limit_to else limit_to
+        )
+        fetched_transactions: list[TransactionOverview] = []
+        block_index: int = self.main_block_id - 2
+
+        # - Get the block from the last index and decrement if required transactions to is not sufficient to the requested number of transactions to render.
+        try:
+            while remaining_transactions:
+
+                # - Access the transactions of the block.
+                txs_on_block: list[frozendict] = self.__chain["chain"][block_index][
+                    "contents"
+                ]["transactions"]
+
+                for each_accounted_tx in txs_on_block:
+                    fetched_transactions.append(
+                        TransactionOverview(
+                            tx_hash=each_accounted_tx["tx_hash"],
+                            action=each_accounted_tx["action"],
+                            from_address=each_accounted_tx["from_address"],
+                            to_address=each_accounted_tx["to_address"],
+                        )
+                    )
+
+                    remaining_transactions -= 1
+
+                    if not remaining_transactions:
+                        break
+
+                block_index -= 1
+
+        except IndexError:
+            logger.warning(
+                "The amount of required transactions cannot be sustained by the lacking number of transactions in the blockchain!"
+            )
+
+        finally:
+            fetched_transactions.reverse()
+
+        return fetched_transactions
 
     async def initialize(self) -> None:
         """# A method that initialize resources needed for the blockchain system to work."""
@@ -1105,85 +1391,6 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
-    @ensure_blockchain_ready()
-    async def fetch_block(self, *, id: int) -> Block | None:
-        for block in self.__chain["chain"]:
-            if id == block["id"]:
-                return block
-
-        return None
-
-    @ensure_blockchain_ready()
-    async def fetch_blocks(self, *, limit_to: int | None = None) -> list[BlockOverview]:
-
-        latest_blocks: list[BlockOverview] = []
-        limit_to = INF if limit_to is None or not limit_to else limit_to
-        slice_start = (
-            (len(self.__chain["chain"]) - limit_to) if limit_to != INF else None
-        )
-
-        for block in self.__chain["chain"][slice_start:]:
-            proto_block: BlockOverview = BlockOverview(
-                id=block["id"],
-                content_bytes_size=block["content_bytes_size"],
-                validator=block["contents"]["validator"],
-                timestamp=block["contents"]["timestamp"],
-            )
-
-            latest_blocks.append(proto_block)
-
-        # - Once done, return the list.
-        latest_blocks.reverse()  # ! We cannot return this directly as it only modifies the memory and does not return the modified reference (memory).
-        return latest_blocks
-
-    # # This method may be modified for the development of Explorer API.
-    @ensure_blockchain_ready()
-    async def fetch_transactions(
-        self, limit_to: int | None = None
-    ) -> list[TransactionOverview]:
-
-        remaining_transactions: int = (
-            INF if limit_to is None or not limit_to else limit_to
-        )
-        fetched_transactions: list[TransactionOverview] = []
-        block_index: int = self.main_block_id - 2
-
-        # - Get the block from the last index and decrement if required transactions to is not sufficient to the requested number of transactions to render.
-        try:
-            while remaining_transactions:
-
-                # - Access the transactions of the block.
-                txs_on_block: list[frozendict] = self.__chain["chain"][block_index][
-                    "contents"
-                ]["transactions"]
-
-                for each_accounted_tx in txs_on_block:
-                    fetched_transactions.append(
-                        TransactionOverview(
-                            tx_hash=each_accounted_tx["tx_hash"],
-                            action=each_accounted_tx["action"],
-                            from_address=each_accounted_tx["from_address"],
-                            to_address=each_accounted_tx["to_address"],
-                        )
-                    )
-
-                    remaining_transactions -= 1
-
-                    if not remaining_transactions:
-                        break
-
-                block_index -= 1
-
-        except IndexError:
-            logger.warning(
-                "The amount of required transactions cannot be sustained by the lacking number of transactions in the blockchain!"
-            )
-
-        finally:
-            fetched_transactions.reverse()
-
-        return fetched_transactions
-
     @restrict_call(on=NodeType.MASTER_NODE)
     async def __block_timer_executor(self) -> None:
         logger.info(
@@ -1303,7 +1510,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         consensus_negotiation.insert().values(
                             block_no_ref=generated_block.id,
                             consensus_negotiation_id=generated_consensus_negotiation_id,
-                            peer_address=self.node_identity[0],
+                            peer_address=available_node_info.miner_address,
                             status=ConsensusNegotiationStatus.ON_PROGRESS,
                         )
                     )
@@ -1433,11 +1640,27 @@ class BlockchainMechanism(ConsensusMechanism):
         shadow_transaction_container = deepcopy(self.__transaction_container)
         self.__transaction_container.clear()
 
+        # # Explain this regarding compatibility issue of handling `prev_hash` when mined by the MASTER itself.
+
+        if self.__new_master_instance and len(self.__chain["chain"]):
+            block_index_ref: int = (
+                self.main_block_id
+                if not len(self.__chain["chain"])
+                else self.main_block_id - 2
+            )
+
+            resolved_prev_hash_block = self.__chain["chain"][block_index_ref][
+                "hash_block"
+            ]
+
+        else:
+            resolved_prev_hash_block = HashUUID("0" * BLOCK_HASH_LENGTH)
+
         _block: Block = Block(
             id=self.leading_block_id,
             content_bytes_size=None,  # * To be resolved on the later process.
             hash_block=None,  # ! Unsolvable, hash_block will handle it.
-            prev_hash_block=HashUUID("0" * BLOCK_HASH_LENGTH),
+            prev_hash_block=resolved_prev_hash_block,
             contents=HashableBlock(
                 nonce=None,  # - This was determined during the process of hashing.
                 validator=self.node_identity[0],
@@ -1677,7 +1900,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 if not bypass_from_update and not len(context_from_update):
                     byte_json_content: bytes = export_to_json(
                         self.__chain,
-                        default=self.__process_serialize_to_blockchain_file,
+                        default=self._process_block_serialization_to_file,
                     )
 
                     logger.debug(
@@ -1701,10 +1924,8 @@ class BlockchainMechanism(ConsensusMechanism):
             else:
                 raw_data = await content_buffer.read()
                 partial_deserialized_data = import_raw_json_to_dict(raw_data)
-                deserialized_data = (
-                    self.__process_deserialize_to_load_blockchain_in_memory(
-                        partial_deserialized_data
-                    )
+                deserialized_data = self.__process_block_deserialization_to_memory(
+                    partial_deserialized_data
                 )
 
                 if deserialized_data is None:
@@ -1719,7 +1940,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                     return deserialized_data
 
-    def __process_deserialize_to_load_blockchain_in_memory(
+    def __process_block_deserialization_to_memory(
         self, context: RawBlockchainPayload, update: bool = False
     ) -> frozendict | None:
         """
@@ -1890,7 +2111,7 @@ class BlockchainMechanism(ConsensusMechanism):
             message=f"The given `context` is not a valid dictionary object! | Received: {context} ({type(context)}). This is a logic error, please report to the developers as soon as possible.",
         )
 
-    def __process_serialize_to_blockchain_file(self, o: frozendict) -> dict[str, Any]:
+    def _process_block_serialization_to_file(self, o: frozendict) -> dict[str, Any]:
         """
         A method that serializes the python objects to a much more universally-readable JSON format to the blockchain file.
 
@@ -1978,7 +2199,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
             secret_code: str | None = env.get(SECRET_KEY, None)
 
-            encrypter_key = secret_code[: len(secret_code) / 2].encode("utf-8") if secret_code is not None else Fernet.generate_key()  # type: ignore
+            if secret_code is None:
+                unconventional_terminate(
+                    message="`SECRET_KEY` doesn't seem to exists, terminating the process, please check your environment file and try again."
+                )
+            else:
+                encrypter_key = urlsafe_b64encode(secret_code[: int(len(secret_code) / 2)].encode("utf-8"))  # type: ignore
 
         else:  # * Resolves to `NOT` an internal payload.
 
@@ -2169,7 +2395,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     dict_blockchain_content = await upstream_chain_content.json()
 
                     in_memory_chain: frozendict | None = (
-                        self.__process_deserialize_to_load_blockchain_in_memory(
+                        self.__process_block_deserialization_to_memory(
                             import_raw_json_to_dict(dict_blockchain_content["content"]),
                             update=True,
                         )

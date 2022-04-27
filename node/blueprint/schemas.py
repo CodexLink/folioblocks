@@ -288,11 +288,6 @@ class Block(BaseBlock):
     contents: HashableBlock
 
 
-class BlockOverview(BaseBlock):
-    validator: AddressUUID
-    timestamp: datetime
-
-
 # # Block Structure — END
 
 # # APIs
@@ -345,14 +340,6 @@ class NodeInformation(BaseModel):
     properties: NodeConsensusInformation
     statistics: NodeMasterInformation | None
 
-
-class Blockchain(BaseModel):
-    block: list[BlockOverview] | None
-    transactions: list[TransactionOverview] | None
-    node_info: NodeMasterInformation | None
-
-
-# # Explorer API — END
 
 # # Entity API — START
 
@@ -511,6 +498,36 @@ class Users(BaseModel):
 
 # # Entity API — END
 
+# # Explorer API (Seperatable) — START
+class BlockOverview(BaseBlock):
+    validator: AddressUUID
+    timestamp: datetime
+
+
+class Blockchain(BaseModel):
+    block: list[BlockOverview] | None
+    transactions: list[TransactionOverview] | None
+    node_info: NodeMasterInformation | None
+
+
+class EntityAddress(BaseModel):
+    uuid: AddressUUID
+    association_uuid: AddressUUID | None
+    entity_type: UserEntity
+    tx_bindings_count: int
+    negotiations_count: int
+
+class EntityAddressDetail(EntityAddress, BaseModel):
+    description: str | None
+    related_txs: list[Transaction]
+
+
+class TransactionDetail(BaseModel):
+    from_block: int
+    transaction: Transaction
+
+
+# # Explorer API (Seperatable) — END
 
 # # HTTP Methods — START
 # * Note that this class is not used in the API system! Meaning they are used internally.
