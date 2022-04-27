@@ -258,11 +258,14 @@ class TransactionSignatures(BaseModel):
     encrypted: HashUUID
 
 
-class Transaction(BaseModel):
+class TransactionOverview(BaseModel):
     tx_hash: HashUUID | None
     action: TransactionActions
     from_address: AddressUUID
     to_address: AddressUUID | None
+
+
+class Transaction(TransactionOverview, BaseModel):
     payload: GroupTransaction | NodeTransaction
     signatures: TransactionSignatures
 
@@ -287,6 +290,7 @@ class Block(BaseBlock):
 
 class BlockOverview(BaseBlock):
     validator: AddressUUID
+    timestamp: datetime
 
 
 # # Block Structure — END
@@ -333,6 +337,8 @@ class NodeMasterInformation(BaseModel):
     chain_block_timer: int
     total_blocks: int
     total_transactions: int
+    total_addresses: int
+    total_tx_mappings: int
 
 
 class NodeInformation(BaseModel):
@@ -342,8 +348,8 @@ class NodeInformation(BaseModel):
 
 class Blockchain(BaseModel):
     block: list[BlockOverview] | None
-    transactions: list[Transaction] | None
-    node_info: NodeMasterInformation
+    transactions: list[TransactionOverview] | None
+    node_info: NodeMasterInformation | None
 
 
 # # Explorer API — END

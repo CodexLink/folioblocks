@@ -137,9 +137,7 @@ CORS_ALLOWED_ORIGINS: Final[list[str]] = ["*"]
 ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 ASGI_APP_TARGET: Union[ASGIApplication, str] = "__main__:api_handler"
-INFINITE_TIMER: Final[
-    int
-] = 4294967295  # * Equivalent of asyncio.windows_events.INFINITE.
+INF: Final[int] = 4294967295  # * Equivalent of asyncio.windows_events.INFINITE.
 # # Constants, Auth: SMTP Email
 DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
 DEFAULT_SMTP_PORT: Final[int] = 465

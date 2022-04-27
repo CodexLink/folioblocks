@@ -34,7 +34,6 @@ from blueprint.schemas import (
     Block,
     BlockOverview,
     ConsensusSuccessPayload,
-    ConsensusToMasterPayload,
     GroupTransaction,
     HashableBlock,
     NodeCertificateTransaction,
@@ -62,10 +61,11 @@ from orjson import loads as import_raw_json_to_dict
 from pydantic import BaseModel, EmailStr
 from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import SECRET_KEY
+from blueprint.schemas import TransactionOverview
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -94,7 +94,7 @@ from core.constants import (
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
     BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE,
-    INFINITE_TIMER,
+    INF,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
     USER_FILES_FOLDER_NAME,
@@ -915,16 +915,29 @@ class BlockchainMechanism(ConsensusMechanism):
         unconventional_terminate(message="Cannot resolve transaction.")
 
     @ensure_blockchain_ready()
-    def get_blockchain_public_state(self) -> NodeMasterInformation | None:
+    async def get_blockchain_public_state(self) -> NodeMasterInformation | None:
         if self.node_role is NodeType.MASTER_NODE:
 
-            # # This may not be okay.
+            address_count_query: Select = select([func.count()]).select_from(users)
+            address_count = await self.__database_instance.fetch_val(
+                address_count_query
+            )
+
+            address_tx_mappings_count_query: Select = select(
+                [func.count()]
+            ).select_from(tx_content_mappings)
+            address_tx_mapping_count = await self.__database_instance.fetch_val(
+                address_tx_mappings_count_query
+            )
+
             return NodeMasterInformation(
                 chain_block_timer=self.block_timer_seconds,
                 total_blocks=len(self.__chain["chain"])
                 if self.__chain is not None
                 else 0,
                 total_transactions=self.__cached_total_transactions,
+                total_addresses=address_count,
+                total_tx_mappings=address_tx_mapping_count,
             )
         logger.warning(
             f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
@@ -1092,41 +1105,84 @@ class BlockchainMechanism(ConsensusMechanism):
             )
             return None
 
-    # # This method may be modified for the development of Explorer API.
     @ensure_blockchain_ready()
-    async def preview_blocks(self, limit_to: int) -> list[BlockOverview] | None:
-        if self.__chain is not None:
-            candidate_blocks: list[BlockOverview] = deepcopy(
-                self.__chain["chain"][len(self.__chain["chain"]) - limit_to :]
-            )
-            resolved_candidate_blocks: list[BlockOverview] | list = []
-
-            for block in candidate_blocks:
-                parsed_block: dict = dict(block)
-                # - [1] Push validator outside.
-                parsed_block["validator"] = parsed_block["contents"]["validator"]
-
-                # -  [2] Remove the contents scope.
-                del parsed_block["contents"]
-
-                # - [3] Remove hash context.
-                del parsed_block["hash_block"]
-                del parsed_block["prev_hash_block"]
-
-                # - [4] Assign this to the indexed block.
-                resolved_candidate_blocks.append(BlockOverview.parse_obj(parsed_block))
-
-            # * Once done, return the list.
-            resolved_candidate_blocks.reverse()
-            return resolved_candidate_blocks
+    async def fetch_block(self, *, id: int) -> Block | None:
+        for block in self.__chain["chain"]:
+            if id == block["id"]:
+                return block
 
         return None
 
+    @ensure_blockchain_ready()
+    async def fetch_blocks(self, *, limit_to: int | None = None) -> list[BlockOverview]:
+
+        latest_blocks: list[BlockOverview] = []
+        limit_to = INF if limit_to is None or not limit_to else limit_to
+        slice_start = (
+            (len(self.__chain["chain"]) - limit_to) if limit_to != INF else None
+        )
+
+        for block in self.__chain["chain"][slice_start:]:
+            proto_block: BlockOverview = BlockOverview(
+                id=block["id"],
+                content_bytes_size=block["content_bytes_size"],
+                validator=block["contents"]["validator"],
+                timestamp=block["contents"]["timestamp"],
+            )
+
+            latest_blocks.append(proto_block)
+
+        # - Once done, return the list.
+        latest_blocks.reverse()  # ! We cannot return this directly as it only modifies the memory and does not return the modified reference (memory).
+        return latest_blocks
+
     # # This method may be modified for the development of Explorer API.
     @ensure_blockchain_ready()
-    async def preview_transactions(self, limit_to: int) -> list[Transaction] | None:
-        if self.__chain is not None:
-            pass
+    async def fetch_transactions(
+        self, limit_to: int | None = None
+    ) -> list[TransactionOverview]:
+
+        remaining_transactions: int = (
+            INF if limit_to is None or not limit_to else limit_to
+        )
+        fetched_transactions: list[TransactionOverview] = []
+        block_index: int = self.main_block_id - 2
+
+        # - Get the block from the last index and decrement if required transactions to is not sufficient to the requested number of transactions to render.
+        try:
+            while remaining_transactions:
+
+                # - Access the transactions of the block.
+                txs_on_block: list[frozendict] = self.__chain["chain"][block_index][
+                    "contents"
+                ]["transactions"]
+
+                for each_accounted_tx in txs_on_block:
+                    fetched_transactions.append(
+                        TransactionOverview(
+                            tx_hash=each_accounted_tx["tx_hash"],
+                            action=each_accounted_tx["action"],
+                            from_address=each_accounted_tx["from_address"],
+                            to_address=each_accounted_tx["to_address"],
+                        )
+                    )
+
+                    remaining_transactions -= 1
+
+                    if not remaining_transactions:
+                        break
+
+                block_index -= 1
+
+        except IndexError:
+            logger.warning(
+                "The amount of required transactions cannot be sustained by the lacking number of transactions in the blockchain!"
+            )
+
+        finally:
+            fetched_transactions.reverse()
+
+        return fetched_transactions
 
     @restrict_call(on=NodeType.MASTER_NODE)
     async def __block_timer_executor(self) -> None:
@@ -1610,7 +1666,7 @@ class BlockchainMechanism(ConsensusMechanism):
             unconventional_terminate(
                 message=f"Supplied value at 'operation' is not a valid enum! Got {operation} ({type(operation)}) instead. This is an internal error.",
             )
-            await sleep(INFINITE_TIMER)
+            await sleep(INF)
 
         async with aopen(
             BLOCKCHAIN_RAW_PATH,
@@ -1655,7 +1711,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     unconventional_terminate(
                         message="Houston, we have a problem! We cannot deserialize from the JSON file. This is most likely someone modified the blockchain file! Please report this to the administrators and ensure that the backup has been added."
                     )  # * Resolves to condition 'deserialized_data is None'.
-                    await sleep(INFINITE_TIMER)
+                    await sleep(INF)
 
                 else:
                     logger.info(
@@ -2123,7 +2179,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         logger.error(
                             "There was an error loading the blockchain from file to in-memory."
                         )
-                        await sleep(INFINITE_TIMER)
+                        await sleep(INF)
 
                     else:
                         self.__chain = in_memory_chain

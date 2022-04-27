@@ -37,7 +37,7 @@ from core.constants import (
     DEFAULT_SMTP_PORT,
     DEFAULT_SMTP_TIMEOUT_CONNECTION,
     DEFAULT_SMTP_URL,
-    INFINITE_TIMER,
+    INF,
     CredentialContext,
     IPPort,
     URLAddress,
@@ -125,7 +125,7 @@ class EmailService:
                         message=f"Failed on email instance, refer to the previous log and please check the credentials in  `{AUTH_ENV_FILE_NAME}` file or your internet connection, then try again.",
                         early=True,
                     )
-                    await sleep(INFINITE_TIMER)
+                    await sleep(INF)
 
                 if retries_count + 1 <= self.max_retries:
                     logger.warning(
@@ -138,7 +138,7 @@ class EmailService:
         unconventional_terminate(
             message=f"Attempt count for retrying to connect to email services has been depleted. Email service failed at connecting due to potentially false credentials or service is not responding. Do CTRL+BREAK to encrypt the file back and check your environment.",
         )
-        await sleep(INFINITE_TIMER)
+        await sleep(INF)
 
     async def send(
         self,

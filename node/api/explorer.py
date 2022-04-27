@@ -11,6 +11,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 from http import HTTPStatus
+from http.client import SERVICE_UNAVAILABLE
 
 from blueprint.schemas import (
     Block,
@@ -21,33 +22,12 @@ from blueprint.schemas import (
 )
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
-    QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    QUERY_CURRENT_INDEX_PAGE_NAME,
-    QUERY_TRANSACTION_RETURN_DESCRIPTION,
-    QUERY_TRANSACTION_RETURN_NAME,
-    AddressUUID,
     BaseAPI,
-    BlockID,
     ExplorerAPI,
-    ExplorerBlockItemReturnCount,
-    TxID,
 )
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path
 
-"""
-# Regarding Dependency Injection on this endpoint.
-
-Note that we are iterating through JSON and we might need the folowing:
-- AsyncIterator
-- AIOFiles-related JSON Reader and Writer
-
-But before we deal with this matter, we need to ensure that we can first do the following:
-- Blockchain File and Block Finalization.
-
-Since this endpoint is just returning by reading through file, we can make this one good to go or a little bit easy but not underestimated.
-
-"""
-# TODO: https://fastapi.tiangolo.com/tutorial/response-model/?h=exclude+on+response#response_model_include-and-response_model_exclude
+from core.constants import AddressUUID
 
 explorer_router = APIRouter(
     prefix="/explorer",
@@ -65,26 +45,19 @@ explorer_router = APIRouter(
     summary="Fetch the context of the blockchain, formatted for displaying in the web.",
     description="An API endpoint that parses the current state of the blockchain under JSON-format for data display in the web. Note that this returns a fixed amount of data.",
 )
-async def get_blockchain() -> Blockchain:
+async def get_node_info() -> Blockchain:
     blockchain_instance: BlockchainMechanism | None = get_blockchain_instance()
 
     if isinstance(blockchain_instance, BlockchainMechanism):
-        blockchain_blocks: list[
-            BlockOverview
-        ] | None = await blockchain_instance.preview_blocks(limit_to=5)
 
-        blockchain_state: NodeMasterInformation | None = (
-            blockchain_instance.get_blockchain_public_state()
+        return Blockchain(
+            block=await blockchain_instance.fetch_blocks(limit_to=5),
+            transactions=await blockchain_instance.fetch_transactions(limit_to=5),
+            node_info=await blockchain_instance.get_blockchain_public_state(),
         )
 
-        if blockchain_state is not None:
-            # TODO: Transaction fetching. This may be hard to do.
-            return Blockchain(
-                block=blockchain_blocks, transactions=None, node_info=blockchain_state
-            )
-
     raise HTTPException(
-        detail="Unable to fetch information for the state of the MASTER node. This is a developer-issue, please report it to them as possible at CodexLink/folioblocks @ Github.",
+        detail="Unable to fetch information of this node.",
         status_code=HTTPStatus.FORBIDDEN,
     )
 
@@ -92,26 +65,24 @@ async def get_blockchain() -> Blockchain:
 @explorer_router.get(
     "/blocks",
     tags=[ExplorerAPI.LIST_FETCH.value, ExplorerAPI.BLOCK_FETCH.value],
-    response_model=list[Block],
+    response_model=list[BlockOverview],
     summary="Fetches all blocks from the blockchain.",
-    description="An API endpoint that specifically obtains all blocks from the blockchain.",  # TODO: Search for the cached output.
+    description="An API endpoint that specifically obtains all blocks from the blockchain.",
 )
 async def get_blocks(
-    *,
-    block_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title="Number of Block Return",
-        description="The value that signifies the number of blocks to return from the requestor.",
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    ),
-) -> None:
-    return
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+) -> list[BlockOverview]:
+
+    if isinstance(blockchain_instance, BlockchainMechanism):
+        # - Instead of automatically deconstructing the model `Block`, use the already optimized model `BlockOverview`.
+        # @o `BlockOverview` was added due to the endpoint `explorer/chain`.
+
+        return await blockchain_instance.fetch_blocks()
+
+    raise HTTPException(
+        detail="Cannot fetch a set of blocks, please try again later.",
+        status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+    )
 
 
 @explorer_router.get(
@@ -124,23 +95,24 @@ async def get_blocks(
     summary="Fetches a certain block from the blockchain.",
     description="An API endpoint that specifically obtains a certain block from the blockchain.",
 )
-async def get_certain_block(
+async def get_block(
     *,
-    block_id: BlockID,
-    tx_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MID,
-        title=QUERY_TRANSACTION_RETURN_NAME,
-        description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description="The page you are currently sitting, defaults to page 1. Other pages are available if the tx_count is higher than the number of total transactions from that block.",
-    ),
-) -> None:
-    return
+    block_id: int = Path(..., title="The ID of the block."),
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance)
+) -> Block:
+
+    if not isinstance(blockchain_instance, BlockchainMechanism):
+        raise HTTPException(
+            detail="Failed to fetch a block, please try again later.",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    block: Block | None = await blockchain_instance.fetch_block(id=block_id)
+
+    if block is not None:
+        return block
+
+    raise HTTPException(detail="Block not found.", status_code=HTTPStatus.NOT_FOUND)
 
 
 @explorer_router.get(
@@ -153,21 +125,7 @@ async def get_certain_block(
     summary="Fetch all transactions for all blocks.",
     description="An API endpoint that returns all transactions that recently entered in the blockchain.",
 )
-async def get_transactions(
-    *,
-    tx_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title=QUERY_TRANSACTION_RETURN_NAME,
-        description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    ),
-) -> None:
+async def get_transactions(*, tx_count: int) -> None:
     return
 
 
@@ -181,7 +139,7 @@ async def get_transactions(
     summary="Fetches a specific transaction.",
     description="An API endpoint that returns a specific transaction that matches for all block inserted in the blockchain.",
 )
-async def get_particular_transaction(*, tx_id: TxID) -> None:
+async def get_particular_transaction() -> None:
     return
 
 
@@ -195,21 +153,7 @@ async def get_particular_transaction(*, tx_id: TxID) -> None:
     summary="Fetch all addresses that has been recorded in blockchain.",
     description="An API endpoint that returns all addresses that is recorded in blockchain.",
 )
-async def get_addresses(
-    *,
-    addr_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title="Number of Address Return",
-        description="The number of addresses to return.",
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    ),
-) -> None:
+async def get_addresses(*, addr_count: int) -> None:
     return
 
 
@@ -223,22 +167,7 @@ async def get_addresses(
     summary="Fetch a specific address recorded in blockchain.",
     description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
-async def get_particular_addresses(
-    *,
-    address_uuid: AddressUUID,
-    tx_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title=QUERY_TRANSACTION_RETURN_NAME,
-        description=QUERY_TRANSACTION_RETURN_DESCRIPTION,
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    ),
-) -> None:
+async def get_particular_addresses(*, address_uuid: AddressUUID) -> None:
     return
 
 
@@ -250,12 +179,12 @@ async def get_particular_addresses(
     description="An API endpoint that attempts to search for an entity provided by input. This endpoint enforce length restrictions, as well as returns a singleton data as a redirection link.",
 )
 async def search_in_explorer(
-    *,
-    context: str = Query(
-        ...,
-        title="The context to search in the blockchain.",
-        min_length=3,
-        max_length=32,
-    ),
+    # *,
+    # context: str = Query()
+    #     ...,
+    #     title="The context to search in the blockchain.",
+    #     min_length=3,
+    #     max_length=32,
+    # ),
 ) -> None:
     return

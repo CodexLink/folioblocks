@@ -114,7 +114,7 @@ async def get_node_info() -> NodeInformation:
             blockchain_instance.get_blockchain_private_state()
         )
         node_statistics: NodeMasterInformation | None = (
-            blockchain_instance.get_blockchain_public_state()
+            await blockchain_instance.get_blockchain_public_state()
         )
 
         return NodeInformation(
