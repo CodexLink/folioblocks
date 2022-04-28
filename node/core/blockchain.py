@@ -566,7 +566,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     async def fetch_transactions(
-        self, limit_to: int | None = None
+        self, limit_to: int | None = None, address: AddressUUID | None = None
     ) -> list[TransactionOverview]:
 
         remaining_transactions: int = (
@@ -585,6 +585,19 @@ class BlockchainMechanism(ConsensusMechanism):
                 ]["transactions"]
 
                 for each_accounted_tx in txs_on_block:
+                    if address is not None and isinstance(address, str):
+                        address_found: bool = False
+
+                        # @o Check the origin address first.
+                        if address != each_accounted_tx["from_address"]:
+
+                            # @o Then if none, check for this one.
+                            if (
+                                address != each_accounted_tx["to_address"]
+                                and not address_found
+                            ):
+                                continue  # ! Ignore this transaction only if address were not found from both fields.
+
                     fetched_transactions.append(
                         TransactionOverview(
                             tx_hash=each_accounted_tx["tx_hash"],

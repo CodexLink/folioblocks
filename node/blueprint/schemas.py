@@ -546,7 +546,7 @@ class EntityAddress(BaseModel):
 
 class EntityAddressDetail(EntityAddress, BaseModel):
     description: str | None
-    related_txs: list[Transaction]
+    related_txs: list[TransactionOverview]
 
 
 class TransactionDetail(BaseModel):
