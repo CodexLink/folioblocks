@@ -21,6 +21,7 @@ from blueprint.models import (
     associations,
     consensus_negotiation,
     file_signatures,
+    portfolio_settings,
     tx_content_mappings,
     users,
 )
@@ -327,14 +328,7 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
     @ensure_blockchain_ready()
-    async def fetch_address(self, *, address: AddressUUID) -> Any:
-        pass
-
-    # @ensure_blockchain_ready()
-    # async def fetch_addresses(self) -> list[Address]
-
-    @ensure_blockchain_ready()
-    async def fetch_block(self, *, id: int) -> Block | None:
+    async def get_block(self, *, id: int) -> Block | None:
         for block in self.__chain["chain"]:
             if id == block["id"]:
                 return block
@@ -342,7 +336,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return None
 
     @ensure_blockchain_ready()
-    async def fetch_blocks(self, *, limit_to: int | None = None) -> list[BlockOverview]:
+    async def get_blocks(self, *, limit_to: int | None = None) -> list[BlockOverview]:
 
         latest_blocks: list[BlockOverview] = []
         limit_to = INF if limit_to is None or not limit_to else limit_to
@@ -365,7 +359,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return latest_blocks
 
     @ensure_blockchain_ready()
-    async def fetch_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
+    async def get_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
         block_index: int = self.main_block_id - 2
 
         # ! This some kind of quadratic iteration, yes o of time, not sure by means of complexity, but all I know is that it will take too long.
@@ -565,7 +559,7 @@ class BlockchainMechanism(ConsensusMechanism):
         return None
 
     @ensure_blockchain_ready()
-    async def fetch_transactions(
+    async def get_transactions(
         self, limit_to: int | None = None, address: AddressUUID | None = None
     ) -> list[TransactionOverview]:
 
@@ -888,6 +882,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         # - When all of the checks are done, then create the user.
                         try:
+                            user_type: UserEntity = (
+                                UserEntity.ORGANIZATION_DASHBOARD_USER
+                                if isinstance(data.context, OrganizationUserTransaction)
+                                else UserEntity.APPLICANT_DASHBOARD_USER
+                            )
+
                             new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
                             insert_user_query: Insert = users.insert().values(
                                 unique_address=new_uuid,
@@ -902,13 +902,25 @@ class BlockchainMechanism(ConsensusMechanism):
                                 username=data.context.username,  # type: ignore
                                 password=hash_context(pwd=RawData(data.context.password)),  # type: ignore
                                 email=data.context.email,  # type: ignore
-                                type=UserEntity.ORGANIZATION_DASHBOARD_USER
-                                if isinstance(data.context, OrganizationUserTransaction)
-                                else UserEntity.APPLICANT_DASHBOARD_USER,
+                                type=user_type,
                             )
 
                             # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
                             await self.__database_instance.execute(insert_user_query)
+
+                            # - When the user is classified as `Applicant`, then create a portfolio settings.
+                            if user_type is UserEntity.APPLICANT_DASHBOARD_USER:
+                                new_portfolio_settings_query: Insert = (
+                                    portfolio_settings.insert().values(
+                                        sharing_state=False,
+                                        expose_email_state=False,
+                                        show_files=False,
+                                    )
+                                )
+
+                                await self.__database_instance.execute(
+                                    new_portfolio_settings_query
+                                )
 
                             # * Resolve fields with missing data.
                             to_address = new_uuid
@@ -1005,7 +1017,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             not user_file_storage_ref.is_dir()
                             or not user_file_storage_ref.exists()
                         ):
-                            logger.debug("User file storage not found. Creating it.")
+                            logger.warning("User file storage not found. Now created.")
                             user_file_storage_ref.mkdir()
 
                         async with aopen(
@@ -1257,13 +1269,11 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
     async def get_chain_hash(self) -> HashUUID:
-        fetch_chain_hash_query = select([file_signatures.c.hash_signature]).where(
+        get_chain_hash_query = select([file_signatures.c.hash_signature]).where(
             file_signatures.c.filename == BLOCKCHAIN_NAME
         )
 
-        return HashUUID(
-            await self.__database_instance.fetch_val(fetch_chain_hash_query)
-        )
+        return HashUUID(await self.__database_instance.fetch_val(get_chain_hash_query))
 
     async def get_chain(self) -> str:
         # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
@@ -1826,19 +1836,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
         logger.warning("There's no block inside blockchain.")
 
-    async def __get_content_data(
-        self,
-        *,
-        data_type: BlockchainContentType,
-        recently: bool = False,
-        size: int = 5,
-        content_id: str | None = None,
-    ) -> None:
-
-        # ! If we wanted to fetch everything then don't add size and put recently to False.
-
-        return
-
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
     async def __hash_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
@@ -2400,7 +2397,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         "x-token": self.node_identity[1],
                         "x-certificate-token": await self._get_consensus_certificate(),
                     },
-                    name="fetch_upstream_from_master_node",
+                    name="get_upstream_from_master_node",
                 )
 
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.

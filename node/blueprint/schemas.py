@@ -41,9 +41,25 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class ApplicantEditableProperties(BaseModel):
-    avatar: UploadFile
+    avatar: UploadFile | None
     description: str | None
     personal_skills: str | None
+
+
+class DashboardApplicant(BaseModel):
+    tx_associated_count: int
+    last_update: datetime
+
+
+class DashboardArchival(BaseModel):
+    negotiation_count: int
+    last_block_hashed: int
+
+
+class DashboardOrganization(BaseModel):
+    total_students: int
+    total_associated_logs: int
+    total_associated_extra: int
 
 
 class DashboardContext(BaseModel):
@@ -52,6 +68,7 @@ class DashboardContext(BaseModel):
     last_name: str | None
     username: str
     role: UserRole
+    reports: DashboardApplicant | DashboardArchival | DashboardOrganization | None
 
 
 class PortfolioSettings(BaseModel):
@@ -60,10 +77,11 @@ class PortfolioSettings(BaseModel):
     show_files: bool
 
 
-class PortfolioLogs(BaseModel):
-    tx_hash: HashUUID
-    origin_address: AddressUUID
+class PortfolioLog(BaseModel):
+    at_block: int
     log_type: TransactionContextMappingType
+    origin_address: AddressUUID
+    tx_hash: HashUUID
 
 
 class PortfolioBase(BaseModel):
@@ -84,12 +102,7 @@ class Student(BaseModel):
     last_name: str
     address: AddressUUID
     program: str
-    semester: str
     date_created: datetime
-
-
-class StudentDetail(BaseModel):
-    pass
 
 
 """
@@ -181,8 +194,7 @@ class ApplicantUserBaseTransaction(BaseModel):
     description: str | None  # - Changeable, but will be recorded as a proof.
     skills: str | None  # - Changeable, but will be recorded as a proof.
     course: str
-    year_level: int
-    prefer_role: str
+    speciality: str
 
 
 class ApplicantUserTransaction(

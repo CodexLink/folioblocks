@@ -671,33 +671,31 @@ async def certify_miner(
 
     # - [1] Validate such entries from the header.
     # - [1.1] Get the source first.
-    fetch_node_source_query = select([users.c.unique_address, users.c.email]).where(
+    get_node_source_query = select([users.c.unique_address, users.c.email]).where(
         users.c.unique_address == x_source
     )
-    validated_source_address = await database_instance.fetch_one(
-        fetch_node_source_query
-    )
+    validated_source_address = await database_instance.fetch_one(get_node_source_query)
 
     # - [1.2] Then validate the token by incorporating previous query and the header `x_acceptance`.
     # * Validate other credentials and beyond at this point.
     if validated_source_address is not None:
-        fetch_node_auth_query = select([func.count()]).where(
+        get_node_auth_query = select([func.count()]).where(
             (auth_codes.c.code == x_acceptance)
             & (
                 auth_codes.c.to_email == validated_source_address.email  # type: ignore
             )  # @o Equivalent to validated_source_address.email.
         )
 
-        validated_auth_code = await database_instance.fetch_one(fetch_node_auth_query)
+        validated_auth_code = await database_instance.fetch_one(get_node_auth_query)
 
         if validated_auth_code.count:  # type: ignore
-            fetch_node_token_query = select([func.count()]).where(
+            get_node_token_query = select([func.count()]).where(
                 (tokens.c.token == x_session)
                 & (tokens.c.from_user == validated_source_address.unique_address)  # type: ignore
             )
 
             validated_node_token = await database_instance.fetch_one(
-                fetch_node_token_query
+                get_node_token_query
             )
 
             if validated_node_token.count:  # type: ignore

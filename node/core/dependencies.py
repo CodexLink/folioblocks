@@ -501,10 +501,12 @@ class EnsureAuthorized:
         _as: UserEntity | list[UserEntity] | None = None,
         blockchain_related: bool = False,
         return_token: bool = False,
+        return_address_from_token: bool = False,
     ) -> None:
         self.__as: UserEntity | list[UserEntity] | None = _as
         self.__blockchain_related: Final[bool] = blockchain_related
         self.__return_token: bool = return_token
+        self.__return_address_from_token: bool = return_address_from_token
 
     async def __call__(
         self,
@@ -516,24 +518,26 @@ class EnsureAuthorized:
             description=f"The certificate token that proves the consensus negotiation between {NodeType.ARCHIVAL_MINER_NODE.name} and {NodeType.MASTER_NODE.name}",
         ),
         database_instance: Database = Depends(get_database_instance),
-    ) -> JWTToken | None:
+    ) -> JWTToken | AddressUUID | None:
 
         if x_token is not None:
-            req_ref_token: Select = select([tokens.c.from_user]).where(
+            token_to_user_query: Select = select([tokens.c.from_user]).where(
                 (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
             )
 
-            req_token = await database_instance.fetch_val(req_ref_token)
+            user_address = await database_instance.fetch_val(token_to_user_query)
 
-            if req_token is not None:  # type: ignore
+            if user_address is not None:  # type: ignore
 
                 # ! I didn't use the Metadata().select() because its parameter `whereclause` prohibits selective column to return.
                 # * Therefore use the general purpose sqlalchemy.select instead.
-                user_role_ref = select([users.c.type]).where(
-                    users.c.unique_address == req_token  # type: ignore
+                fetch_user_role_query = select([users.c.type]).where(
+                    users.c.unique_address == user_address  # type: ignore
                 )
 
-                user_role: Mapping = await database_instance.fetch_val(user_role_ref)
+                user_role: Mapping = await database_instance.fetch_val(
+                    fetch_user_role_query
+                )
 
                 # * Exception variables, for use later.
                 condition_unmet_message: str = f"The role of this user is prohibited from running this method. | Allowed roles: {self.__as}"
@@ -555,12 +559,38 @@ class EnsureAuthorized:
                         status_code=condition_unmet_http_code,
                     )
 
-                # - This condition checks if the instance of `user_role` is `UserEntity` and _return_token is invoked.
-                if self.__return_token and isinstance(user_role, UserEntity):  # type: ignore
+                # # Contradiction between `__return_token` and `__return_address_from_token`.
+                # @o For some reason, I don't want to return them both because there is like a potential redundancy upon the implementation who uses this class method.
+                # - Even though I'm aware that I may have duplicated the code by querying the same thing again, I don't want it to happen from other future implementations, ie. Dashboard API.
+                # * Adjustment of code will take soon and not this time as of the time of this writing due to very hectic schedule where I need to finish this as soon as possible.
+                # ! Time of writing is 04/29/2022 at 12:53am.
+
+                # - Code to execute whenthe instance of `user_role` is `UserEntity` and `_return_token` is invoked and `__return_address_from_token` is `False`.
+                if (
+                    self.__return_token
+                    and not self.__return_address_from_token
+                    and isinstance(user_role, UserEntity)
+                ):
                     return x_token
 
+                # - Code to execute whenthe instance of `user_role` is `UserEntity` and `_return_token` is not invoked and `__return_address_from_token` is `True`.
+                if (
+                    not self.__return_token
+                    and self.__return_address_from_token
+                    and isinstance(user_role, UserEntity)
+                ):
+                    return AddressUUID(user_address)
+
+                if (
+                    self.__return_token and self.__return_address_from_token
+                ):  # ! Ignore returned instance.
+                    raise HTTPException(
+                        detail="Returning token and address is not possible. If you see this message, please report to the developers as this was an internal condition conflict.",
+                        status_code=HTTPStatus.CONFLICT,
+                    )
+
                 # - If no other specific conditions have been specified, ensure that we return if the token has been matched.
-                if req_token is not None:
+                if user_address is not None:
                     return None
 
         # - This condition checks whether this operation is `blockchain_based`, and it contains `x_certificate_token`.

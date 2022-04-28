@@ -77,6 +77,7 @@ users = Table(
     Column("avatar", Text, nullable=True, unique=False),
     Column("description", Text, nullable=True, unique=False),
     Column("skills", Text, nullable=True, unique=False),
+    Column("program", Text, nullable=True, unique=False),
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
     Column(
@@ -174,6 +175,7 @@ portfolio_settings = Table(
     Column("sharing_state", Boolean, server_default=false()),
     Column("expose_email_state", Boolean, server_default=false()),
     Column("show_files", Boolean, server_default=false()),
+    Column("datetime_to_allowed_changes", DateTime, server_default=func.now())
 )
 
 portfolio_settings.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
@@ -224,7 +226,7 @@ tx_content_mappings = Table(
         "content_type",
         SQLEnum(
             TransactionContextMappingType
-        ),  # - We dont want to automatically fill this on `INSERT`.
+        ),
         nullable=False,
         unique=False,
     ),

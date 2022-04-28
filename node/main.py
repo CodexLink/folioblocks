@@ -310,9 +310,7 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
             & (tokens.c.expiration.isnot(None))  # type: ignore
         )
 
-        tokens_available: list[Mapping] = await database_instance.fetch_all(
-            token_query
-        )
+        tokens_available: list[Mapping] = await database_instance.fetch_all(token_query)
 
         if not tokens_available:
             logger.warning("There are no tokens available to iterate as of the moment.")

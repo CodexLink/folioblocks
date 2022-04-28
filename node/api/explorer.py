@@ -57,8 +57,8 @@ async def get_node_info() -> Blockchain:
     if isinstance(blockchain_instance, BlockchainMechanism):
 
         return Blockchain(
-            block=await blockchain_instance.fetch_blocks(limit_to=5),
-            transactions=await blockchain_instance.fetch_transactions(limit_to=5),
+            block=await blockchain_instance.get_blocks(limit_to=5),
+            transactions=await blockchain_instance.get_transactions(limit_to=5),
             node_info=await blockchain_instance.get_blockchain_public_state(),
         )
 
@@ -83,7 +83,7 @@ async def get_blocks(
         # - Instead of automatically deconstructing the model `Block`, use the already optimized model `BlockOverview`.
         # @o `BlockOverview` was added due to the endpoint `explorer/chain`.
 
-        return await blockchain_instance.fetch_blocks()
+        return await blockchain_instance.get_blocks()
 
     raise HTTPException(
         detail="Cannot fetch a set of blocks, please try again later.",
@@ -116,7 +116,7 @@ async def get_block(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
-    block: Block | None = await blockchain_instance.fetch_block(id=block_id)
+    block: Block | None = await blockchain_instance.get_block(id=block_id)
 
     if block is not None:
         return block
@@ -143,7 +143,7 @@ async def get_transactions(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
-    return await blockchain_instance.fetch_transactions()
+    return await blockchain_instance.get_transactions()
 
 
 @explorer_router.get(
@@ -171,7 +171,7 @@ async def get_transaction(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
-    transaction: TransactionDetail | None = await blockchain_instance.fetch_transaction(
+    transaction: TransactionDetail | None = await blockchain_instance.get_transaction(
         tx_hash=tx_hash
     )
 
@@ -198,12 +198,12 @@ async def get_addresses(
 ) -> list[EntityAddress]:
     entity_addresses: list[EntityAddress] = []
 
-    fetch_entity: Select = select(
+    get_entity: Select = select(
         [users.c.unique_address, users.c.association, users.c.type]
     ).where(users.c.type != UserEntity.MASTER_NODE_USER)
 
     fetched_entities: list[Mapping[Any, Any]] = await database_instance.fetch_all(
-        fetch_entity
+        get_entity
     )
 
     for entity in fetched_entities:
@@ -212,20 +212,20 @@ async def get_addresses(
 
         # - Fill other fields based on their role.
         if entity.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
-            fetch_negotiation_count_query: Select = select([func.count()]).where(
+            get_negotiation_count_query: Select = select([func.count()]).where(
                 consensus_negotiation.c.peer_address == entity.unique_address
             )
 
             node_negotiations_count: int = await database_instance.fetch_val(
-                fetch_negotiation_count_query
+                get_negotiation_count_query
             )
         else:
-            fetch_tx_bindings_query: Select = select([func.count()]).where(
+            get_tx_bindings_query: Select = select([func.count()]).where(
                 tx_content_mappings.c.address_ref == entity.unique_address
             )
 
             tx_bindings_count: int = await database_instance.fetch_val(
-                fetch_tx_bindings_query
+                get_tx_bindings_query
             )
 
         entity_addresses.append(
@@ -281,42 +281,43 @@ async def get_address(
         raise HTTPException(
             detail="Address not found.", status_code=HTTPStatus.NOT_FOUND
         )
-
-    # - Fill the information of the field `description` if this user was a type `UserEntity.ORGANIZATION_DASHBOARD_USER`.
-    if user_props.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
-        user_description = user_props.description
-
-    # - Fill the information of the field `tx_bindings_count` if this user was a type `UserEntity.APPLICANT_DASHBOARD_USER`.
-    elif user_props.type is UserEntity.APPLICANT_DASHBOARD_USER:
-        user_tx_count_query: Select = select([func.count()]).where(
-            tx_content_mappings.c.address_ref == uuid
-        )
-
-        tx_count = await database_instance.fetch_val(user_tx_count_query)
-
-    # - FIll the information of the field `negotiations_count` if this user was a type `UserEntity.ARCHIVAL_MINER_NODE_USER`.
-    elif user_props.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
-        user_negotiation_count_query: Select = select(func.count()).where(
-            consensus_negotiation.c.peer_address == uuid
-        )
-
-        negotiation_count = await database_instance.fetch_val(
-            user_negotiation_count_query
-        )
-
     else:
-        raise HTTPException(
-            detail="Failed to parse user due to out of scope type.",
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-        )
 
-    return EntityAddressDetail(
-        uuid=uuid,
-        association_uuid=user_props.association,
-        description=user_description,
-        entity_type=user_props.type,
-        tx_bindings_count=tx_count,
-        negotiations_count=negotiation_count,
-        # - Get the transaction associated from this user.
-        related_txs=await blockchain_instance.fetch_transactions(address=uuid),
-    )
+        # - Fill the information of the field `description` if this user was a type `UserEntity.ORGANIZATION_DASHBOARD_USER`.
+        if user_props.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
+            user_description = user_props.description
+
+        # - Fill the information of the field `tx_bindings_count` if this user was a type `UserEntity.APPLICANT_DASHBOARD_USER`.
+        elif user_props.type is UserEntity.APPLICANT_DASHBOARD_USER:
+            user_tx_count_query: Select = select([func.count()]).where(
+                tx_content_mappings.c.address_ref == uuid
+            )
+
+            tx_count = await database_instance.fetch_val(user_tx_count_query)
+
+        # - FIll the information of the field `negotiations_count` if this user was a type `UserEntity.ARCHIVAL_MINER_NODE_USER`.
+        elif user_props.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
+            user_negotiation_count_query: Select = select(func.count()).where(
+                consensus_negotiation.c.peer_address == uuid
+            )
+
+            negotiation_count = await database_instance.fetch_val(
+                user_negotiation_count_query
+            )
+
+        else:
+            raise HTTPException(
+                detail="Failed to parse user due to out of scope type.",
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+
+        return EntityAddressDetail(
+            uuid=uuid,
+            association_uuid=user_props.association,
+            description=user_description,
+            entity_type=user_props.type,
+            tx_bindings_count=tx_count,
+            negotiations_count=negotiation_count,
+            # - Get the transaction associated from this user.
+            related_txs=await blockchain_instance.get_transactions(address=uuid),
+        )

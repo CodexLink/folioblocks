@@ -137,12 +137,14 @@ ENUM_NAME_PATTERN: RegExp = RegExp(r"[A-Z]")
 ASYNC_TARGET_LOOP: Final[str] = "uvicorn"
 ASGI_APP_TARGET: Union[ASGIApplication, str] = "__main__:api_handler"
 INF: Final[int] = 4294967295  # * Equivalent of asyncio.windows_events.INFINITE.
+
 # # Constants, Auth: SMTP Email
 DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
 DEFAULT_SMTP_PORT: Final[int] = 465
 DEFAULT_SMTP_ATTEMPT_MAX_RETRIES: Final[int] = 10
 DEFAULT_SMTP_TIMEOUT_CONNECTION: Final[int] = 10
 USER_FILES_FOLDER_NAME: Final[str] = "userfiles/"
+USER_AVATAR_FOLDER_NAME: Final[str] = "avatars/"
 
 # # Constants, Resources
 DATABASE_NAME: Final[str] = "folioblocks-node.db"
@@ -151,6 +153,9 @@ DATABASE_URL_PATH: str = f"sqlite:///{DATABASE_RAW_PATH}"
 
 BLOCKCHAIN_NAME: Final[str] = "folioblocks-chain.json"
 BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
+
+# # Constraints, Portfolio
+PORTFOLIO_MINUTE_TO_ALLOW_STATE_CHANGE: Final[int] = 5
 
 # # Constants, Template Models with Pydantic
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
@@ -364,7 +369,7 @@ class TransactionActions(IntEnum):
     # - https://softwareengineering.stackexchange.com/questions/266582/is-it-better-to-use-strings-or-int-to-reference-enums-outside-the-java-part-of-t
 
     # - Node-based Transactions: General
-    NODE_GENERAL_CONSENSUS_INIT = auto()  # #.
+    NODE_GENERAL_CONSENSUS_INIT = auto()
     NODE_GENERAL_REGISTER_INIT = auto()
     NODE_GENERAL_GENESIS_BLOCK_INIT = auto()
 
@@ -374,9 +379,6 @@ class TransactionActions(IntEnum):
     NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING = auto()
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
-    # - Applicant-based actions.
-    APPLICANT_CHANGE_BASIC_INFO = auto()
-
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = auto()
     INSTITUTION_ORG_REFER_NEW_DOCUMENT = auto()
