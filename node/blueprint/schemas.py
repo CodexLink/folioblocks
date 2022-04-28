@@ -15,20 +15,20 @@ from core.constants import (
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
     AddressUUID,
+    ApplicantChangeInfoActions,
     ApplicantLogContentType,
-    OrganizationType,
     CredentialContext,
     HashUUID,
     HTTPQueueMethods,
     JWTToken,
     NodeTransactionInternalActions,
-    NotificationContext,
+    NodeType,
     OrganizationType,
     RandomUUID,
     RequestPayloadContext,
-    RoleContext,
     TokenStatus,
     TransactionActions,
+    TransactionContextMappingType,
     URLAddress,
     UserActivityState,
     UserEntity,
@@ -37,33 +37,59 @@ from core.constants import (
 from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field
 
-from core.constants import TransactionContextMappingType
-from core.constants import NodeType
-from core.constants import ApplicantChangeInfoActions
-
 # # Dashboard API — START
+
+
+class ApplicantEditableProperties(BaseModel):
+    avatar: UploadFile
+    description: str | None
+    personal_skills: str | None
 
 
 class DashboardContext(BaseModel):
     address: AddressUUID
+    first_name: str | None
+    last_name: str | None
+    username: str
     role: UserRole
-    notifications: NotificationContext
-    role_context: RoleContext
 
 
-class Student(BaseModel):  # This may or may not be possible.
+class PortfolioSettings(BaseModel):
+    enable_sharing: bool
+    expose_email_info: bool
+    show_files: bool
+
+
+class PortfolioLogs(BaseModel):
+    tx_hash: HashUUID
+    origin_address: AddressUUID
+    log_type: TransactionContextMappingType
+
+
+class PortfolioBase(BaseModel):
+    pass
+
+
+class PortfolioDetailed(PortfolioBase):
+    pass
+
+
+# - For people who have hidden their attributes.
+class PortfolioMinimized(PortfolioBase):
+    pass
+
+
+class Student(BaseModel):
     first_name: str
     last_name: str
-    address_equiv: AddressUUID
+    address: AddressUUID
     program: str
     semester: str
-    # applicant_data: Applicant  # Nested since students will become applicants later on.
     date_created: datetime
 
 
-class NewStudentOut(BaseModel):
-    student_address: AddressUUID
-    date_created: datetime
+class StudentDetail(BaseModel):
+    pass
 
 
 """
@@ -516,6 +542,7 @@ class EntityAddress(BaseModel):
     entity_type: UserEntity
     tx_bindings_count: int
     negotiations_count: int
+
 
 class EntityAddressDetail(EntityAddress, BaseModel):
     description: str | None

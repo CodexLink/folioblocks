@@ -9,18 +9,19 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import Any
+from http import HTTPStatus
 
-from blueprint.schemas import DashboardContext, NewStudentOut, Student
-from core.constants import (
-    QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    QUERY_CURRENT_INDEX_PAGE_NAME,
-    AddressUUID,
-    BaseAPI,
-    DashboardAPI,
-    ExplorerBlockItemReturnCount,
+from blueprint.schemas import (
+    ApplicantEditableProperties,
+    DashboardContext,
+    PortfolioLogs,
+    PortfolioSettings,
+    Student,
+    StudentDetail,
 )
-from fastapi import APIRouter, Query
+from core.constants import BaseAPI, DashboardAPI, HashUUID, UserEntity
+from core.dependencies import EnsureAuthorized
+from fastapi import APIRouter, Depends, HTTPException
 
 dashboard_router = APIRouter(
     prefix="/dashboard",
@@ -35,181 +36,129 @@ Will work on this one when I was able to finish the explorer and node API functi
 
 
 @dashboard_router.get(
-    "/dashboard",
+    "",
     tags=[DashboardAPI.DASHBOARD_GENERAL_API.value],
     response_model=DashboardContext,
     summary="Obtains necessary information for the dashboard display.",
     description="An API endpoint that returns the data of the user based on their role.",
-)
-async def get_data_to_dashboard(*, context: DashboardContext) -> None:
-    return
-
-
-@dashboard_router.get(
-    "/applicants",
-    # tags=[DashboardAPI.EMPLOYER_API.value],
-    description="An API-exclusive to employers that obtains a list of individuals (applicants) who applies to them.",
-)
-async def get_applicants(
-    *,
-    applicant_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title="Number of Applicants to Return",
-        description="The number of applicants to return.",
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,
-    ),
-) -> None:
-    return
-
-
-@dashboard_router.get(
-    "/applicant/{applicant_id}",
-    # tags=[DashboardAPI.EMPLOYER_API.value],
-    # response_model=Applicant,
-    summary="Obtain a certain individual.",
-    description="An API-exclusive to employers that obtains a particular individual, which displays their information.",
-)
-async def get_applicant(*, applicant_id: AddressUUID) -> None:
-    return
-
-
-@dashboard_router.get(
-    "/requests",
-    tags=[
-        DashboardAPI.APPLICANT_API.value,
-        # DashboardAPI.EMPLOYER_API.value,
-        DashboardAPI.INSTITUTION_API.value,
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=[
+                    UserEntity.ORGANIZATION_DASHBOARD_USER,
+                    UserEntity.APPLICANT_DASHBOARD_USER,
+                ],
+                return_token=True,
+            )
+        )
     ],
-    description="An API endpoint that obtains all requests associated to this user. This endpoint is also flexible for all roles associated from this system.",
 )
-async def get_all_requests() -> None:  # TODO.
-    return
-
-
-@dashboard_router.get(
-    "/request/{request_id}",
-    tags=[
-        DashboardAPI.APPLICANT_API.value,
-        # DashboardAPI.EMPLOYER_API.value,
-        DashboardAPI.INSTITUTION_API.value,
-    ],
-    # response_model=Request,
-    summary="Obtain a particular request. Context-protected based on the association of the user.",
-    description="An API endpoint that returns a particular requests that is associated from this user.",
-)
-async def get_request(*, request_id: int) -> None:
-    return
-
-
-@dashboard_router.get(
-    "/request/{request_id}/request_view/{doc_type}",
-    # tags=[DashboardAPI.EMPLOYER_API.value],
-    # response_model = RequestDocView,
-    summary="Submit request for viewing a particular document from the applicant.",
-    description="An API-exclusive to employers that allows them to make request for documents to be viewed.",
-)
-async def request_document_view(
-    *, request_id: int, doc_type: str
-) -> None:  # TODO: Types. | doc_type should have choices.
-    return
-
-
-@dashboard_router.get(
-    "/issuances",
-    tags=[DashboardAPI.INSTITUTION_API.value],
-    # response_model=Issuances,
-    summary="Get a list of issuances from the students.",
-    description="An API endpoint that returns of a list of issuances that was invoked from the students.",
-)
-async def get_issuances(
-    *,
-    issuance_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title="Number of Issued Documents to Return",
-        description="The number of documents issued to return.",
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,  # TODO: [TO BE CONFIRMED] If this renders the `` style, use it across other arguments that have the same functionality.
-    ),
-) -> None:
-    pass
-
-
-@dashboard_router.get(
-    "/issuance/{issue_id}",
-    tags=[DashboardAPI.INSTITUTION_API.value],
-    # response_model=Issuance,
-    summary="Obtain a particular issued document.",
-    description="An API endpoint that obtains a specified document based on its ID.",
-)
-async def get_issued_docs(*, issue_id: int) -> None:
-    return
-
-
-@dashboard_router.post(
-    "/issue",
-    tags=[DashboardAPI.INSTITUTION_API.value],
-    # response_model=IssueToStudentOut,
-    summary="Submit a document to mint from the blockchain.",
-    description="An API endpoint that allows institutions to submit new documents in the blockchain. Note that minting them requires user (address) reference.",
-)
-async def mint_document(*, doc_context: Any) -> None:
-    return
+async def fetch_dashboard_data() -> HTTPException:
+    return HTTPException(detail="Works.", status_code=HTTPStatus.NOT_IMPLEMENTED)
 
 
 @dashboard_router.get(
     "/students",
-    tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=Student,
-    summary="Obtain a list of classified students in the blockchain.",
-    description="An API endpoint that returns a list of addresses that is classified as student.",
+    tags=[
+        DashboardAPI.INSTITUTION_API.value,
+    ],
+    response_model=list[Student],
+    summary="Returns a set of students associated from the organization.",
+    description="An API endpoint that returns generated students from the blockchain, solely from the association from where this institution user belongs.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=UserEntity.ORGANIZATION_DASHBOARD_USER, return_token=True
+            )
+        )
+    ],
 )
-async def get_students(
-    *,
-    student_count: int
-    | None = Query(
-        ExplorerBlockItemReturnCount.MIN,
-        title="Number of Students to Return",
-        description="The number of students to return.",
-    ),
-    page: int
-    | None = Query(
-        None,
-        title=QUERY_CURRENT_INDEX_PAGE_NAME,
-        description=QUERY_CURRENT_INDEX_NAME_DESCRIPTION,  # TODO: If this renders the `` style, use it across other arguments that have the same functionality.
-    ),
-) -> None:
+async def fetch_associated_students() -> None:
     return
 
 
 @dashboard_router.get(
-    "/student/{student_addr}",
-    tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=Student,
-    summary="Obtain a particular student's information.",
-    description="An API endpoint that obtains a student along with its readable information.",
+    "/student/{address}",
+    tags=[
+        DashboardAPI.INSTITUTION_API.value,
+    ],
+    response_model=StudentDetail,
+    summary="Returns generated information of the student, non-editable.",
+    description="An API endpoint that returns the information of the student.",
+    dependencies=[
+        Depends(
+            EnsureAuthorized(
+                _as=UserEntity.ORGANIZATION_DASHBOARD_USER, return_token=True
+            )
+        )
+    ],
 )
-async def get_student(*, student_addr: AddressUUID) -> None:
+async def fetch_associated_student(*, address: HashUUID) -> StudentDetail:
+    return StudentDetail()
+
+
+@dashboard_router.get(
+    "/user_profile",
+    tags=[DashboardAPI.APPLICANT_API.value],
+    response_model=ApplicantEditableProperties,
+    summary="Returns the editable information from the applicant.",
+    description="An API endpoint that returns information that are editable from the applicant to display from their portfolio.",
+)
+async def fetch_user_profile() -> ApplicantEditableProperties:
+    return ApplicantEditableProperties()
+
+
+@dashboard_router.post(
+    "/apply_profile_changes",
+    tags=[DashboardAPI.APPLICANT_API.value],
+    response_model=ApplicantEditableProperties,
+    summary="Applies changes of the editable information of the applicant.",
+    description="An API endpoint that applies changes to the editable information of the applicant.",
+    status_code=HTTPStatus.ACCEPTED,
+)
+async def save_user_profile(data: ApplicantEditableProperties) -> None:
+    return None
+    # return Response(status_code=HTT)
+
+
+@dashboard_router.get(
+    "/portfolio",
+    tags=[DashboardAPI.INSTITUTION_API.value, DashboardAPI.APPLICANT_API.value],
+    summary="Renders the portfolio of this applicant.",
+    description="An API-exclusive to applicants where they can view their portfolio.",
+)
+async def fetch_portfolio() -> None:
     return
 
 
-# ! TODO: We need PUT method and a batch push accounts method to the blockchain so that it is less error prone. We implement that if we already have the web.
-@dashboard_router.post(
-    "/student",
-    tags=[DashboardAPI.INSTITUTION_API.value],
-    response_model=NewStudentOut,
-    summary="Create a student information for the blockchain to recognize.",
-    description="An API endpoint that creates a student account on the blockchain.",
+@dashboard_router.get(
+    "/portfolio_settings",
+    tags=[DashboardAPI.APPLICANT_API],
+    response_model=PortfolioSettings,
+    summary="Returns the state of the portfolio.",
+    description="An API endpoint that returns the state of portfolio, where state changes affects the output of the portfolio.",
 )
-async def create_student(*, student_context: Any) -> None:
+async def fetch_portfolio_settings() -> None:
+    return
+
+
+@dashboard_router.get(
+    "/apply_portfolio_settings",
+    tags=[DashboardAPI.APPLICANT_API],
+    summary="Applies portfolio setting from applicant's portfolio.",
+    description="An API endpoint that applies changes to the portfolio's state.",
+    status_code=HTTPStatus.ACCEPTED,
+)
+async def save_portfolio_settings() -> None:
+    return
+
+
+@dashboard_router.get(
+    "/portfolio_log",
+    tags=[DashboardAPI.APPLICANT_API.value],
+    response_model=PortfolioLogs,
+    summary="Fetches the logs regarding this portfolio.",
+    description="An API endpoint that returns the logs of the portfolio, which should contain the changes done.",
+)
+async def fetch_portfolio_log() -> None:
     return

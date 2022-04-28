@@ -1,6 +1,6 @@
 from argparse import Namespace
 from asyncio import create_task, gather, get_event_loop, sleep
-from base64 import urlsafe_b64decode, urlsafe_b64encode
+from base64 import urlsafe_b64encode
 from copy import deepcopy
 from datetime import datetime, timedelta
 from hashlib import sha256

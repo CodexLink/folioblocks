@@ -11,7 +11,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 from http import HTTPStatus
-from typing import Mapping
+from typing import Any, Generic, Literal, Mapping, TypeVar
 
 from blueprint.models import consensus_negotiation, tx_content_mappings, users
 from blueprint.schemas import (
@@ -25,15 +25,15 @@ from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import AddressUUID, BaseAPI, ExplorerAPI, HashUUID
 from databases import Database
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
-from sqlalchemy import Column, Table, func, select
+from sqlalchemy import Column, MetaData, Table, func, select
 from sqlalchemy.sql.expression import Select
 
 from blueprint.schemas import EntityAddress
 from core.dependencies import get_database_instance
 from core.constants import UserEntity
 from sqlalchemy.orm import Query as SQLQuery
-
-from node.blueprint.schemas import EntityAddressDetail
+from sqlalchemy.engine.row import Row
+from blueprint.schemas import EntityAddressDetail
 
 explorer_router = APIRouter(
     prefix="/explorer",
@@ -156,7 +156,7 @@ async def get_transactions(
     summary="Fetches a specific transaction.",
     description="An API endpoint that returns a specific transaction that matches for all block inserted in the blockchain.",
 )
-async def get_particular_transaction(
+async def get_transaction(
     tx_hash: HashUUID = Query(
         ...,
         title="Transaction Hash (TX)",
@@ -200,10 +200,9 @@ async def get_addresses(
 
     fetch_entity: Select = select(
         [users.c.unique_address, users.c.association, users.c.type]
-        # ).where(users.c.type != UserEntity.MASTER_NODE_USER)
-    ).select_from(users)
+    ).where(users.c.type != UserEntity.MASTER_NODE_USER)
 
-    fetched_entities: list[Mapping[Table, Column]] = await database_instance.fetch_all(
+    fetched_entities: list[Mapping[Row, Column[Any]]] = await database_instance.fetch_all(
         fetch_entity
     )
 
@@ -217,7 +216,7 @@ async def get_addresses(
                 consensus_negotiation.c.peer_address == entity.unique_address
             )
 
-            node_negotiations_count = await database_instance.fetch_val(
+            node_negotiations_count: int = await database_instance.fetch_val(
                 fetch_negotiation_count_query
             )
         else:
@@ -225,7 +224,7 @@ async def get_addresses(
                 tx_content_mappings.c.address_ref == entity.unique_address
             )
 
-            tx_bindings_count = await database_instance.fetch_val(
+            tx_bindings_count: int = await database_instance.fetch_val(
                 fetch_tx_bindings_query
             )
 
@@ -252,16 +251,5 @@ async def get_addresses(
     summary="Fetch a specific address recorded in blockchain.",
     description="An API endpoint that obtains an address and display its transactions associated in the blockchain.",
 )
-async def get_particular_addresses(uuid: AddressUUID) -> EntityAddressDetail:
+async def get_address(uuid: AddressUUID) -> EntityAddressDetail:
     return
-
-
-@explorer_router.get(
-    "/search",
-    tags=[ExplorerAPI.GENERAL_FETCH.value],
-    summary="Search an entity (block, transaction, address) on the blockchain.",
-    description="An API endpoint that attempts to search for an entity provided by input. This endpoint enforce length restrictions, as well as returns a singleton data as a redirection link.",
-)
-async def search_in_explorer(parameter: str) -> Response:
-    # - Remember about the one that requires classifying the parameter if it was a block, transaction or an address.
-    return Response(status_code=HTTPStatus.ACCEPTED)

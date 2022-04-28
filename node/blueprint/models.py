@@ -144,7 +144,7 @@ auth_codes.user_ref = relationship(users, foreign_keys="generated_by")  # type: 
 consensus_negotiation = Table(
     "consensus_negotiation",
     model_metadata,
-    Column("id", Integer, nullable=False, primary_key=True, unique=False),
+    Column("id", Integer, primary_key=True),
     Column("block_no_ref", Integer, nullable=False, unique=True),
     Column("consensus_negotiation_id", String(11), nullable=False, unique=True),
     Column("peer_address", ForeignKey(user_addr_ref), nullable=False, unique=False),
@@ -165,6 +165,18 @@ consensus_negotiation = Table(
 )
 
 consensus_negotiation.peer_address_ref = relationship(users, foreign_keys="peer_address")  # type: ignore
+
+portfolio_settings = Table(
+    "portfolio_settings",
+    model_metadata,
+    Column("id", Integer, primary_key=True),
+    Column("from_user", ForeignKey(user_addr_ref), nullable=False),
+    Column("sharing_state", Boolean, server_default=false()),
+    Column("expose_email_state", Boolean, server_default=false()),
+    Column("show_files", Boolean, server_default=false()),
+)
+
+portfolio_settings.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 
 tokens = Table(
     "tokens",
@@ -204,7 +216,7 @@ tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 tx_content_mappings = Table(
     "tx_content_mappings",
     model_metadata,
-    Column("id", Integer, nullable=False, primary_key=True, unique=False),
+    Column("id", Integer, primary_key=True),
     Column("address_ref", ForeignKey(user_addr_ref), nullable=False, unique=False),
     Column("block_no_ref", Integer, nullable=False, unique=False),
     Column("tx_ref", String(64), nullable=False, unique=False),

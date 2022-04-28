@@ -11,7 +11,16 @@
       "program": "node/main.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["--local", "--prefer-role", "MASTER_NODE", "-d"]
+      "args": [
+        "--node-role",
+        "MASTER_NODE",
+        "--log-level",
+        "DEBUG",
+        "--node-host",
+        "127.0.0.1",
+        "--node-port",
+        "6001"
+      ]
     },
     {
       "name": "Folioblocks Node Backend: No Local Param, Debug as MASTER_NODE (Top-Level Code Check)",
