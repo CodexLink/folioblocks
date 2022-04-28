@@ -995,7 +995,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - For the sake of stupidity, I will be handling the length truncation of the address when the action.value has a length of 1 or 2.
                         transaction_action_ref: str = str(action.value)
 
-                        # TODO: Make this constant non-magic number.
                         to_address_truncation_char: int = (
                             14 if transaction_action_ref == 2 else 13
                         )

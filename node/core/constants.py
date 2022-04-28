@@ -21,17 +21,12 @@ from asgiref.typing import ASGIApplication
 from databases import Database
 
 # # Custom Assertable Types
-# TODO: DocumentSet is unconfirmed because I don't have proper vision of what would be the output.
-AcademicExperience = _N("AcademicExperience", str)
 AddressUUID = _N("AddressUUID", str)
 ArgumentParameter = _N("ArgumentParameter", str)
 ArgumentDescription = _N("ArgumentDescription", str)
 AuthAcceptanceCode = _N("AuthAcceptanceCode", str)
-BlockID = _N("BlockID", str)
 BlockchainFileContext = _N("BlockchainFileContext", str)
 CredentialContext = _N("CredentialContext", str)
-DocumentMeta = _N("DocumentMeta", str)
-GenericUUID = _N("GenericUUID", str)
 HashUUID = _N("HashUUID", str)
 HashedData = _N("HashedData", str)
 IPAddress = _N("IPAddress", str)
@@ -43,21 +38,15 @@ RandomUUID = _N("RandomUUID", str)
 RawData = _N("RawData", str)
 RegExp = _N("RegExp", str)
 RuntimeLoopContext = _N("RuntimeLoopContext", str)
-RequestContext = _N("RequestContext", str)
 URLAddress = _N("URLAddress", str)
 UserRole = _N("UserRole", str)
-TxID = _N("TxID", str)
 
 # # Custom Variable Types
 ArgsPlusDatabaseInstances = tuple[Namespace, Database]
-BlockchainNodeStatePayload = dict[str, bool | timedelta | int]
 BlockchainPayload = tuple[HashUUID, BlockchainFileContext]
-DocumentSet = list[dict[str, Any]]
 IdentityTokens = tuple[AddressUUID, JWTToken]
-NodeCredentials = tuple[CredentialContext, CredentialContext]
 RawBlockchainPayload = dict[str, Any]
 RequestPayloadContext = dict[str, Any]
-RoleContext = dict[str, Any]
 UserCredentials = tuple[CredentialContext, CredentialContext]
 
 
@@ -99,7 +88,7 @@ AUTH_CODE_MAX_CONTEXT: Final[int] = 32
 # # Constants, Blockchain
 BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
     int
-] = 4  # NOTE: #  ! I'm not quite sure if this would be okay. As per checked, 2 to 3 more transactions takes more time. We might need to adjust block timer from this.
+] = 4
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
 BLOCKCHAIN_GENESIS_MIN_CHAR_DATA: Final[int] = 16
 BLOCKCHAIN_GENESIS_MAX_CHAR_DATA: Final[int] = 32
