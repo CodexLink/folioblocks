@@ -302,13 +302,15 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
     @api_handler.on_event("startup")
     @repeat_every(seconds=120, wait_first=True)
     async def jwt_invalidation_on_users() -> None:
+        database_instance: Database = get_database_instance()
 
         ## Query available tokens.
         token_query: Select = tokens.select().where(
             (tokens.c.state != TokenStatus.EXPIRED)
             & (tokens.c.expiration.isnot(None))  # type: ignore
         )
-        tokens_available: list[Mapping] = await get_database_instance().fetch_all(
+
+        tokens_available: list[Mapping] = await database_instance.fetch_all(
             token_query
         )
 
@@ -330,13 +332,13 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
                         tokens.update()
                         .where(tokens.c.expiration == token.expiration)
                         .values(state=TokenStatus.EXPIRED)
-                    )  # # Change the state of the token when past through expiration.
+                    )  # - Change the state of the token when past through expiration.
 
-                    await get_database_instance().execute(token_to_del)
+                    await database_instance.execute(token_to_del)
 
                     logger.info(
-                        f"Token {token.token[:25]}(...) has been deleted due to expiration date {token.expiration}."
-                    )  # # Character beyond 25th will be truncated. This is just a pure random though.
+                        f"Token {token.token[:25]}(...) was set to {TokenStatus.EXPIRED.name} due to its expiration date {token.expiration}."
+                    )  # - Character beyond 25th will be truncated. This is just a pure random though.
 
 
 # * We cannot encapsulate the whole (main.py) module as there's a subprocess instantiated wherein there's a custom `__main__` that will run this script. Avoiding this technique will cause recursion.

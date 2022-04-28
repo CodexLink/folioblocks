@@ -279,7 +279,7 @@ async def get_address(
 
     if user_props is None:
         raise HTTPException(
-            detail="Address not found", status_code=HTTPStatus.NOT_FOUND
+            detail="Address not found.", status_code=HTTPStatus.NOT_FOUND
         )
 
     # - Fill the information of the field `description` if this user was a type `UserEntity.ORGANIZATION_DASHBOARD_USER`.
