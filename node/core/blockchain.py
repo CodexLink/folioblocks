@@ -2342,9 +2342,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 status_code=HTTPStatus.CONFLICT,
             )
 
-    async def __search_for(self, *, type: str, uid: AddressUUID | str) -> None:
-        return
-
     def __set_node_state(self) -> None:
         self.__node_ready = (
             True

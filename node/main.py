@@ -275,11 +275,6 @@ async def terminate() -> None:
             should_destroy=True
         )  # * Shutdown the HTTP client module.
 
-    # if isinstance(blockchain_instance, BlockchainMechanism):
-    #     await wait(
-    #         {create_task(blockchain_instance.close())}
-    #     )  # * Shutdown the blockchain instance. We really need to finish this off before doing anything else.
-
     await close_resources(
         key=parsed_args.key_file[0]
     )  # * When necessary services finished, close the resource, as well as the database to go back from their malformed structure.
