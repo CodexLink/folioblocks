@@ -9,7 +9,6 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from argparse import Namespace
-from datetime import timedelta
 from enum import Enum, IntEnum, auto
 from pathlib import Path
 from secrets import SystemRandom
@@ -86,9 +85,7 @@ AUTH_CODE_MIN_CONTEXT: Final[int] = 4
 AUTH_CODE_MAX_CONTEXT: Final[int] = 32
 
 # # Constants, Blockchain
-BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[
-    int
-] = 4
+BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[int] = 4
 BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS: Final[int] = 5
 BLOCKCHAIN_GENESIS_MIN_CHAR_DATA: Final[int] = 16
 BLOCKCHAIN_GENESIS_MAX_CHAR_DATA: Final[int] = 32
@@ -102,6 +99,25 @@ BLOCKCHAIN_CONSENSUS_SLEEP_BASE_VALUE: Final[int] = 2
 
 REF_MASTER_BLOCKCHAIN_ADDRESS: Final[str] = "MASTER_NODE_ADDRESS"
 REF_MASTER_BLOCKCHAIN_PORT: Final[str] = "MASTER_NODE_PORT"
+
+# # Constants, Blockchain Encrypter and Decrypter Values
+
+# - Variables for the method `BlockchainMechanism.__resolve_transaction_payload.` at Blockchain Module. | Used to encrypt and decrpyt the payload of 'GroupTransactions.context'.
+TRANSACTION_PAYLOAD_MIN_CHAR_COUNT: Final[int] = 11
+TRANSACTION_PAYLOAD_MAX_CHAR_COUNT: Final[int] = 12
+TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX: Final[int] = 7
+TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY: Final[str] = "%m%y%d%H%M%S"
+
+# - Variables for the method `certify_miner` at Node API. | Used to create a unique token based from a key, which is a cipher.
+CERTIFICATE_TOKEN_SECRET_KEY_START_INDEX = 16
+CERTIFICATE_TOKEN_SECRET_KEY_MIDDLE_INDEX = 32
+CERTIFICATE_TOKEN_SECRET_KEY_END_INDEX = 48
+
+# - Variables for the method `BlockchainMechanism.insert_external_transaction` at Blockchain Module, focused on encrypting and decrypting a file fetched.
+FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY: Final[str] = "%y%m%d%H%M%S"
+FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX: Final[int] = 3
+FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN: Final[int] = 13
+FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX: Final[int] = 14
 
 # # Constants, HTTP
 HTTP_MICRO_SLEEP_TO_FETCH_REQUEST: Final[float] = 0.2
@@ -274,9 +290,9 @@ class TransactionContextMappingType(IntEnum):
     APPLICANT_BASE = auto()
     APPLICANT_LOG = auto()
     APPLICANT_ADDITIONAL = auto()
-    ORGANIZATION_BASE = auto()
-    ORGANIZATION_ASSOCIATIONS = auto()
-    ORGANIZATION_ADDITIONAL = auto()
+    ORGANIZATION_BASE = auto()  # ! Potentially deprecated.
+    ORGANIZATION_ASSOCIATIONS = auto()  # ! Potentially deprecated.
+    ORGANIZATION_ADDITIONAL = auto()  # ! Potentially deprecated.
 
 
 class UserActivityState(IntEnum):
@@ -321,15 +337,6 @@ class HTTPQueueStatus(IntEnum):
 
 
 # # Enums, Transaction-Related Attributes
-class ApplicantChangeInfoActions(IntEnum):
-    AVATAR = auto()
-    DESCRIPTION = auto()
-    PERSONAL_SKILLS = auto()
-    AVATAR_PLUS_DESCRIPTION = auto()
-    AVATAR_PLUS_PERSONAL_SKILLS = auto()
-    DESCRIPTION_PLUS_PERSONAL_SKILLS = auto()
-
-
 class NodeTransactionInternalActions(IntEnum):
     CONSENSUS = auto()
     INIT = auto()
@@ -370,7 +377,7 @@ class TransactionActions(IntEnum):
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
     # - For Institutions / Organization.
     INSTITUTION_ORG_GENERATE_APPLICANT = auto()
-    INSTITUTION_ORG_REFER_NEW_DOCUMENT = auto()
+    INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO = auto()
     INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO = auto()
 
     # - For Organization, in general.

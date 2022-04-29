@@ -80,6 +80,7 @@ users = Table(
     Column("program", Text, nullable=True, unique=False),
     Column("first_name", String(32), nullable=True),
     Column("last_name", String(32), nullable=True),
+    Column("preferred_role", String(32), nullable=True),
     Column(
         "association", ForeignKey("associations.address"), nullable=True, unique=False
     ),
@@ -92,7 +93,7 @@ users = Table(
         SQLEnum(UserActivityState),
         server_default=UserActivityState.OFFLINE.name,
     ),
-    Column("date_registered", DateTime, server_default=func.now()),
+    Column("date_registered", DateTime, nullable=False),
 )
 
 users.association_ref = relationship(associations, foreign_keys="association")  # type: ignore
@@ -175,7 +176,7 @@ portfolio_settings = Table(
     Column("sharing_state", Boolean, server_default=false()),
     Column("expose_email_state", Boolean, server_default=false()),
     Column("show_files", Boolean, server_default=false()),
-    Column("datetime_to_allowed_changes", DateTime, server_default=func.now())
+    Column("datetime_to_allowed_changes", DateTime, server_default=func.now()),
 )
 
 portfolio_settings.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
@@ -224,15 +225,11 @@ tx_content_mappings = Table(
     Column("tx_ref", String(64), nullable=False, unique=False),
     Column(
         "content_type",
-        SQLEnum(
-            TransactionContextMappingType
-        ),
+        SQLEnum(TransactionContextMappingType),
         nullable=False,
         unique=False,
     ),
-    Column(
-        "timestamp", DateTime, nullable=False, unique=True, server_default=func.now()
-    ),
+    Column("timestamp", DateTime, nullable=False),
 )
 
 tx_content_mappings.address_user_ref = relationship(users, foreign_keys="address_ref")  # type: ignore

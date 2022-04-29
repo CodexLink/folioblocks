@@ -15,7 +15,6 @@ from core.constants import (
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
     AddressUUID,
-    ApplicantChangeInfoActions,
     ApplicantLogContentType,
     CredentialContext,
     HashUUID,
@@ -36,6 +35,32 @@ from core.constants import (
 )
 from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field
+
+# # Agnostic Models — END
+
+
+class AdditionalContextTransaction(BaseModel):
+    address_origin: AddressUUID
+    title: str
+    description: str
+    inserter: AddressUUID | None
+    timestamp: datetime | None
+
+
+class ApplicantLogTransaction(BaseModel):
+    address_origin: AddressUUID
+    type: ApplicantLogContentType
+    name: str
+    description: str
+    role: str
+    file: UploadFile | HashUUID | None
+    duration_start: datetime
+    duration_end: datetime | None
+    validated_by: AddressUUID | None  # * We will be using `AddressUUID` for the output. Meanwhile, we will left the right-operand as None since we are dependent to the user who does that by getting the session token.
+    timestamp: datetime | None  # * We will be using `datetime` for output, while we don't take any inputs from the frontend in terms of the timestamp, it can be easily modified, so therefore let the backend calculate the time.
+
+
+# # Agnostic Models — END
 
 # # Dashboard API — START
 
@@ -77,24 +102,25 @@ class PortfolioSettings(BaseModel):
     show_files: bool
 
 
-class PortfolioLog(BaseModel):
+class PortfolioLogMinimal(BaseModel):
     at_block: int
     log_type: TransactionContextMappingType
     origin_address: AddressUUID
     tx_hash: HashUUID
 
 
-class PortfolioBase(BaseModel):
-    pass
+class Portfolio(ApplicantEditableProperties, BaseModel):
+    address: AddressUUID
+    email: EmailStr | None
+    program: str
+    prefer_role: str
+    association: AddressUUID
+    logs: list[ApplicantLogTransaction] | None
+    extra: list[AdditionalContextTransaction] | None
 
 
-class PortfolioDetailed(PortfolioBase):
-    pass
-
-
-# - For people who have hidden their attributes.
-class PortfolioMinimized(PortfolioBase):
-    pass
+# class PortfolioDetailed(PortfolioBase):
+#     pass
 
 
 class Student(BaseModel):
@@ -124,24 +150,6 @@ class GenerateAuthInput(BaseModel):
 """
 
 # @o This is used for both fields under `extra` of Applicant and Organization.
-
-# # Generalized Transactions — END
-
-
-class ApplicantChangeInfoTransaction(BaseModel):
-    content_changed: ApplicantChangeInfoActions
-    timestamp: datetime
-
-
-class AdditionalContextTransaction(BaseModel):
-    address_origin: AddressUUID
-    title: str
-    description: str
-    inserter: AddressUUID | None
-    timestamp: datetime | None
-
-
-# # Generalized Transactions — END
 
 # # Generalized Validator — START
 
@@ -173,19 +181,6 @@ class AgnosticViewExtenderFields(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
-class ApplicantLogTransaction(BaseModel):
-    address_origin: AddressUUID
-    type: ApplicantLogContentType
-    name: str
-    description: str
-    role: str
-    file: UploadFile | HashUUID | None
-    duration_start: datetime
-    duration_end: datetime | None
-    validated_by: AddressUUID | None  # * We will be using `AddressUUID` for the output. Meanwhile, we will left the right-operand as None since we are dependent to the user who does that by getting the session token.
-    timestamp: datetime | None  # * We will be using `datetime` for output, while we don't take any inputs from the frontend in terms of the timestamp, it can be easily modified, so therefore let the backend calculate the time.
-
-
 class ApplicantUserBaseTransaction(BaseModel):
     avatar: UploadFile | None  # - Changeable but will be recorded as a proof.
     identity: AddressUUID | None  # * This is going to be resolved during process.
@@ -193,8 +188,8 @@ class ApplicantUserBaseTransaction(BaseModel):
     institution: AddressUUID | None
     description: str | None  # - Changeable, but will be recorded as a proof.
     skills: str | None  # - Changeable, but will be recorded as a proof.
-    course: str
-    speciality: str
+    program: str
+    preferred_role: str
 
 
 class ApplicantUserTransaction(

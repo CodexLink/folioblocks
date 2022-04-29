@@ -68,6 +68,18 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import SECRET_KEY
 from blueprint.schemas import TransactionOverview
 from blueprint.schemas import TransactionDetail
+from core.constants import (
+    FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
+    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
+    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
+    FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX,
+    TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX,
+    TRANSACTION_PAYLOAD_MAX_CHAR_COUNT,
+    TRANSACTION_PAYLOAD_MIN_CHAR_COUNT,
+    TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
+)
+from blueprint.schemas import PortfolioSettings
+from core.constants import ApplicantLogContentType
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -102,7 +114,6 @@ from core.constants import (
     USER_FILES_FOLDER_NAME,
     AddressUUID,
     AssociatedNodeStatus,
-    BlockchainContentType,
     BlockchainFileContext,
     BlockchainIOAction,
     BlockchainPayload,
@@ -357,6 +368,193 @@ class BlockchainMechanism(ConsensusMechanism):
         # - Once done, return the list.
         latest_blocks.reverse()  # ! We cannot return this directly as it only modifies the memory and does not return the modified reference (memory).
         return latest_blocks
+
+    @ensure_blockchain_ready()
+    async def get_blockchain_public_state(self) -> NodeMasterInformation | None:
+        if self.node_role is NodeType.MASTER_NODE:
+
+            address_count_query: Select = select([func.count()]).select_from(users)
+            address_count = await self.__database_instance.fetch_val(
+                address_count_query
+            )
+
+            address_tx_mappings_count_query: Select = select(
+                [func.count()]
+            ).select_from(tx_content_mappings)
+            address_tx_mapping_count = await self.__database_instance.fetch_val(
+                address_tx_mappings_count_query
+            )
+
+            return NodeMasterInformation(
+                chain_block_timer=self.block_timer_seconds,
+                total_blocks=len(self.__chain["chain"])
+                if self.__chain is not None
+                else 0,
+                total_transactions=self.__cached_total_transactions,
+                total_addresses=address_count,
+                total_tx_mappings=address_tx_mapping_count,
+            )
+        logger.warning(
+            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
+        )
+        return None
+
+    @ensure_blockchain_ready()
+    def get_blockchain_private_state(self) -> NodeConsensusInformation:
+        last_block: Block | None = self.__get_last_block()
+
+        return NodeConsensusInformation(
+            current_consensus_sleep_timer=self.__hashing_duration,
+            is_hashing=not self.blockchain_ready,
+            is_sleeping=self.__node_ready and self.blockchain_ready,
+            last_mined_block=last_block.id if last_block is not None else 0,
+            node_role=self.node_role,
+            owner=self.__auth_token[0],
+        )
+
+    async def get_chain(self) -> str:
+        # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
+
+        # Adjust function for forcing to save new data when fetched.
+        async with aopen(BLOCKCHAIN_NAME, "r") as chain_reader:
+            data: str = await chain_reader.read()
+
+        return data
+
+    async def get_chain_hash(self) -> HashUUID:
+        get_chain_hash_query = select([file_signatures.c.hash_signature]).where(
+            file_signatures.c.filename == BLOCKCHAIN_NAME
+        )
+
+        return HashUUID(await self.__database_instance.fetch_val(get_chain_hash_query))
+
+    @ensure_blockchain_ready()
+    async def get_content_from_chain(
+        self,
+        *,
+        address_ref: AddressUUID,
+        block_index: int,
+        tx_target: HashUUID,
+        tx_timestamp: datetime,
+        show_files: bool,
+    ) -> GroupTransaction | None:
+
+        logger.info(
+            f"Obtaining content from the chain at block {block_index}, targetting transaction hash: {tx_target}."
+        )
+
+        try:  # - Handle potential error when specified `block_index` is out of range from the in-memory loaded chain.
+            block_target_transactions = self.__chain["chain"][block_index - 1][
+                "contents"
+            ]["transactions"]
+
+        except IndexError:
+            logger.error("Blockchain index is out of range or out of scope.")
+            return None
+
+        for transaction in block_target_transactions:
+            if tx_target == transaction["tx_hash"]:
+                # - For us to render the content with support from pydantic, ensure that we identify the transaction actions first.
+                identified_tx_content_type: TransactionContextMappingType = (
+                    TransactionContextMappingType(transaction["content_type"])
+                )
+
+                # - After filtering the transaction actions, attempt to decrypt the payload.
+                # - To decrpyt the payload, we need to refer from the method `self.__resolve_transaction_payload`.
+                # * Further information regarding on why it was structured in a way like that, please go from that method to understand.
+
+                # @o Get the datetime from this action.
+                tx_action_str_literal: int = (
+                    TRANSACTION_PAYLOAD_MIN_CHAR_COUNT
+                    if len(str(identified_tx_content_type.value)) == 2
+                    else TRANSACTION_PAYLOAD_MAX_CHAR_COUNT
+                )  # @o Enum shouldn't go past 99+ items.
+
+                # @o Construct the key.
+                constructed_key_to_decrypt: bytes = (
+                    str(identified_tx_content_type.value)
+                    + transaction["from_address"][
+                        :TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX
+                    ]
+                    + transaction["to_address"][-tx_action_str_literal:]
+                    + tx_timestamp.strftime(TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY)
+                ).encode("utf-8")
+
+                decrypter_key: bytes = urlsafe_b64encode(constructed_key_to_decrypt)
+                decrypter_instance: Fernet = Fernet(decrypter_key)
+                decrypted_content: bytes = decrypter_instance.decrypt(
+                    transaction["payload"]["context"].encode("utf-8")
+                )
+
+                resolved_raw_decrypted_content: dict = import_raw_json_to_dict(
+                    decrypted_content
+                )
+
+                # @o Type-hint.
+                resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction
+
+                # - To resolve the dictionary, which should conform with the pydantic model, resolve its fields.
+                if (
+                    identified_tx_content_type
+                    is TransactionContextMappingType.APPLICANT_LOG
+                ):
+                    resolved_payload = ApplicantLogTransaction(
+                        address_origin=AddressUUID(
+                            resolved_raw_decrypted_content["address_origin"]
+                        ),
+                        type=ApplicantLogContentType(
+                            resolved_raw_decrypted_content["type"]
+                        ),
+                        name=resolved_raw_decrypted_content["name"],
+                        description=resolved_raw_decrypted_content["description"],
+                        role=resolved_raw_decrypted_content["role"],
+                        file=HashUUID(resolved_raw_decrypted_content["file"]),
+                        duration_start=datetime.fromisoformat(
+                            resolved_raw_decrypted_content["duration_start"]
+                        ),
+                        duration_end=datetime.fromisoformat(
+                            resolved_raw_decrypted_content["duration_end"]
+                        )
+                        if resolved_raw_decrypted_content["duration_end"] is not None
+                        else None,
+                        validated_by=AddressUUID(
+                            resolved_raw_decrypted_content["validated_by"]
+                        ),
+                        timestamp=datetime.fromisoformat(
+                            resolved_raw_decrypted_content["timestamp"]
+                            if resolved_raw_decrypted_content["timestamp"] is not None
+                            else None
+                        ),
+                    )
+
+                elif (
+                    identified_tx_content_type
+                    is TransactionContextMappingType.APPLICANT_ADDITIONAL
+                ):
+                    resolved_payload = AdditionalContextTransaction(
+                        address_origin=AddressUUID(
+                            resolved_raw_decrypted_content["address_origin"]
+                        ),
+                        title=resolved_raw_decrypted_content["title"],
+                        description=resolved_raw_decrypted_content["description"],
+                        inserter=AddressUUID(
+                            resolved_raw_decrypted_content["inserter"]
+                        ),
+                        timestamp=datetime.fromisoformat(
+                            resolved_raw_decrypted_content["timestamp"]
+                        ),
+                    )
+
+                else:
+                    raise HTTPException(
+                        detail="Detected transaction content types which are not supported by this method. Please contact the developer regarding this issue.",
+                        status_code=HTTPStatus.FORBIDDEN,
+                    )
+
+                return GroupTransaction(
+                    content_type=identified_tx_content_type,
+                    context=resolved_payload,
+                )
 
     @ensure_blockchain_ready()
     async def get_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
@@ -733,6 +931,9 @@ class BlockchainMechanism(ConsensusMechanism):
             exception_message: str | None = None  # * Reflects to log while sending the detail message from the HTTPException.
             exception_status: HTTPStatus | None = None
 
+            # @o Declared for the datetime object generation.
+            datetime_generation: datetime = datetime.now()
+
             # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
             # # [4]
 
@@ -765,6 +966,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 validate_user: bool
                 existing_association: Mapping | None
+
                 # - Validate the existence of the user based on the sensitive information.
                 # ! I cannot deduce this and combine its functionality from the method `validate_source_and_origin_associates.` since that method focuses on validating the address and the token given by the sender.
 
@@ -887,8 +1089,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 if isinstance(data.context, OrganizationUserTransaction)
                                 else UserEntity.APPLICANT_DASHBOARD_USER
                             )
-
                             new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
+
                             insert_user_query: Insert = users.insert().values(
                                 unique_address=new_uuid,
                                 avatar=None,
@@ -896,13 +1098,16 @@ class BlockchainMechanism(ConsensusMechanism):
                                 skills=data.context.skills
                                 if isinstance(data.context, ApplicantUserTransaction)
                                 else None,
+                                preferred_role=data.context.preferred_role if isinstance(data.context, ApplicantUserTransaction) else None,  # type: ignore
                                 first_name=data.context.first_name,  # type: ignore
                                 last_name=data.context.last_name,  # type: ignore
                                 association=data.context.institution,  # type: ignore
+                                program=data.context.program if isinstance(data.context, ApplicantUserTransaction) else None,  # type: ignore
                                 username=data.context.username,  # type: ignore
                                 password=hash_context(pwd=RawData(data.context.password)),  # type: ignore
                                 email=data.context.email,  # type: ignore
                                 type=user_type,
+                                date_registered=datetime_generation,
                             )
 
                             # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
@@ -963,7 +1168,8 @@ class BlockchainMechanism(ConsensusMechanism):
             # @o This needs special handling due to the fact that it may contain an actual file.
             # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `ApplicantLogTransaction`.
             elif (
-                action is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT
+                action
+                is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO
                 and isinstance(data.context, ApplicantLogTransaction)
                 and isinstance(to_address, str)
             ):
@@ -986,9 +1192,8 @@ class BlockchainMechanism(ConsensusMechanism):
                         # @o Create the key based from the Transaction Action (1 to 2 characters) + the user address (`target` or `to`), truncated the first 3 characters and the last 13 to 14 characters of the target address + datetime in custom format, please see the variable `current_date` below.
                         # # Documentation regarding custom format: https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
 
-                        timestamp: datetime = datetime.now()
-                        current_date: str = timestamp.strftime(
-                            "%y%m%d%H%M%S"
+                        current_date: str = datetime_generation.strftime(
+                            FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
                         )  # @o datetime.now() produces "datetime.datetime(2022, 4, 16, 19, 45, 36, 724779)" and when called with datetime.now().isoformat() produces "2022-04-16T19:45:36.724779'", when we used datetime.now().strftime() with parameters "%y%m%d%H%M%S", will produce "'220416194536'"
 
                         # # Regarding dynamic values adjusting offset from its enumeration.
@@ -996,10 +1201,12 @@ class BlockchainMechanism(ConsensusMechanism):
                         transaction_action_ref: str = str(action.value)
 
                         to_address_truncation_char: int = (
-                            14 if transaction_action_ref == 2 else 13
+                            FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX
+                            if transaction_action_ref == 2  # ! What?
+                            else FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN
                         )
 
-                        encrypter_key: bytes = f"{str(action.value)}{to_address[3:-to_address_truncation_char]}{current_date}".encode(
+                        encrypter_key: bytes = f"{str(action.value)}{to_address[FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX:-to_address_truncation_char]}{current_date}".encode(
                             "utf-8"
                         )
 
@@ -1008,7 +1215,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
 
                         user_file_storage_ref: Path = Path(USER_FILES_FOLDER_NAME)
-                        temp_filename: str = f"{user_file_storage_ref}/{timestamp.isoformat()}{data.context.file.filename}{to_address}".replace(
+                        temp_filename: str = f"{user_file_storage_ref}/{datetime_generation.isoformat()}{data.context.file.filename}{to_address}".replace(
                             ":", "_"
                         )
 
@@ -1086,6 +1293,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         to_address=to_address,
                         payload=data,
                         is_internal_payload=False,
+                        external_datetime_creation=datetime_generation,
                     )
                 )
 
@@ -1097,7 +1305,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             block_no_ref=self.leading_block_id,
                             tx_ref=transaction_context["tx_hash"],
                             content_type=data.content_type,
-                            timestamp=datetime.now(),
+                            timestamp=datetime_generation,
                         )
                     )
 
@@ -1218,70 +1426,12 @@ class BlockchainMechanism(ConsensusMechanism):
             ),
             to_address=AddressUUID(resolved_from_address),
             is_internal_payload=True,
+            external_datetime_creation=None,
             payload=data,
         ):
             return
 
         unconventional_terminate(message="Cannot resolve transaction.")
-
-    @ensure_blockchain_ready()
-    async def get_blockchain_public_state(self) -> NodeMasterInformation | None:
-        if self.node_role is NodeType.MASTER_NODE:
-
-            address_count_query: Select = select([func.count()]).select_from(users)
-            address_count = await self.__database_instance.fetch_val(
-                address_count_query
-            )
-
-            address_tx_mappings_count_query: Select = select(
-                [func.count()]
-            ).select_from(tx_content_mappings)
-            address_tx_mapping_count = await self.__database_instance.fetch_val(
-                address_tx_mappings_count_query
-            )
-
-            return NodeMasterInformation(
-                chain_block_timer=self.block_timer_seconds,
-                total_blocks=len(self.__chain["chain"])
-                if self.__chain is not None
-                else 0,
-                total_transactions=self.__cached_total_transactions,
-                total_addresses=address_count,
-                total_tx_mappings=address_tx_mapping_count,
-            )
-        logger.warning(
-            f"This client node requests for the `public_state` when their role is {self.node_role.name}! | Expects: {NodeType.MASTER_NODE.name}."
-        )
-        return None
-
-    @ensure_blockchain_ready()
-    def get_blockchain_private_state(self) -> NodeConsensusInformation:
-        last_block: Block | None = self.__get_last_block()
-
-        return NodeConsensusInformation(
-            current_consensus_sleep_timer=self.__hashing_duration,
-            is_hashing=not self.blockchain_ready,
-            is_sleeping=self.__node_ready and self.blockchain_ready,
-            last_mined_block=last_block.id if last_block is not None else 0,
-            node_role=self.node_role,
-            owner=self.__auth_token[0],
-        )
-
-    async def get_chain_hash(self) -> HashUUID:
-        get_chain_hash_query = select([file_signatures.c.hash_signature]).where(
-            file_signatures.c.filename == BLOCKCHAIN_NAME
-        )
-
-        return HashUUID(await self.__database_instance.fetch_val(get_chain_hash_query))
-
-    async def get_chain(self) -> str:
-        # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
-
-        # Adjust function for forcing to save new data when fetched.
-        async with aopen(BLOCKCHAIN_NAME, "r") as chain_reader:
-            data: str = await chain_reader.read()
-
-        return data
 
     @restrict_call(on=NodeType.ARCHIVAL_MINER_NODE)
     async def hash_and_store_given_block(
@@ -2179,6 +2329,7 @@ class BlockchainMechanism(ConsensusMechanism):
         payload: GroupTransaction | NodeTransaction,
         from_address: AddressUUID,
         to_address: AddressUUID | None,
+        external_datetime_creation: datetime | None,
         is_internal_payload: bool,  # @o Even though I can logically assume its a `Node-based transaction` when `to_address` is None, it is not possible since some `Node-based transactions` actually has a point to `address`.
     ) -> dict | HTTPException:
 
@@ -2186,6 +2337,15 @@ class BlockchainMechanism(ConsensusMechanism):
             None  # * Just a variable that is used for returning error messages.
         )
 
+        # - Parse the time to a certain format as part of the encryption key phase.
+        # ! Or, will be used to return something from the payload after the method doesn't encountered any error.
+        timestamp_ref: str = (
+            datetime.now().strftime(TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY)
+            if external_datetime_creation is None
+            else external_datetime_creation.strftime(
+                TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
+            )
+        )
         if not isinstance(payload, GroupTransaction | NodeTransaction):
 
             error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."  # type: ignore # I can be stupid sometimes.
@@ -2196,16 +2356,14 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
         # @o Declare type-hint from here
-        encrypter_key: bytes
+        encrypter_key: bytes = b""
 
         # - Prepare the context encrypter.
         # @d Cases for both internal transactions and user transaction contains different key.
         # @o For the case of user transaction, create our own key wherein we can remember that later.
         # @d For the case of internal transaction (Required Models of `NodeTransactions` under `context` or models with prefixes `Node`), there's no need of fetching these transactions back, therefore we can create a random key and push it.
 
-        timestamp: str = datetime.now().strftime("%m%y%d%H%M%S")
         if is_internal_payload:
-
             secret_code: str | None = env.get(SECRET_KEY, None)
 
             if secret_code is None:
@@ -2216,9 +2374,14 @@ class BlockchainMechanism(ConsensusMechanism):
                 encrypter_key = urlsafe_b64encode(secret_code[: int(len(secret_code) / 2)].encode("utf-8"))  # type: ignore
 
         else:  # * Resolves to `NOT` an internal payload.
+            if external_datetime_creation is None:
+                return HTTPException(
+                    detail="Transaction datetime was not provided. This was not user's fault, please report this to the developer.",
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                )
 
             # - Create a custom key.
-            # @d Constraints: Should be comprised of 32-character of an urlsafe_base64 encoded.
+            # @d Constraints: Should be comprised of 32-character of an `urlsafe_base64` encoded.
             # @d Some models
             # @d With that, our key should consist of the following:
 
@@ -2231,14 +2394,16 @@ class BlockchainMechanism(ConsensusMechanism):
 
             if to_address is not None:
                 resolved_slicer_to_address: int = (
-                    11 if len(str(action.value)) == 2 else 12
+                    TRANSACTION_PAYLOAD_MIN_CHAR_COUNT
+                    if len(str(action.value)) == 2
+                    else TRANSACTION_PAYLOAD_MAX_CHAR_COUNT
                 )  # @o Enum shouldn't go past 99+ items.
 
                 constructed_context_to_key: bytes = (
                     str(action.value)
-                    + from_address[:7]
+                    + from_address[:TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX]
                     + to_address[-resolved_slicer_to_address:]
-                    + timestamp
+                    + timestamp_ref
                 ).encode("utf-8")
                 encrypter_key = urlsafe_b64encode(constructed_context_to_key)
 
@@ -2334,7 +2499,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return {
                 "tx_hash": built_internal_transaction.tx_hash,
                 "address_ref": to_address,
-                "timestamp": timestamp,
+                "timestamp": timestamp_ref,
             }
         else:
             return HTTPException(

@@ -11,42 +11,40 @@ You should have received a copy of the GNU General Public License along with Fol
 
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from logging import Logger, getLogger
 from pathlib import Path
 from sqlite3 import IntegrityError
 from typing import Any, Mapping
-from databases import Database
 
-from sqlalchemy import Column, func, select
-
-from blueprint.models import (
-    associations,
-    portfolio_settings,
-    tx_content_mappings,
-    users,
-)
+from aiofiles import open as aopen
+from blueprint.models import portfolio_settings, tx_content_mappings, users
 from blueprint.schemas import (
     ApplicantEditableProperties,
     DashboardContext,
-    PortfolioLog,
+    GroupTransaction,
+    Portfolio,
     PortfolioSettings,
     Student,
 )
-from core.constants import BaseAPI, DashboardAPI, HashUUID, UserEntity
-from core.dependencies import EnsureAuthorized
-from fastapi import APIRouter, Depends, Form, HTTPException, Response, UploadFile
-from sqlalchemy.sql.expression import Select, Update
-from starlette.datastructures import UploadFile as StarletteUploadFile
-
-from core.constants import AddressUUID
-from core.dependencies import get_database_instance
+from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ASYNC_TARGET_LOOP,
     PORTFOLIO_MINUTE_TO_ALLOW_STATE_CHANGE,
     USER_AVATAR_FOLDER_NAME,
+    AddressUUID,
+    BaseAPI,
+    DashboardAPI,
     TransactionContextMappingType,
+    UserEntity,
 )
-from aiofiles import open as aopen
-from logging import getLogger, Logger
+from core.dependencies import EnsureAuthorized, get_database_instance
+from databases import Database
+from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import Path as PathParams
+from fastapi import Response, UploadFile
+from sqlalchemy import func, select
+from sqlalchemy.sql.expression import Select, Update
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -281,28 +279,311 @@ async def save_user_profile(
 
 
 @dashboard_router.get(
-    "/portfolio",
+    "/portfolio/{address}",
     tags=[DashboardAPI.INSTITUTION_API.value, DashboardAPI.APPLICANT_API.value],
+    response_model=Portfolio,
     summary="Renders the portfolio of this applicant.",
     description="An API-exclusive to applicants where they can view their portfolio.",
 )
-async def get_portfolio() -> None:
-    # # Prep.
-    # - [1] Check if applicant has a `APPLICANT_BASE` tx_mapping.
+async def get_portfolio(
+    blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
+    database_instance: Database = Depends(get_database_instance),
+    returned_address_ref: AddressUUID
+    | Portfolio = Depends(
+        EnsureAuthorized(
+            _as=[
+                UserEntity.ORGANIZATION_DASHBOARD_USER,
+                UserEntity.APPLICANT_DASHBOARD_USER,
+            ],
+            return_address_from_token=True,
+        )
+    ),
+    portfolio_address_ref: AddressUUID
+    | None = PathParams(
+        None,
+        title="The address of the applicant, which should render their portfolio, if allowed.",
+    ),
+) -> Portfolio:
+
+    if not isinstance(blockchain_instance, BlockchainMechanism):
+        raise HTTPException(
+            detail="Blockchain module is initializing, please try again later.",
+            status_code=HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    # * State variables.
+    authorized_anonymous_user: bool = False
+    authorized_org_user: bool = False
+    confirmed_applicant_address: Any  # ! I don't know how to type-hint this.
+
+    # ! Regardless of who accessed this endpoint, the portfolio is applied for both `AnonymousUsers` and `AuthenticatedApplicantUsers`.
+    # # Condition
+    # @o For [1] 'anonymous users' and 'institution organization users', they need to fill the `portfolio_address_ref`. Otherwise they can't do anything.
+    # @o For [2] authenticated users, there's no need to fill the `portfolio_address_ref`, though if there is, it will get ignored. Should go back to their own and should be an applicant.
+
+    # - [0] Resolution the condition upon various roles.
+
+    # - Condition wherein the user is not authenticated and there's no `portfolio_address_ref` value.
+    if portfolio_address_ref is None and returned_address_ref is None:
+        raise HTTPException(
+            detail="Failed to access portfolio as the user is not authorized.",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
+
+    # - This condition assumes that the 'anonymous' user tries to access the portfolio of someone else with reference from the `portfolio_address_ref`.
+    elif portfolio_address_ref is not None and returned_address_ref is None:
+        authorized_anonymous_user = True
+
+    # - Condition where we check that the `portfolio address is specified` but there is an authentication wherein the authorizer returns an address.
+    # @o This is where we handle whether this accessor is an organization member or just an applicant.
+    elif portfolio_address_ref is not None and returned_address_ref is not None:
+        validate_user_type_query: Select = select([users.c.type]).where(
+            users.c.unique_address == validate_user_type_query
+        )
+
+        fetched_user_type: UserEntity | None = await database_instance.fetch_val(
+            validate_user_type_query
+        )
+
+        # - Resolve user's type and check on what to do.
+        if fetched_user_type is UserEntity.ORGANIZATION_DASHBOARD_USER:
+            authorized_org_user = True  # * Allow organizations to access this portfolio, as long it belongs to their organization.
+
+        elif fetched_user_type is UserEntity.APPLICANT_DASHBOARD_USER:
+            # * Even though the applicant explicitly provides the `portfolio_address_ref` we should not allow since it may bypass other portfolio.
+            raise HTTPException(
+                detail="Explicit address is not allowed for applicants.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+        else:
+            raise HTTPException(
+                detail="User is not authorized due to their role prohibited from accessing this endpoint.",
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+    else:  # * Resolutes to `portfolio_address_ref` is None and `returned_address_ref` is None.
+        raise HTTPException(
+            detail="No specified portfolio address is found.",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
+
+    # - [1] Check if applicant has a `APPLICANT_BASE` tx_mapping with a variety of conditions handled.
+
+    # @o Condition for the organization accessing the portfolio.
+    if authorized_anonymous_user or authorized_org_user:
+        # - Check if the specified portfolio exists.
+        check_portfolio_validity_query: Select = select(
+            [tx_content_mappings.c.address_ref]
+        ).where(
+            (tx_content_mappings.c.address_ref == portfolio_address_ref)
+            & (
+                tx_content_mappings.c.content_type
+                == TransactionContextMappingType.APPLICANT_BASE
+            )
+        )
+
+        result_portfolio_context = database_instance.fetch_val(
+            check_portfolio_validity_query
+        )  # ! I cannot type hint this for some reason.
+
+        if result_portfolio_context is None:
+            raise HTTPException(
+                detail="Portfolio not found.", status_code=HTTPStatus.NOT_FOUND
+            )
+
+        # - From here, handle organization members wherein the address_ref should be their association.
+        # @o The reason why is that, this user may have been looking from the inserter context of the organization view.
+
+        if authorized_org_user and not authorized_anonymous_user:
+            # - Get the association address of the applicant first.
+            get_applicant_association_addresss_ref_query: Select = select(
+                [users.c.association]
+            ).where(users.c.unique_address == result_portfolio_context)
+
+            applicant_association_ref: str | None = await database_instance.fetch_val(
+                get_applicant_association_addresss_ref_query
+            )
+
+            if applicant_association_ref is None:
+                raise HTTPException(
+                    detail="Association address reference does not exist. Please report this to the developers as this shouldn't be possible.",
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+
+            # - Since the authorizer returns the address of the user who accessed this endpoint, get its association.
+            get_org_association_query: Select = select([users.c.association]).where(
+                users.c.unique_address == portfolio_address_ref
+            )
+
+            org_association_ref: str | None = await database_instance.fetch_val(
+                get_org_association_query
+            )
+
+            if org_association_ref is None:
+                raise HTTPException(
+                    detail="Organization doesn't have an association reference, please report this to the developers as this shouldn't be possible.",
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+
+            # # Compare the organization's association reference against the applicant's association reference.
+            if org_association_ref != applicant_association_ref:
+                raise HTTPException(
+                    detail="The organization's association reference does not match from this applicant, access denied.",
+                    status_code=HTTPStatus.CONFLICT,
+                )
+
+        confirmed_applicant_address = result_portfolio_context
+        logger.info(
+            f"Applicant Portfolio Access: Allowed from {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} context."
+        )
+
+    else:  # * Resolves to `authorized_anonymous_user` and `authorized_org_user` being None.
+
+        # - Check if this applicant has its own transaction mapping.
+        get_tx_ref_applicant_query: Select = select(
+            [tx_content_mappings.c.address_ref]
+        ).where(
+            (tx_content_mappings.c.address_ref == portfolio_address_ref)
+            & (
+                tx_content_mappings.c.content_type
+                == TransactionContextMappingType.APPLICANT_BASE
+            )
+        )
+
+        tx_ref_applicant = await database_instance.fetch_val(get_tx_ref_applicant_query)
+
+        if tx_ref_applicant is None:
+            raise HTTPException(
+                detail="Applicant transaction mapping not found.",
+                status_code=HTTPStatus.NOT_FOUND,
+            )
+
+        confirmed_applicant_address = tx_ref_applicant
+
     # - [2] Load the portfolio properties.
-    # - [3] Check for any `APPLICANT_LOG` to render.
-    # - [4] Do the rendering part.
-    # - [5] Check for any `APPLICANT_EXTRA` to render.
-    # - [6] Do the rendering part.
-    # - [7] Setup the pydantic model. (Create one actually.)
-    # - [8] Hide all necessary parts or take the portfolio settings in effect.
-    # - [9] Render all data to pydantic model.
+    # ! This will not be used for rendering the share button state.
+    # ! This was fetched to better render the portfolio from its current state.
+    get_portfolio_properties_query: Select = select(
+        [
+            portfolio_settings.c.sharing_state,
+            portfolio_settings.c.expose_email_state,
+            portfolio_settings.c.show_files,
+        ]
+    ).where(portfolio_settings.c.from_user == confirmed_applicant_address)
 
-    # * Integration stuff.
-    # - We may need to modify the structure of this endpoint, specially the `EnsureAuthorized`.
-    # - Check the performance. xd
+    portfolio_properties = await database_instance.fetch_val(
+        get_portfolio_properties_query
+    )
 
-    return
+    if portfolio_properties is None:
+        raise HTTPException(
+            detail="Portfolio settings for this applicant does not exists. Schema may be outdated.",
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    # - [3] Fetch references of the `APPLICANT_LOG` and `APPLICANT_EXTRA` on the `tx_content_mappings` table.
+    # * Seperated the query because we need to display both of them distinctively.
+    tx_log_applicant_refs_query: Select = tx_content_mappings.select().where(
+        (tx_content_mappings.c.address == confirmed_applicant_address)
+        & (
+            tx_content_mappings.c.content_type
+            == TransactionContextMappingType.APPLICANT_LOG
+        )
+    )
+    tx_extra_applicant_refs_query: Select = tx_content_mappings.select().where(
+        (tx_content_mappings.c.address == confirmed_applicant_address)
+        & (
+            tx_content_mappings.c.content_type
+            == TransactionContextMappingType.APPLICANT_ADDITIONAL
+        )
+    )
+    tx_log_applicant_refs: list[Mapping] = await database_instance.fetch_all(
+        tx_log_applicant_refs_query
+    )
+    tx_extra_applicant_refs: list[Mapping] = await database_instance.fetch_all(
+        tx_extra_applicant_refs_query
+    )
+
+    print("DEBUG tx extra", tx_extra_applicant_refs)
+    print("DEBUG tx log", tx_log_applicant_refs)
+
+    # - [4] Fetch those `logs` and `extras` inside the blockchain system.
+    # - [5] If possible, filter the retrieved content by checking the conditions based from the portfolio settings, whether to hide a data or not.
+    # @o Type-hint and container variables.
+    resolved_tx_logs_container: list[GroupTransaction] = []
+    resolved_tx_extra_container: list[GroupTransaction] = []
+
+    if tx_log_applicant_refs is not None:
+        for log_info in tx_log_applicant_refs:
+            resolved_tx_info: GroupTransaction | None = (
+                await blockchain_instance.get_content_from_chain(
+                    address_ref=confirmed_applicant_address,
+                    block_index=log_info.block_no_ref,
+                    tx_target=log_info.tx_ref,
+                    tx_timestamp=log_info.timestamp,
+                    show_files=portfolio_properties.show_files,
+                )
+            )
+
+            if resolved_tx_info is not None:
+                resolved_tx_logs_container.append(resolved_tx_info)
+
+    if tx_extra_applicant_refs is not None:
+        for extra_info in tx_extra_applicant_refs:
+            resolved_tx_extra: GroupTransaction | None = await blockchain_instance.get_content_from_chain(
+                address_ref=confirmed_applicant_address,
+                block_index=extra_info.block_no_ref,
+                tx_target=extra_info.tx_ref,
+                tx_timestamp=extra_info.timestamp,
+                show_files=False,  # * Default, since `extra` fields, contain nothing.
+            )
+
+            if resolved_tx_extra is not None:
+                resolved_tx_extra_container.append(resolved_tx_extra)
+
+    # - [6] Resolve other attributes that is out of `log` and `extra` fields.
+    # @o Type-hints.
+
+    # if portfolio_properties.expose_email_state:
+    get_user_basic_info_query: Select = select(
+        [users.c.email, users.c.program, users.c.skills]
+    ).where(users.c.unique_address == confirmed_applicant_address)
+    resolved_user_basic_info = await database_instance.fetch_val(
+        get_user_basic_info_query
+    )
+
+    # - [7] Return the pydantic model.
+    return Portfolio(
+        address=confirmed_applicant_address,
+        email=resolved_user_basic_info.email
+        if portfolio_properties.expose_email_state
+        else None,
+        program=resolved_user_basic_info.program,
+        prefer_role=resolved_user_basic_info.preferred_role,
+        association=resolved_user_basic_info.association,
+        avatar=resolved_user_basic_info.avatar,
+        description=resolved_user_basic_info.description,
+        personal_skills=resolved_user_basic_info.skills,
+        logs=resolved_tx_logs_container,
+        extra=resolved_tx_extra_container,
+    )
+
+
+@dashboard_router.get(
+    "/portfolio/{address_ref}/file/{file_hash}",
+    tags=[DashboardAPI.APPLICANT_API],
+    summary="Returns the file in raw form.",
+    description="An API endpoint that returns file resources with respect to the portfolio's setting regarding file resource accessibility.",
+)
+async def get_portfolio_file(
+    applicant_address_ref: AddressUUID
+    | None = Depends(
+        EnsureAuthorized(
+            _as=UserEntity.APPLICANT_DASHBOARD_USER, return_address_from_token=True
+        )
+    ),
+    database_instance: Database = Depends(get_database_instance),
+) -> Response:
+    return Response(media_type="application/pdf")  # - File path.
 
 
 @dashboard_router.get(

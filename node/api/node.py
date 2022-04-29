@@ -81,6 +81,11 @@ from pydantic import PydanticValueError
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select, Update
 from blueprint.schemas import NodeMineConsensusSuccessProofTransaction
+from core.constants import (
+    CERTIFICATE_TOKEN_SECRET_KEY_END_INDEX,
+    CERTIFICATE_TOKEN_SECRET_KEY_MIDDLE_INDEX,
+    CERTIFICATE_TOKEN_SECRET_KEY_START_INDEX,
+)
 from utils.processors import (
     validate_previous_consensus_negotiation,
     validate_source_and_origin_associates,
@@ -598,13 +603,11 @@ async def receive_file_from_dashboard(
             context=wrapped_to_model,
         )
 
-        insertion_result: HTTPException | None = (
-            await blockchain_instance.insert_external_transaction(
-                action=TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT,
-                from_address=AddressUUID(resolved_source_address),  # type: ignore
-                to_address=AddressUUID(address_origin),
-                data=transaction,
-            )
+        insertion_result: HTTPException | None = await blockchain_instance.insert_external_transaction(
+            action=TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO,
+            from_address=AddressUUID(resolved_source_address),  # type: ignore
+            to_address=AddressUUID(address_origin),
+            data=transaction,
         )
 
         if isinstance(insertion_result, HTTPException):
@@ -709,13 +712,17 @@ async def certify_miner(
                     encrypter = Fernet(authority_code.encode("utf-8"))
 
                     authored_token: bytes = (
-                        authority_signed[:16]
+                        authority_signed[:CERTIFICATE_TOKEN_SECRET_KEY_START_INDEX]
                         + x_session
-                        + authority_signed[32:48]
+                        + authority_signed[
+                            CERTIFICATE_TOKEN_SECRET_KEY_MIDDLE_INDEX:CERTIFICATE_TOKEN_SECRET_KEY_END_INDEX
+                        ]
                         + x_source
-                        + authority_signed[48:]
+                        + authority_signed[CERTIFICATE_TOKEN_SECRET_KEY_END_INDEX:]
                         + x_acceptance
-                        + authority_signed[16:32]
+                        + authority_signed[
+                            CERTIFICATE_TOKEN_SECRET_KEY_START_INDEX:CERTIFICATE_TOKEN_SECRET_KEY_MIDDLE_INDEX
+                        ]
                         + datetime.now().isoformat()  # Add variance.
                     ).encode("utf-8")
 
