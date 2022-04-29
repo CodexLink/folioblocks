@@ -1,13 +1,13 @@
 {
-  "name": "folioblocks-web",
+  "name": "folioblock",
   "version": "0.0.1",
-  "description": "SPA that contains the explorer and the dashboard.",
-  "productName": "FolioBlocks Web",
-  "author": "Janrey Licas <self.codexlink@gmail.com>",
+  "description": "A Quasar Framework app",
+  "productName": "Folioblock",
+  "author": "Ronan",
   "private": true,
   "scripts": {
-    "lint": "eslint --ext .js,.vue ./",
-    "format": "prettier --write \"**/*.{js,vue,scss,html,md,json}\" --ignore-path .gitignore",
+    "lint": "eslint --ext .js,.ts,.vue ./",
+    "format": "prettier --write \"**/*.{js,ts,vue,scss,html,md,json}\" --ignore-path .gitignore",
     "test": "echo \"No test specified\" && exit 0"
   },
   "dependencies": {
@@ -15,15 +15,18 @@
     "core-js": "^3.6.5",
     "quasar": "^2.0.0",
     "vue": "^3.0.0",
-    "vue-router": "^4.0.0"
+    "vue-router": "^4.0.0",
+    "vuex": "^4.0.1"
   },
   "devDependencies": {
     "@babel/eslint-parser": "^7.13.14",
     "@quasar/app": "^3.0.0",
+    "@types/node": "^12.20.21",
+    "@typescript-eslint/eslint-plugin": "^5.10.0",
+    "@typescript-eslint/parser": "^5.10.0",
     "eslint": "^7.14.0",
     "eslint-config-prettier": "^8.1.0",
     "eslint-plugin-vue": "^7.0.0",
-    "eslint-webpack-plugin": "^2.4.0",
     "prettier": "^2.5.1"
   },
   "browserslist": [
