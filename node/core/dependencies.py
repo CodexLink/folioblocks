@@ -502,11 +502,13 @@ class EnsureAuthorized:
         blockchain_related: bool = False,
         return_token: bool = False,
         return_address_from_token: bool = False,
+        optionally_validate: bool = False,
     ) -> None:
         self.__as: UserEntity | list[UserEntity] | None = _as
         self.__blockchain_related: Final[bool] = blockchain_related
         self.__return_token: bool = return_token
         self.__return_address_from_token: bool = return_address_from_token
+        self.__optionally_validate: bool = optionally_validate
 
     async def __call__(
         self,
@@ -553,7 +555,7 @@ class EnsureAuthorized:
                     if user_role is self.__as:  # type: ignore
                         user_role_sufficient = True
 
-                if not user_role_sufficient:
+                if not user_role_sufficient and not self.__optionally_validate:
                     raise HTTPException(
                         detail=condition_unmet_message,
                         status_code=condition_unmet_http_code,
@@ -604,6 +606,9 @@ class EnsureAuthorized:
 
             if certificate_count_count:
                 return None
+
+        if self.__optionally_validate:
+            return
 
         raise HTTPException(
             detail="You are unauthorized to access this endpoint.",

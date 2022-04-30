@@ -29,7 +29,7 @@ from blueprint.schemas import (
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    PORTFOLIO_MINUTE_TO_ALLOW_STATE_CHANGE,
+    PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE,
     USER_AVATAR_FOLDER_NAME,
     AddressUUID,
     BaseAPI,
@@ -39,7 +39,7 @@ from core.constants import (
 )
 from core.dependencies import EnsureAuthorized, get_database_instance
 from databases import Database
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query
 from fastapi import Path as PathParams
 from fastapi import Response, UploadFile
 from sqlalchemy import func, select
@@ -94,10 +94,15 @@ async def get_dashboard_data(
         )
 
     get_user_basic_context_query: Select = select(
-        [users.c.first_name, users.c.last_name, users.c.username, users.c.type]
+        [
+            users.c.first_name,
+            users.c.last_name,
+            users.c.username,
+            users.c.type,
+        ]
     ).where(users.c.unique_address == entity_address_ref)
 
-    user_basic_context = await database_instance.fetch_val(get_user_basic_context_query)
+    user_basic_context = await database_instance.fetch_one(get_user_basic_context_query)
 
     if user_basic_context is None:
         raise HTTPException(
@@ -105,12 +110,14 @@ async def get_dashboard_data(
             status_code=HTTPStatus.NOT_FOUND,
         )
 
+    print(user_basic_context)
+
     return DashboardContext(
-        address=user_basic_context.unique_address,
+        address=entity_address_ref,
         first_name=user_basic_context.first_name,
         last_name=user_basic_context.last_name,
         username=user_basic_context.username,
-        role=user_basic_context.role,
+        role=user_basic_context.type,
         reports=None,  # # For now.
     )
 
@@ -155,12 +162,15 @@ async def get_associated_students(
     get_students_as_applicants_query: Select = select(
         [
             users.c.first_name,
-            users.c.lastname,
+            users.c.last_name,
             users.c.unique_address,
-            users.c.speciality,
+            users.c.program,
             users.c.date_registered,
         ]
-    ).where(users.c.association == association_address_ref)
+    ).where(
+        (users.c.association == association_address_ref)
+        & (users.c.type == UserEntity.APPLICANT_DASHBOARD_USER)
+    )
 
     list_of_qualified_students = await database_instance.fetch_all(
         get_students_as_applicants_query
@@ -198,17 +208,17 @@ async def get_user_profile(
 ) -> ApplicantEditableProperties:
     # - Get the information of this user.
     get_editable_info_query: Select = select(
-        [users.c.avatar, users.c.description, users.c.personal_skills]
+        [users.c.avatar, users.c.description, users.c.skills]
     ).where(users.c.unique_address == applicant_address_ref)
 
-    editable_infos: list[Mapping] = await database_instance.fetch_val(
+    editable_infos: list[Mapping] = await database_instance.fetch_one(
         get_editable_info_query
     )
 
     return ApplicantEditableProperties(
         avatar=editable_infos.avatar,
         description=editable_infos.description,
-        personal_skills=editable_infos.personal_skills,
+        personal_skills=editable_infos.skills,
     )
 
 
@@ -228,7 +238,7 @@ async def save_user_profile(
         )
     ),
     database_instance: Database = Depends(get_database_instance),
-    avatar: UploadFile | None = Form(None, title="The avatar of this user."),
+    avatar: UploadFile | None = File(None, title="The avatar of this user."),
     description: str
     | None = Form(None, title="The description that basically describes the user."),
     personal_skills: str
@@ -275,7 +285,7 @@ async def save_user_profile(
             .values(
                 avatar=resolved_avatar_dir,
                 description=description,
-                personal_skills=personal_skills,
+                skills=personal_skills,
             )
         )
         await database_instance.execute(update_user_editable_info)
@@ -290,7 +300,7 @@ async def save_user_profile(
 
 
 @dashboard_router.get(
-    "/portfolio/{address}",
+    "/portfolio",
     tags=[DashboardAPI.INSTITUTION_API.value, DashboardAPI.APPLICANT_API.value],
     response_model=Portfolio,
     summary="Renders the portfolio of this applicant.",
@@ -300,21 +310,23 @@ async def get_portfolio(
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
     database_instance: Database = Depends(get_database_instance),
     returned_address_ref: AddressUUID
-    | Portfolio = Depends(
+    | None = Depends(
         EnsureAuthorized(
             _as=[
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
                 UserEntity.APPLICANT_DASHBOARD_USER,
             ],
             return_address_from_token=True,
+            optionally_validate=True,
         )
     ),
-    portfolio_address_ref: AddressUUID
-    | None = PathParams(
+    address: AddressUUID
+    | None = Query(
         None,
         title="The address of the applicant, which should render their portfolio, if allowed.",
     ),
 ) -> Portfolio:
+    print(address)
 
     if not isinstance(blockchain_instance, BlockchainMechanism):
         raise HTTPException(
@@ -335,21 +347,21 @@ async def get_portfolio(
     # - [0] Resolution the condition upon various roles.
 
     # - Condition wherein the user is not authenticated and there's no `portfolio_address_ref` value.
-    if portfolio_address_ref is None and returned_address_ref is None:
+    if address is None and returned_address_ref is None:
         raise HTTPException(
             detail="Failed to access portfolio as the user is not authorized.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
     # - This condition assumes that the 'anonymous' user tries to access the portfolio of someone else with reference from the `portfolio_address_ref`.
-    elif portfolio_address_ref is not None and returned_address_ref is None:
+    elif address is not None and returned_address_ref is None:
         authorized_anonymous_user = True
 
     # - Condition where we check that the `portfolio address is specified` but there is an authentication wherein the authorizer returns an address.
     # @o This is where we handle whether this accessor is an organization member or just an applicant.
-    elif portfolio_address_ref is not None and returned_address_ref is not None:
+    elif address is not None and returned_address_ref is not None:
         validate_user_type_query: Select = select([users.c.type]).where(
-            users.c.unique_address == validate_user_type_query
+            users.c.unique_address == address
         )
 
         fetched_user_type: UserEntity | None = await database_instance.fetch_val(
@@ -385,7 +397,7 @@ async def get_portfolio(
         check_portfolio_validity_query: Select = select(
             [tx_content_mappings.c.address_ref]
         ).where(
-            (tx_content_mappings.c.address_ref == portfolio_address_ref)
+            (tx_content_mappings.c.address_ref == address)
             & (
                 tx_content_mappings.c.content_type
                 == TransactionContextMappingType.APPLICANT_BASE
@@ -422,7 +434,7 @@ async def get_portfolio(
 
             # - Since the authorizer returns the address of the user who accessed this endpoint, get its association.
             get_org_association_query: Select = select([users.c.association]).where(
-                users.c.unique_address == portfolio_address_ref
+                users.c.unique_address == address
             )
 
             org_association_ref: str | None = await database_instance.fetch_val(
@@ -453,7 +465,7 @@ async def get_portfolio(
         get_tx_ref_applicant_query: Select = select(
             [tx_content_mappings.c.address_ref]
         ).where(
-            (tx_content_mappings.c.address_ref == portfolio_address_ref)
+            (tx_content_mappings.c.address_ref == address)
             & (
                 tx_content_mappings.c.content_type
                 == TransactionContextMappingType.APPLICANT_BASE
@@ -711,7 +723,7 @@ async def get_portfolio_settings(
         (tx_content_mappings.c.address_ref == applicant_address_ref)
         & (
             tx_content_mappings.c.content_type
-            is TransactionContextMappingType.APPLICANT_BASE
+            == TransactionContextMappingType.APPLICANT_BASE
         )
     )
 
@@ -734,7 +746,7 @@ async def get_portfolio_settings(
         ]
     ).where(portfolio_settings.c.from_user == applicant_address_ref)
 
-    portfolio_states = await database_instance.fetch_val(get_portfolio_state_query)
+    portfolio_states = await database_instance.fetch_one(get_portfolio_state_query)
 
     return PortfolioSettings(
         enable_sharing=portfolio_states.sharing_state,
@@ -793,7 +805,7 @@ async def save_portfolio_settings(
                 expose_email_state=portfolio_state_payload.expose_email_info,
                 show_files=portfolio_state_payload.show_files,
                 datetime_to_allowed_changes=datetime.now()
-                + timedelta(minutes=PORTFOLIO_MINUTE_TO_ALLOW_STATE_CHANGE),
+                + timedelta(minutes=PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE),
             )
         )
 

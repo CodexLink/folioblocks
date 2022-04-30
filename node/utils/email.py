@@ -97,7 +97,7 @@ class EmailService:
         while retries_count <= self.max_retries:
             try:
                 logger.info(
-                    f"Attempt #{retries_count} | Attempting to connect AT email service ({self.url}) at port {self.port}."
+                    f"Attempt #{retries_count} | Attempting to connect at email service ({self.url}) at port {self.port}."
                 )
 
                 await self._email_service.connect(

@@ -116,7 +116,7 @@ async def get_block(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
         )
 
-    block: Block | None = await blockchain_instance.get_block(id=block_id)
+    block: Block | None = await blockchain_instance.get_block(id=id)
 
     if block is not None:
         return block

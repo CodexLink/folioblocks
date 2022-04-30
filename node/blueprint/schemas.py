@@ -66,7 +66,7 @@ class ApplicantLogTransaction(BaseModel):
 
 
 class ApplicantEditableProperties(BaseModel):
-    avatar: UploadFile | None
+    avatar: UploadFile | str | None
     description: str | None
     personal_skills: str | None
 
@@ -92,7 +92,7 @@ class DashboardContext(BaseModel):
     first_name: str | None
     last_name: str | None
     username: str
-    role: UserRole
+    role: UserEntity
     reports: DashboardApplicant | DashboardArchival | DashboardOrganization | None
 
 

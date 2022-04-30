@@ -338,6 +338,10 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     async def get_block(self, *, id: int) -> Block | None:
+        # - Check for the block index before attemptting to do something.
+        if not id or id < 1 or id > self.main_block_id:
+            return None
+
         for block in self.__chain["chain"]:
             if id == block["id"]:
                 return block
@@ -346,7 +350,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     async def get_blocks(self, *, limit_to: int | None = None) -> list[BlockOverview]:
-
         latest_blocks: list[BlockOverview] = []
         limit_to = INF if limit_to is None or not limit_to else limit_to
         slice_start = (

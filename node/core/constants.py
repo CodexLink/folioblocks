@@ -159,7 +159,7 @@ BLOCKCHAIN_NAME: Final[str] = "folioblocks-chain.json"
 BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 
 # # Constraints, Portfolio
-PORTFOLIO_MINUTE_TO_ALLOW_STATE_CHANGE: Final[int] = 5
+PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE: Final[int] = 3
 
 # # Constants, Template Models with Pydantic
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
