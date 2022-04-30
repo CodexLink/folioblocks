@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 from http import HTTPStatus
 from logging import Logger, getLogger
+from os import environ as env
 from pathlib import Path
 from secrets import token_hex, token_urlsafe
 from sqlite3 import IntegrityError
@@ -51,6 +52,8 @@ from blueprint.schemas import (
     OrganizationUserBaseTransaction,
     OrganizationUserTransaction,
     Transaction,
+    TransactionDetail,
+    TransactionOverview,
     TransactionSignatures,
 )
 from cryptography.fernet import Fernet
@@ -65,21 +68,6 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
-from core.constants import SECRET_KEY
-from blueprint.schemas import TransactionOverview
-from blueprint.schemas import TransactionDetail
-from core.constants import (
-    FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
-    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
-    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
-    FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX,
-    TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX,
-    TRANSACTION_PAYLOAD_MAX_CHAR_COUNT,
-    TRANSACTION_PAYLOAD_MIN_CHAR_COUNT,
-    TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
-)
-from blueprint.schemas import PortfolioSettings
-from core.constants import ApplicantLogContentType
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -108,11 +96,21 @@ from core.constants import (
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
     BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE,
+    FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
+    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
+    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
+    FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX,
     INF,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
+    SECRET_KEY,
+    TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX,
+    TRANSACTION_PAYLOAD_MAX_CHAR_COUNT,
+    TRANSACTION_PAYLOAD_MIN_CHAR_COUNT,
+    TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
     USER_FILES_FOLDER_NAME,
     AddressUUID,
+    ApplicantLogContentType,
     AssociatedNodeStatus,
     BlockchainFileContext,
     BlockchainIOAction,
@@ -141,7 +139,6 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
-from os import environ as env
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -507,7 +504,9 @@ class BlockchainMechanism(ConsensusMechanism):
                         name=resolved_raw_decrypted_content["name"],
                         description=resolved_raw_decrypted_content["description"],
                         role=resolved_raw_decrypted_content["role"],
-                        file=HashUUID(f"{resolved_raw_decrypted_content['file']}_{tx_target}")
+                        file=HashUUID(
+                            f"{resolved_raw_decrypted_content['file']}_{tx_target}"
+                        )
                         if show_file
                         else None,
                         duration_start=datetime.fromisoformat(
@@ -1497,9 +1496,10 @@ class BlockchainMechanism(ConsensusMechanism):
                 data={
                     "consensus_negotiation_id": recorded_consensus_negotiation,
                     "miner_address": self.node_identity[0],
-                    "block": import_raw_json_to_dict(
+                    "hashed_block": import_raw_json_to_dict(
                         export_to_json(mined_block.dict())
                     ),
+                    "local_block_id": self.main_block_id,
                     "hashing_duration_finished": (
                         datetime.now() + self.__hashing_duration
                     ).isoformat(),
