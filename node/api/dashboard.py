@@ -45,6 +45,7 @@ from fastapi import Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from cryptography.fernet import Fernet
 
 from core.constants import (
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
@@ -628,6 +629,8 @@ async def get_portfolio_file(
 
     # - [4] If it's allowed, check for the transaction mapping.
     splitted_file_hash_ref: list[str] = file_hash_ref.split("_")
+    # 1 Create path.
+
     resolved_filename: str = splitted_file_hash_ref[0]
     resolved_tx_hash: str = splitted_file_hash_ref[1]
 
@@ -645,11 +648,13 @@ async def get_portfolio_file(
         )
 
     # - [5] Check if the file exists.
-    assumed_filename: str = f"{address_ref[3:]}{file_hash_ref}"
+    assumed_filename: str = f"{address_ref[3:]}{resolved_filename}"
 
-    path_to_file: Path = Path(f"{USER_FILES_FOLDER_NAME}/{assumed_filename}")
+    final_resolve_path_to_file: Path = Path(
+        f"{USER_FILES_FOLDER_NAME}/{assumed_filename}"
+    )
 
-    if not path_to_file.exists():
+    if not final_resolve_path_to_file.exists():
         raise HTTPException(
             detail="File was not found.", status_code=HTTPStatus.NOT_FOUND
         )
@@ -675,11 +680,13 @@ async def get_portfolio_file(
     )
 
     file_read_content: bytes
-
-    async with aopen(resolved_filename, "rb") as file_decrypter:
+    async with aopen(final_resolve_path_to_file, "rb") as file_decrypter:
         file_read_content = await file_decrypter.read()
 
-    return Response(content=file_read_content, media_type="application/pdf")
+    decrypter_instance: Fernet = Fernet(key=constructed_key_to_decrypt)
+    decrypted_file_content: bytes = decrypter_instance.decrypt(file_read_content)
+
+    return Response(content=decrypted_file_content, media_type="application/pdf")
 
 
 @dashboard_router.get(
