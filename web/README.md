@@ -1,11 +1,11 @@
-# FolioBlocks Web (folioblocks-web)
+# Quasar App (folioblock)
 
-SPA that contains the explorer and the dashboard.
+A Quasar Framework app
 
 ## Install the dependencies
 
 ```bash
-npm install
+yarn
 ```
 
 ### Start the app in development mode (hot-code reloading, error reporting, etc.)
@@ -17,13 +17,13 @@ quasar dev
 ### Lint the files
 
 ```bash
-npm run lint
+yarn lint
 ```
 
 ### Format the files
 
 ```bash
-npm run format
+yarn format
 ```
 
 ### Build the app for production
