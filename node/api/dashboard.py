@@ -46,6 +46,16 @@ from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
+from core.constants import (
+    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
+    FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
+    FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX,
+    TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
+    USER_FILES_FOLDER_NAME,
+    HashUUID,
+    TransactionActions,
+)
+
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 dashboard_router = APIRouter(
@@ -516,11 +526,10 @@ async def get_portfolio(
         for log_info in tx_log_applicant_refs:
             resolved_tx_info: GroupTransaction | None = (
                 await blockchain_instance.get_content_from_chain(
-                    address_ref=confirmed_applicant_address,
                     block_index=log_info.block_no_ref,
                     tx_target=log_info.tx_ref,
                     tx_timestamp=log_info.timestamp,
-                    show_files=portfolio_properties.show_files,
+                    show_file=portfolio_properties.show_files,
                 )
             )
 
@@ -530,11 +539,10 @@ async def get_portfolio(
     if tx_extra_applicant_refs is not None:
         for extra_info in tx_extra_applicant_refs:
             resolved_tx_extra: GroupTransaction | None = await blockchain_instance.get_content_from_chain(
-                address_ref=confirmed_applicant_address,
                 block_index=extra_info.block_no_ref,
                 tx_target=extra_info.tx_ref,
                 tx_timestamp=extra_info.timestamp,
-                show_files=False,  # * Default, since `extra` fields, contain nothing.
+                show_file=False,  # * Default, since `extra` fields, contain nothing.
             )
 
             if resolved_tx_extra is not None:
@@ -543,7 +551,6 @@ async def get_portfolio(
     # - [6] Resolve other attributes that is out of `log` and `extra` fields.
     # @o Type-hints.
 
-    # if portfolio_properties.expose_email_state:
     get_user_basic_info_query: Select = select(
         [users.c.email, users.c.program, users.c.skills]
     ).where(users.c.unique_address == confirmed_applicant_address)
@@ -575,15 +582,104 @@ async def get_portfolio(
     description="An API endpoint that returns file resources with respect to the portfolio's setting regarding file resource accessibility.",
 )
 async def get_portfolio_file(
-    applicant_address_ref: AddressUUID
-    | None = Depends(
-        EnsureAuthorized(
-            _as=UserEntity.APPLICANT_DASHBOARD_USER, return_address_from_token=True
-        )
-    ),
     database_instance: Database = Depends(get_database_instance),
+    address_ref: AddressUUID = PathParams(
+        ..., title="The address reference from the portfolio."
+    ),
+    file_hash_ref: HashUUID = PathParams(
+        ...,
+        title="The transaction hash from where the file was located, plus the actual filename.",
+    ),
 ) -> Response:
-    return Response(media_type="application/pdf")  # - File path.
+    # # This endpoint doesn't care who you are at this point. Since address were specified, portfolio settings are going to be the dependency of the endpoint whether, to return a file or not.
+    # - [1] Get the applicant address.
+    validate_user_address_query: Select = select([func.count()]).where(
+        users.c.unique_address == address_ref
+    )
+
+    user_address_is_valid = await database_instance.fetch_val(
+        validate_user_address_query
+    )
+
+    if not user_address_is_valid:
+        raise HTTPException(
+            detail="Address specified not found.", status_code=HTTPStatus.NOT_FOUND
+        )
+
+    # - [2] Get portfolio settings.
+    get_address_portfolio_query: Select = portfolio_settings.select().where(
+        portfolio_settings.c.from_user == address_ref
+    )
+
+    address_portfolio = await database_instance.fetch_one(get_address_portfolio_query)
+
+    if address_portfolio is None:
+        raise HTTPException(
+            detail="Portfolio of this address does not exist. This is not possible and is not user's fault, please contact the developer regarding this issue to get it resolved.",
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    # - [3] Obligatory, check if the portfolio settings states that sharing is allowed, states to look at is `sharing_state` and `show_files`.
+    if not address_portfolio.sharing_state or not address_portfolio.show_files:
+        raise HTTPException(
+            detail="Address specified prohibit access of the file.",
+            status_code=HTTPStatus.FORBIDDEN,
+        )
+
+    # - [4] If it's allowed, check for the transaction mapping.
+    splitted_file_hash_ref: list[str] = file_hash_ref.split("_")
+    resolved_filename: str = splitted_file_hash_ref[0]
+    resolved_tx_hash: str = splitted_file_hash_ref[1]
+
+    # * Get the transaction mapping.
+    get_tx_ref_query: Select = tx_content_mappings.select().where(
+        tx_content_mappings.c.tx_ref == resolved_tx_hash
+    )
+
+    tx_ref = await database_instance.fetch_one(get_tx_ref_query)
+
+    if tx_ref is None:
+        raise HTTPException(
+            detail="Content mapping does not exists. This is not possible, please contact the developers to get it resolved.",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
+
+    # - [5] Check if the file exists.
+    assumed_filename: str = f"{address_ref[3:]}{file_hash_ref}"
+
+    path_to_file: Path = Path(f"{USER_FILES_FOLDER_NAME}/{assumed_filename}")
+
+    if not path_to_file.exists():
+        raise HTTPException(
+            detail="File was not found.", status_code=HTTPStatus.NOT_FOUND
+        )
+
+    # - [6] Decrypt the file.
+
+    # @o Since the file has a cryptic filename, by looking at the method `insert_external_transaction` under the condition of handling the file from the `TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO` with an instance of a pydantic model of `ApplicantLogTransaction`, which has an actual instance of `StarletteFileUpload`, a.k.a `UploadFile` from the `file` field.
+    # * We can see that we can decrypt the file.
+
+    datetime_from_encryption: str = tx_ref.timestamp.strftime(
+        TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
+    )
+    transaction_action_ref_length: int = len(str(TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO.value))  # type: ignore # ! No other transaction action can be specified.
+
+    address_truncation_for_key: int = (
+        FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX
+        if transaction_action_ref_length == 2
+        else FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN
+    )
+
+    constructed_key_to_decrypt: bytes = f"{str(TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO.value)}{address_ref[FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX:-address_truncation_for_key]}{datetime_from_encryption}".encode(
+        "utf-8"
+    )
+
+    file_read_content: bytes
+
+    async with aopen(resolved_filename, "rb") as file_decrypter:
+        file_read_content = await file_decrypter.read()
+
+    return Response(content=file_read_content, media_type="application/pdf")
 
 
 @dashboard_router.get(

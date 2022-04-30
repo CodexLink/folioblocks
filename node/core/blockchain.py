@@ -432,12 +432,11 @@ class BlockchainMechanism(ConsensusMechanism):
     async def get_content_from_chain(
         self,
         *,
-        address_ref: AddressUUID,
         block_index: int,
         tx_target: HashUUID,
         tx_timestamp: datetime,
-        show_files: bool,
-    ) -> GroupTransaction | None:
+        show_file: bool,
+    ) -> AdditionalContextTransaction | ApplicantLogTransaction | None:
 
         logger.info(
             f"Obtaining content from the chain at block {block_index}, targetting transaction hash: {tx_target}."
@@ -508,7 +507,9 @@ class BlockchainMechanism(ConsensusMechanism):
                         name=resolved_raw_decrypted_content["name"],
                         description=resolved_raw_decrypted_content["description"],
                         role=resolved_raw_decrypted_content["role"],
-                        file=HashUUID(resolved_raw_decrypted_content["file"]),
+                        file=HashUUID(f"{resolved_raw_decrypted_content['file']}_{tx_target}")
+                        if show_file
+                        else None,
                         duration_start=datetime.fromisoformat(
                             resolved_raw_decrypted_content["duration_start"]
                         ),
@@ -551,10 +552,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         status_code=HTTPStatus.FORBIDDEN,
                     )
 
-                return GroupTransaction(
-                    content_type=identified_tx_content_type,
-                    context=resolved_payload,
-                )
+                return resolved_payload
 
     @ensure_blockchain_ready()
     async def get_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
@@ -1198,11 +1196,11 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         # # Regarding dynamic values adjusting offset from its enumeration.
                         # - For the sake of stupidity, I will be handling the length truncation of the address when the action.value has a length of 1 or 2.
-                        transaction_action_ref: str = str(action.value)
+                        transaction_action_ref_length: int = len(str(action.value))
 
                         to_address_truncation_char: int = (
                             FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX
-                            if transaction_action_ref == 2  # ! What?
+                            if transaction_action_ref_length == 2
                             else FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN
                         )
 

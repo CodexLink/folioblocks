@@ -225,8 +225,8 @@ async def register_entity(
         data: Insert = users.insert().values(
             **dict_credentials,
             unique_address=generate_uuid_user(),
-            password=hash_context(pwd=RawData(credentials.password))
-            # association=, # I'm not sure on what to do with this one, as of now.
+            password=hash_context(pwd=RawData(credentials.password)),
+            date_registered=datetime.now(),
         )
         dispose_auth_code: Update = (
             auth_codes.update()
