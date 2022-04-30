@@ -68,6 +68,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from core.constants import BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -1114,6 +1115,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             if user_type is UserEntity.APPLICANT_DASHBOARD_USER:
                                 new_portfolio_settings_query: Insert = (
                                     portfolio_settings.insert().values(
+                                        from_user=new_uuid,
                                         sharing_state=False,
                                         expose_email_state=False,
                                         show_files=False,
@@ -1249,13 +1251,13 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - After hashing, rename the file to the hash so that it can be referred later.
                         try:
                             Path(temp_filename).rename(
-                                f"{user_file_storage_ref}/{to_address[3:]}{data.context.file}"
+                                f"{user_file_storage_ref}/{to_address[3:]}_{data.context.file}"
                             )
 
                         # - Even though Path.rename() overrides file, in windows, it does not. Therefore resolve by replacing that file before attempting to rename it.
                         except FileExistsError:
                             Path(temp_filename).replace(
-                                f"{user_file_storage_ref}/{data.context.file}"
+                                f"{user_file_storage_ref}/{to_address[3:]}_{data.context.file}"
                             )
 
                 else:
@@ -1416,12 +1418,12 @@ class BlockchainMechanism(ConsensusMechanism):
 
         if await self.__resolve_transaction_payload(
             action=action,
-            from_address=AddressUUID(
+            from_address=AddressUUID(resolved_from_address),
+            to_address=AddressUUID(
                 resolved_to_address
                 if resolved_to_address is not None
                 else self.node_identity[0]
             ),
-            to_address=AddressUUID(resolved_from_address),
             is_internal_payload=True,
             external_datetime_creation=None,
             payload=data,
@@ -1447,7 +1449,7 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.warning(
-            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to properly consume requests from {NodeType.MASTER_NODE.name}'s API-side before softlocking-self to hash the block."
+            f"Waiting for {BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER} seconds to properly consume requests from {NodeType.MASTER_NODE.name}'s API-side before soft-locking itself to hash the block."
         )
         await sleep(BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER)
 
@@ -1534,7 +1536,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     update_completed_consensus_negotiation_query
                 )
 
-                logger.info(f"Consensus Negotiation ID {recorded_consensus_negotiation} with the peer (receiver) address {master_address_ref} has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
+                logger.info(f"Consensus Negotiation ID `{recorded_consensus_negotiation}` with the peer (receiver) address `{master_address_ref}` has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
 
                 # - Sum the mined_timer sleep phase + given random sleep timer.
                 self.__consensus_calculate_sleep_time(
@@ -1575,17 +1577,8 @@ class BlockchainMechanism(ConsensusMechanism):
         generated_block: Block | None = None
 
         while True:
-            logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while gathering transactions. | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-13]} seconds/s."
-            )
-
-            # - Sleep first due to block timer.
-            await sleep(self.block_timer_seconds)
-
-            # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             # - Wait until a number of sufficient transactions were received.
-            # - Since we already have a node, do not let this one go.
-
+            # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
             required_transactions: int = (
                 BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
                 if first_instance
@@ -1596,6 +1589,14 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
             )
 
+            logger.warning(
+                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({len(self.__transaction_container)}/{required_transactions} transaction/s) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
+            )
+
+            # - Sleep first due to block timer.
+            await sleep(self.block_timer_seconds)
+
+            # - Since we already have a node, do not let this one go.
             if (len(self.__transaction_container) >= required_transactions) and not len(
                 self.__unsent_block_container
             ):
@@ -1614,10 +1615,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 generated_block = self.__unsent_block_container.pop(0)
 
             else:
-                logger.warning(
-                    f"Not enough transactions to create a block (currently have {len(self.__transaction_container)} transaction/s, requires {required_transactions} transaction/s)."
-                )
-
                 continue
 
             # - Queue for other (`ARCHIVAL_MINER_NODE`) nodes to see who can hash the block.
@@ -2211,7 +2208,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         # # Create a task that waits for it to do something to fetch a valid blockchain file.
 
                     logger.info(
-                        f"Block #{block_data['id']} backward reference to Block# {block_data['id'] - 1} is valid!"
+                        f"Block #{block_data['id']} backward reference to Block #{block_data['id'] - 1} is valid!"
                     )
                 else:
                     logger.debug(
@@ -2419,7 +2416,7 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         payload_to_encrypt: GroupTransaction | NodeTransaction = deepcopy(payload)
-
+        print("\n\nDEBUG PAYLOAD", payload_to_encrypt, end="\n\n")
         # - Hash the content of the payload.
         if not isinstance(payload_to_encrypt.context, str):
             payload_to_encrypt.context = HashUUID(
