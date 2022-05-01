@@ -362,8 +362,7 @@ async def get_portfolio(
 
         # - Check the address first by getting its type.
         validate_user_type_query: Select = select([users.c.type]).where(
-            users.c.unique_address
-            == (address if address is not None else returned_address_ref)
+            users.c.unique_address == returned_address_ref
         )
 
         fetched_user_type: UserEntity | None = await database_instance.fetch_val(
@@ -375,6 +374,8 @@ async def get_portfolio(
                 detail="Specified portfolio address not found.",
                 status_code=HTTPStatus.NOT_FOUND,
             )
+
+        print(returned_address_ref, address, fetched_user_type)
 
         # - Resolve user's type and check on what to do.
         if (
@@ -461,7 +462,7 @@ async def get_portfolio(
             )
         )
 
-        result_portfolio_context = database_instance.fetch_val(
+        result_portfolio_context = await database_instance.fetch_val(
             check_portfolio_validity_query
         )  # ! I cannot type hint this for some reason.
 
@@ -470,7 +471,7 @@ async def get_portfolio(
                 detail="Portfolio not found.", status_code=HTTPStatus.NOT_FOUND
             )
 
-        # - From here, handle organization members wherein the address_ref should be their association.
+        # - From here, handle organization members wherein the `address` should be their association.
         # @o The reason why is that, this user may have been looking from the inserter context of the organization view.
 
         if authorized_org_user and not authorized_anonymous_user:
@@ -513,8 +514,9 @@ async def get_portfolio(
                 )
 
         confirmed_applicant_address = result_portfolio_context
+
         logger.info(
-            f"Applicant Portfolio Access: Allowed from {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} context."
+            f"Applicant Portfolio Access: via {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} context."
         )
 
     else:  # * Resolves to `authorized_anonymous_user` and `authorized_org_user` being None.
@@ -546,6 +548,7 @@ async def get_portfolio(
     # - [2] Load the portfolio properties.
     # ! This will not be used for rendering the share button state.
     # ! This was fetched to better render the portfolio from its current state.
+    print(confirmed_applicant_address)
     get_portfolio_properties_query: Select = select(
         [
             portfolio_settings.c.sharing_state,
@@ -563,6 +566,14 @@ async def get_portfolio(
             detail="Portfolio settings for this applicant does not exists. Schema may be outdated.",
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         )
+
+    # - Check if this was an anonymous and not an organization or anyone else.
+    if authorized_anonymous_user and not authorized_org_user:
+        if not portfolio_properties.sharing_state:
+            raise HTTPException(
+                detail="Anonymous access not allowed from this portoflio.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
 
     # - [3] Fetch references of the `APPLICANT_LOG` and `APPLICANT_EXTRA` on the `tx_content_mappings` table.
     # * Seperated the query because we need to display both of them distinctively.

@@ -513,7 +513,10 @@ class EnsureAuthorized:
     async def __call__(
         self,
         x_token: JWTToken
-        | None = Header(..., description="The token that is inferred for validation."),
+        | None = Header(
+            None,
+            description="The token that is inferred for validation.",
+        ),
         x_certificate_token: str
         | None = Header(
             None,

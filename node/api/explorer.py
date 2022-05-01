@@ -11,9 +11,14 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 from http import HTTPStatus
-from typing import Any, Generic, Literal, Mapping, TypeVar
+from typing import Any, Mapping
 
-from blueprint.models import consensus_negotiation, tx_content_mappings, users
+from blueprint.models import (
+    associations,
+    consensus_negotiation,
+    tx_content_mappings,
+    users,
+)
 from blueprint.schemas import (
     Block,
     Blockchain,
@@ -24,15 +29,13 @@ from blueprint.schemas import (
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import AddressUUID, BaseAPI, ExplorerAPI, HashUUID
 from databases import Database
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
-from sqlalchemy import Column, MetaData, Table, func, select
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Select
 
 from blueprint.schemas import EntityAddress
 from core.dependencies import get_database_instance
 from core.constants import UserEntity
-from sqlalchemy.orm import Query as SQLQuery
-from sqlalchemy.engine.row import Row
 from blueprint.schemas import EntityAddressDetail
 
 explorer_router = APIRouter(
@@ -264,6 +267,7 @@ async def get_address(
         )
 
     # - Fill Variables.
+    association_name: str | None = None
     user_description: str | None = None
     tx_count: int = 0
     negotiation_count: int = 0
@@ -286,6 +290,14 @@ async def get_address(
         # - Fill the information of the field `description` if this user was a type `UserEntity.ORGANIZATION_DASHBOARD_USER`.
         if user_props.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
             user_description = user_props.description
+
+            get_association_name_query: Select = select([associations.c.name]).where(
+                associations.c.address == user_props.association
+            )
+
+            association_name = await database_instance.fetch_val(
+                get_association_name_query
+            )
 
         # - Fill the information of the field `tx_bindings_count` if this user was a type `UserEntity.APPLICANT_DASHBOARD_USER`.
         elif user_props.type is UserEntity.APPLICANT_DASHBOARD_USER:
@@ -314,6 +326,7 @@ async def get_address(
         return EntityAddressDetail(
             uuid=uuid,
             association_uuid=user_props.association,
+            association_name=association_name,
             description=user_description,
             entity_type=user_props.type,
             tx_bindings_count=tx_count,

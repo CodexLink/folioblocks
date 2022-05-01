@@ -553,6 +553,7 @@ class EntityAddress(BaseModel):
 
 class EntityAddressDetail(EntityAddress, BaseModel):
     description: str | None
+    association_name: str | None
     related_txs: list[TransactionOverview]
 
 
