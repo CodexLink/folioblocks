@@ -71,6 +71,7 @@ from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK
 from core.constants import BLOCKCHAIN_FILENAME_RANDOM_CHAR_LENGTH
+from blueprint.schemas import PortfolioLoadedContext
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -439,7 +440,7 @@ class BlockchainMechanism(ConsensusMechanism):
         tx_target: HashUUID,
         tx_timestamp: datetime,
         show_file: bool,
-    ) -> AdditionalContextTransaction | ApplicantLogTransaction | None:
+    ) -> PortfolioLoadedContext | None:
 
         logger.info(
             f"Obtaining content from the chain at block {block_index}, targetting transaction hash: {tx_target}."
@@ -500,45 +501,47 @@ class BlockchainMechanism(ConsensusMechanism):
                         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
                     )
 
-                # @o Type-hint.
-                resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction
-
                 # - To resolve the dictionary, which should conform with the pydantic model, resolve its fields.
                 if (
                     identified_tx_action
                     is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO
                 ):
-                    resolved_payload = ApplicantLogTransaction(
-                        address_origin=AddressUUID(
-                            resolved_raw_decrypted_content["address_origin"]
-                        ),
-                        type=ApplicantLogContentType(
-                            resolved_raw_decrypted_content["type"]
-                        ),
-                        name=resolved_raw_decrypted_content["name"],
-                        description=resolved_raw_decrypted_content["description"],
-                        role=resolved_raw_decrypted_content["role"],
-                        file=HashUUID(
-                            f"{resolved_raw_decrypted_content['file']}_{tx_target}"
-                        )
-                        if show_file
-                        and resolved_raw_decrypted_content["file"] is not None
-                        else None,
-                        duration_start=datetime.fromisoformat(
-                            resolved_raw_decrypted_content["duration_start"]
-                        ),
-                        duration_end=datetime.fromisoformat(
-                            resolved_raw_decrypted_content["duration_end"]
-                        )
-                        if resolved_raw_decrypted_content["duration_end"] is not None
-                        else None,
-                        validated_by=AddressUUID(
-                            resolved_raw_decrypted_content["validated_by"]
-                        ),
-                        timestamp=datetime.fromisoformat(
-                            resolved_raw_decrypted_content["timestamp"]
-                            if resolved_raw_decrypted_content["timestamp"] is not None
-                            else None
+                    return PortfolioLoadedContext(
+                        tx_hash=tx_target,
+                        context=ApplicantLogTransaction(
+                            address_origin=AddressUUID(
+                                resolved_raw_decrypted_content["address_origin"]
+                            ),
+                            type=ApplicantLogContentType(
+                                resolved_raw_decrypted_content["type"]
+                            ),
+                            name=resolved_raw_decrypted_content["name"],
+                            description=resolved_raw_decrypted_content["description"],
+                            role=resolved_raw_decrypted_content["role"],
+                            file=HashUUID(
+                                f"{resolved_raw_decrypted_content['file']}_{tx_target}"
+                            )
+                            if show_file
+                            and resolved_raw_decrypted_content["file"] is not None
+                            else None,
+                            duration_start=datetime.fromisoformat(
+                                resolved_raw_decrypted_content["duration_start"]
+                            ),
+                            duration_end=datetime.fromisoformat(
+                                resolved_raw_decrypted_content["duration_end"]
+                            )
+                            if resolved_raw_decrypted_content["duration_end"]
+                            is not None
+                            else None,
+                            validated_by=AddressUUID(
+                                resolved_raw_decrypted_content["validated_by"]
+                            ),
+                            timestamp=datetime.fromisoformat(
+                                resolved_raw_decrypted_content["timestamp"]
+                                if resolved_raw_decrypted_content["timestamp"]
+                                is not None
+                                else None
+                            ),
                         ),
                     )
 
@@ -546,17 +549,20 @@ class BlockchainMechanism(ConsensusMechanism):
                     identified_tx_action
                     is TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
                 ):
-                    resolved_payload = AdditionalContextTransaction(
-                        address_origin=AddressUUID(
-                            resolved_raw_decrypted_content["address_origin"]
-                        ),
-                        title=resolved_raw_decrypted_content["title"],
-                        description=resolved_raw_decrypted_content["description"],
-                        inserter=AddressUUID(
-                            resolved_raw_decrypted_content["inserter"]
-                        ),
-                        timestamp=datetime.fromisoformat(
-                            resolved_raw_decrypted_content["timestamp"]
+                    return PortfolioLoadedContext(
+                        tx_hash=tx_target,
+                        context=AdditionalContextTransaction(
+                            address_origin=AddressUUID(
+                                resolved_raw_decrypted_content["address_origin"]
+                            ),
+                            title=resolved_raw_decrypted_content["title"],
+                            description=resolved_raw_decrypted_content["description"],
+                            inserter=AddressUUID(
+                                resolved_raw_decrypted_content["inserter"]
+                            ),
+                            timestamp=datetime.fromisoformat(
+                                resolved_raw_decrypted_content["timestamp"]
+                            ),
                         ),
                     )
 
@@ -565,8 +571,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         detail="Detected transaction content types which are not supported by this method. Please contact the developer regarding this issue.",
                         status_code=HTTPStatus.FORBIDDEN,
                     )
-
-                return resolved_payload
 
     @ensure_blockchain_ready()
     async def get_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
@@ -611,7 +615,27 @@ class BlockchainMechanism(ConsensusMechanism):
                     payload_context = each_transaction["payload"]["context"]
 
                     if was_external:
-                        payload_context = HashUUID(payload_context)
+
+                        return TransactionDetail(
+                            from_block=block_index,
+                            transaction=Transaction(
+                                tx_hash=HashUUID(each_transaction["tx_hash"]),
+                                action=TransactionActions(each_transaction["action"]),
+                                from_address=AddressUUID(
+                                    each_transaction["from_address"]
+                                ),
+                                to_address=AddressUUID(each_transaction["to_address"]),
+                                signatures=TransactionSignatures(
+                                    **each_transaction["signatures"]
+                                ),
+                                payload=GroupTransaction(
+                                    content_type=TransactionContextMappingType(
+                                        each_transaction["payload"]["content_type"]
+                                    ),
+                                    context=HashUUID(payload_context),
+                                ),
+                            ),
+                        )
 
                     else:  # * Resolves to `NodeTransaction` as resolution model.
 
@@ -728,7 +752,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                 payload_context["receiver_address"]
                             )
                             payload_context["consensus_negotiation_id"] = RandomUUID(
-                                payload_context["consensus)negotiation_ud"]
+                                payload_context["consensus_negotiation_id"]
                             )
                             payload_context["block_hash"] = HashUUID(
                                 payload_context["block_hash"]
@@ -766,6 +790,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             from_block=block_index,
                             transaction=Transaction(**each_transaction),
                         )
+
         return None
 
     @ensure_blockchain_ready()

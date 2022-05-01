@@ -59,6 +59,7 @@ from core.constants import (
 )
 from blueprint.schemas import AdditionalContextTransaction, ApplicantLogTransaction
 from core.constants import FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
+from blueprint.schemas import PortfolioLoadedContext
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -601,20 +602,19 @@ async def get_portfolio(
     # - [4] Fetch those `logs` and `extras` inside the blockchain system.
     # - [5] If possible, filter the retrieved content by checking the conditions based from the portfolio settings, whether to hide a data or not.
     # @o Type-hint and container variables.
-    resolved_tx_logs_container: list[
-        AdditionalContextTransaction | ApplicantLogTransaction
-    ] = []
-    resolved_tx_extra_container: list[
-        AdditionalContextTransaction | ApplicantLogTransaction
-    ] = []
+    resolved_tx_logs_container: list[PortfolioLoadedContext] = []
+    resolved_tx_extra_container: list[PortfolioLoadedContext] = []
 
     if tx_log_applicant_refs is not None:
         for log_info in tx_log_applicant_refs:
-            resolved_tx_info: AdditionalContextTransaction | ApplicantLogTransaction | None = await blockchain_instance.get_content_from_chain(
-                block_index=log_info.block_no_ref,
-                tx_target=log_info.tx_ref,
-                tx_timestamp=log_info.timestamp,
-                show_file=portfolio_properties.show_files,
+            print(log_info)
+            resolved_tx_info: PortfolioLoadedContext | None = (
+                await blockchain_instance.get_content_from_chain(
+                    block_index=log_info.block_no_ref,
+                    tx_target=log_info.tx_ref,
+                    tx_timestamp=log_info.timestamp,
+                    show_file=portfolio_properties.show_files,
+                )
             )
 
             if resolved_tx_info is not None:
@@ -622,7 +622,7 @@ async def get_portfolio(
 
     if tx_extra_applicant_refs is not None:
         for extra_info in tx_extra_applicant_refs:
-            resolved_tx_extra: AdditionalContextTransaction | ApplicantLogTransaction | None = await blockchain_instance.get_content_from_chain(
+            resolved_tx_extra: PortfolioLoadedContext | None = await blockchain_instance.get_content_from_chain(
                 block_index=extra_info.block_no_ref,
                 tx_target=extra_info.tx_ref,
                 tx_timestamp=extra_info.timestamp,
@@ -651,10 +651,10 @@ async def get_portfolio(
     )
     # - [7] Sort the containers.
     resolved_tx_logs_container.sort(
-        key=lambda tx_context: tx_context.timestamp, reverse=True
+        key=lambda tx_context: tx_context.context.timestamp, reverse=True
     )
     resolved_tx_extra_container.sort(
-        key=lambda tx_context: tx_context.timestamp, reverse=True
+        key=lambda tx_context: tx_context.context.timestamp, reverse=True
     )
 
     # - [8] Return the pydantic model.

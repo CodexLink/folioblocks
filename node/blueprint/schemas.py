@@ -60,6 +60,11 @@ class ApplicantLogTransaction(BaseModel):
     timestamp: datetime | None  # * We will be using `datetime` for output, while we don't take any inputs from the frontend in terms of the timestamp, it can be easily modified, so therefore let the backend calculate the time.
 
 
+class PortfolioLoadedContext(BaseModel):
+    tx_hash: HashUUID
+    context: AdditionalContextTransaction | ApplicantLogTransaction | None
+
+
 # # Agnostic Models — END
 
 # # Dashboard API — START
@@ -115,8 +120,8 @@ class Portfolio(ApplicantEditableProperties, BaseModel):
     program: str
     prefer_role: str
     association: AddressUUID
-    logs: list[ApplicantLogTransaction] | None
-    extra: list[AdditionalContextTransaction] | None
+    logs: list[PortfolioLoadedContext] | None
+    extra: list[PortfolioLoadedContext] | None
 
 
 # class PortfolioDetailed(PortfolioBase):
