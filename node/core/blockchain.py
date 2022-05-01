@@ -1254,13 +1254,13 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - After hashing, rename the file to the hash so that it can be referred later.
                         try:
                             Path(temp_filename).rename(
-                                f"{user_file_storage_ref}/{to_address[3:]}_{data.context.file}"
+                                f"{user_file_storage_ref}/{data.context.file}"
                             )
 
                         # - Even though Path.rename() overrides file, in windows, it does not. Therefore resolve by replacing that file before attempting to rename it.
                         except FileExistsError:
                             Path(temp_filename).replace(
-                                f"{user_file_storage_ref}/{to_address[3:]}_{data.context.file}"
+                                f"{user_file_storage_ref}/{data.context.file}"
                             )
 
                 else:

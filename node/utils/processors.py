@@ -113,6 +113,7 @@ async def crypt_file(
     return_key: bool = False,
     return_file_hash: bool = False,
     enable_async: bool = False,
+    ignore_error: bool = False,
 ) -> bytes | str | None:
     """
     A Non-async function that processes a file with `to` under `filename` that uses `key` for decrypt and encrypt processes. This function exists for providing anti-redundancy over calls for preparing the files that has to be initialized for the session. This function is not compatible during async process, please refer to the acrypt_file for the implementation of async version.
@@ -183,10 +184,17 @@ async def crypt_file(
                 return sha256(_file_content).hexdigest()
 
     except InvalidToken:
-        logger.critical(
-            f"{'Decryption' if process == CryptFileAction.TO_DECRYPT else 'Encryption'} failed. This may likely corrupted your file! Please check your argument and try again after reloading the backup. If persists, please report to the developer."
+
+        if not ignore_error:
+            logger.critical(
+                f"{'Decryption' if process == CryptFileAction.TO_DECRYPT else 'Encryption'} failed. This may likely corrupted your file! Please check your argument and try again after reloading the backup. If persists, please report to the developer."
+            )
+            _exit(1)
+
+        logger.error(
+            f"{'Decryption' if process == CryptFileAction.TO_DECRYPT else 'Encryption'} failed, but will not exit due to 'ignore_error' has been invoked."
         )
-        _exit(1)
+        return
 
 
 async def process_crpyt_file(
@@ -272,6 +280,7 @@ async def initialize_resources_and_return_db_context(
                 filename=DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
+                ignore_error=True,
             )
 
             try:
@@ -308,10 +317,12 @@ async def initialize_resources_and_return_db_context(
             logger.info("Fetched blockchain file content's signature.")
 
             # * We need to decrypt the blockchin file first before we do something to it. If we didn't, we are technically reading the encrypted version instead of the exposed version.
+
             await crypt_file(
                 filename=BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
+                ignore_error=True,
             )
             logger.info("Blockchain file decrypted.")
 

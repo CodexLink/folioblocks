@@ -599,7 +599,7 @@ async def get_portfolio_file(
     address_ref: AddressUUID = PathParams(
         ..., title="The address reference from the portfolio."
     ),
-    file_hash_ref: HashUUID = PathParams(
+    file_hash: HashUUID = PathParams(
         ...,
         title="The transaction hash from where the file was located, plus the actual filename.",
     ),
@@ -640,7 +640,7 @@ async def get_portfolio_file(
         )
 
     # - [4] If it's allowed, check for the transaction mapping.
-    splitted_file_hash_ref: list[str] = file_hash_ref.split("_")
+    splitted_file_hash_ref: list[str] = file_hash.split("_")
     # 1 Create path.
 
     resolved_filename: str = splitted_file_hash_ref[0]
