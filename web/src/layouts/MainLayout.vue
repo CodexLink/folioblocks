@@ -4,16 +4,7 @@
       <q-toolbar>
         <q-btn dense flat round icon="menu" @click="toggleLeftDrawer" />
 
-        <q-toolbar-title class="webtitle">
-          <q-avatar class="logo">
-            <img src="https://cdn.quasar.dev/logo-v2/svg/logo-mono-white.svg" />
-          </q-avatar>
-          Folioblocks
-          <a class="toolbar-items gt-sm">Home</a>
-          <a class="toolbar-items gt-sm">Team</a>
-          <a class="toolbar-items gt-sm">Home</a>
-          <a class="toolbar-items gt-sm">Home</a>
-        </q-toolbar-title>
+        <q-toolbar-title class="webtitle"> Folioblocks </q-toolbar-title>
         <q-btn
           class="exit gt-sm"
           flat
