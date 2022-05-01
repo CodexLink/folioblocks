@@ -1,9 +1,9 @@
 {
-  "name": "folioblock",
+  "name": "folioblocks",
   "version": "0.0.1",
   "description": "A Quasar Framework app",
-  "productName": "Folioblock",
-  "author": "Ronan",
+  "productName": "Folioblocks",
+  "author": "Ronan and Janrey `CodexLink` Licas",
   "private": true,
   "scripts": {
     "lint": "eslint --ext .js,.ts,.vue ./",
@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@quasar/extras": "^1.0.0",
+    "axios": "^0.27.2",
     "core-js": "^3.6.5",
+    "dotenv": "^16.0.0",
     "quasar": "^2.0.0",
     "vue": "^3.0.0",
     "vue-router": "^4.0.0",

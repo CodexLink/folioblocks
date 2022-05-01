@@ -16,11 +16,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/Dashboard.vue'),
       },
       {
-        path: '/explorerdashboard',
-        component: () => import('pages/ExplorerDashboard.vue'),
+        path: '/explorer',
+        component: () => import('pages/ExplorerHome.vue'),
       },
       {
-        path: '/explorertransaction',
+        path: '/transactions',
         component: () => import('pages/ExplorerTransaction.vue'),
       },
       {
@@ -36,7 +36,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ExplorerBlockDetails.vue'),
       },
       {
-        path: '/explorertransactiondetails',
+        path: '/transaction/:tx_hash',
         component: () => import('pages/ExplorerTransactionDetails.vue'),
       },
       {
@@ -55,10 +55,9 @@ const routes: RouteRecordRaw[] = [
     ],
   },
 
-  { path: '/register', component: () => import('pages/Register.vue') },
+  { path: '/entry/:action', component: () => import('pages/EntryForm.vue') },
 
-  // Always leave this as last one,
-  // but you can also remove it
+
   {
     path: '/:catchAll(.*)*',
     component: () => import('pages/Error404.vue'),

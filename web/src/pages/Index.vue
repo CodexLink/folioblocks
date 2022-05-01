@@ -1,112 +1,112 @@
 <template>
-  <q-header bordered class="bg-warning text-black nav">
-    <q-toolbar>
-      <div class="lt-md">
-        <q-btn dense flat round icon="menu" @click="toggleLeftDrawer" />
-      </div>
-      <q-toolbar-title class="title">
-        <q-avatar class="logo">
-          <img src="https://cdn.quasar.dev/logo-v2/svg/logo-mono-white.svg" />
-        </q-avatar>
-        Folioblocks
-      </q-toolbar-title>
-      <a class="gt-sm toolbar-items" href="/">Home</a>
-      <a class="gt-sm toolbar-items">Team</a>
-      <a class="login gt-sm toolbar-items" href="#/register">Login </a>
-    </q-toolbar>
-
-    <q-drawer
-      v-model="leftDrawerOpen"
-      dark
-      overlay
-      :width="200"
-      :breakpoint="500"
-    >
-      <q-scroll-area class="fit">
-        <q-list padding class="menu-list">
-          <q-item clickable v-ripple>
-            <q-item-section avatar>
-              <q-icon name="home" />
-            </q-item-section>
-
-            <q-item-section> Home </q-item-section>
-          </q-item>
-
-          <q-item clickable v-ripple>
-            <q-item-section avatar>
-              <q-icon name="people" />
-            </q-item-section>
-
-            <q-item-section> Team </q-item-section>
-          </q-item>
-
-          <q-item clickable v-ripple to="/login">
-            <q-item-section avatar>
-              <q-icon name="login" />
-            </q-item-section>
-
-            <q-item-section> Login </q-item-section>
-          </q-item>
-        </q-list>
-      </q-scroll-area>
-    </q-drawer>
-  </q-header>
-
-  <div class="main">
-    <div class="intro">
-      <div class="container text-white">
-        <p class="mb-3">Get a trully skilled workers with Folioblocks!</p>
-        <p class="mb-4">
-          Tired of the tedious process of validating the credentials of workers?
-          Blockchain can help you with that and with us!
-        </p>
-        <div class="btn">
+  <q-layout>
+    <q-header elevated class="bg-warning text-black nav">
+      <q-toolbar>
+        <div class="lt-md">
           <q-btn
-            class="loginbtn"
-            outline
-            color="primary"
-            label="Login"
-            to="/register"
+            dense
+            flat
+            round
+            icon="menu"
+            color="white"
+            @click="toggleLeftDrawer"
           />
+        </div>
+        <q-toolbar-title class="title text-white">
+          <strong>Folioblocks</strong>
+        </q-toolbar-title>
+
+        <div class="gt-md">
           <q-btn
-            class="registerbtn"
-            outline
-            color="primary"
-            label="Register"
-            to="/register"
+            flat
+            rounde
+            align="around"
+            class="btn-fixed-width"
+            color="white"
+            label="Explorer"
+            icon="mdi-checkbox-multiple-blank"
+            to="/explorer"
           />
+        </div>
+      </q-toolbar>
+
+      <q-drawer v-model="leftDrawerOpen" overlay :width="200" :breakpoint="500">
+        <q-scroll-area class="fit">
+          <q-list padding class="menu-list">
+            <q-item clickable v-ripple to="/explorer">
+              <q-item-section avatar>
+                <q-icon name="mdi-checkbox-multiple-blank" />
+              </q-item-section>
+
+              <q-item-section> Explorer </q-item-section>
+            </q-item>
+          </q-list>
+        </q-scroll-area>
+      </q-drawer>
+    </q-header>
+
+    <div class="main">
+      <div class="intro">
+        <div class="container text-white">
+          <p class="mb-3">Get a trully skilled workers with Folioblocks!</p>
+          <p class="mb-4">
+            Tired of the tedious process of validating the credentials of
+            workers? Blockchain can help you with that and with us!
+          </p>
+          <div class="btn">
+            <q-btn
+              class="loginbtn"
+              outline
+              color="primary"
+              label="Login"
+              to="/entry/login"
+              :ripple="{ center: true }"
+            />
+            <q-btn
+              class="registerbtn"
+              outline
+              color="primary"
+              label="Register"
+              to="/entry/register"
+              :ripple="{ center: true }"
+            />
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="info">
-    <img class="img" src="\img.jpg" />
-    <div>
-      <h5>
-        Design of an Immutable Credential Verification System using Blockchain
-        Technology
-      </h5>
+    <div class="info">
+      <img class="img" src="\img.jpg" />
+      <div>
+        <h5>
+          Design of an Immutable Credential Verification System using Blockchain
+          Technology
+        </h5>
 
-      <ul>
-        <li>
-          Immutable credential verification system using blockchain technology.
-        </li>
-        <li>Provides secure location and platform fo validated credentials.</li>
-        <li>Suitable for people looking for trustworthy employees.</li>
-      </ul>
+        <ul>
+          <li>
+            Immutable credential verification system using blockchain
+            technology.
+          </li>
+          <li>
+            Provides secure location and platform fo validated credentials.
+          </li>
+          <li>Suitable for people looking for trustworthy employees.</li>
+        </ul>
+      </div>
+      <img class="img" src="\img2.jpg" />
+
+      <div>
+        <h5>Distributed Ledger Technology</h5>
+        <p class="info-txt">
+          The certificates and credentials of employees registered in
+          FolioBlocks are recorded and stored on the blockchain. Blockchain is a
+          distributed ledger that guarantees the authenticity of the stored
+          credentials.
+        </p>
+      </div>
     </div>
-    <img class="img" src="\img2.jpg" />
-
-    <div>
-      <h5>Distributed Ledger Technology</h5>
-      <p class="info-txt">
-        The certificates and credentials of employees registered in FolioBlocks
-        are recorded and stored on the blockchain. Blockchain is a distributed
-        ledger that guarantees the authenticity of the stored credentials.
-      </p>
-    </div>
-  </div>
+  </q-layout>
 </template>
 
 <script lang="ts">

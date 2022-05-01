@@ -4,7 +4,7 @@
       <div class="header">
         <q-card class="profile">
           <q-card-section>
-            <h2>Hello {{ user }}</h2>
+            <h2>Hello</h2>
             <p class="alias">You are also known as {{ alias }}</p>
             <div class="btn">
               <q-btn
@@ -77,77 +77,51 @@
             <p class="title">Transaction Rates</p>
           </div>
         </q-card>
-
-        <q-card class="activity">
-          <img class="seminar-activity-icon" src="\icon8.jpg" />
-          <div class="output">
-            <p class="dataseminar">{{ activity }}</p>
-            <p class="titleseminar">Total Activity Elements</p>
-            <p>On monthly basis</p>
-          </div>
-        </q-card>
-
-        <q-card class="totalblocks">
-          <img src="\icon3.jpg" />
-          <div class="output">
-            <p class="data">{{ totalblocks }}</p>
-            <p class="title">Total Blocks</p>
-          </div>
-        </q-card>
-
-        <q-card class="certificate">
-          <div class="output">
-            <p class="data">{{ certificates }}</p>
-            <p class="title">Generated Certificates</p>
-          </div>
-          <img src="\icon4.jpg" />
-        </q-card>
-
-        <q-card class="bounce">
-          <div class="output">
-            <p class="data">{{ bouncerate }}</p>
-            <p class="title">Bounce Rate</p>
-          </div>
-          <img src="\icon5.jpg" />
-        </q-card>
-
-        <q-card class="visits">
-          <div class="output">
-            <p class="data">{{ visits }}</p>
-            <p class="title">Total Visits</p>
-          </div>
-          <img src="\icon6.jpg" />
-        </q-card>
       </div>
     </body>
   </q-layout>
 </template>
 
 <script>
-import { defineComponent } from 'vue';
+import { defineComponent, ref } from 'vue';
+import { useQuasar } from 'quasar';
+import { useRoute, useRouter } from 'vue-router';
+import axios from 'axios';
+
 export default defineComponent({
   name: 'Dashboard',
   components: {},
 
   data() {
     return {
-      user: '0x593sdx107c',
-      alias: 'Ronan',
+      user: ref(null),
+      alias: ref(null),
 
-      blocks: '100000',
-      time: '2 ms',
-      txs: '10000',
-      addresses: '100000',
+      blocks: ref(null),
+      time: ref(null),
+      txs: ref(null),
+      addresses: ref(null),
 
-      newblock: '1000',
-      transactions: '1000',
-      totalblocks: '1000',
-      certificates: '1000',
-      bouncerate: '1000',
-      visits: '1000',
-      seminars: '1000',
-      activity: '1000',
+      newblock: ref(null),
+      transactions: ref(null),
+      totalblocks: ref(null),
+      certificates: ref(null),
+      bouncerate: ref(null),
+      visits: ref(null),
+      seminars: ref(null),
+      activity: ref(null),
     };
+  },
+  setup() {
+    const $route = useRoute();
+    const $router = useRouter();
+    const $q = useQuasar();
+
+    // axios.get(`http://${resolvedNodeAPIURL}/chain/info`).then((response) => {
+
+    // });
+
+    return;
   },
 });
 </script>
