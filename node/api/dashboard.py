@@ -9,6 +9,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from base64 import urlsafe_b64encode
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from logging import Logger, getLogger
@@ -57,6 +58,7 @@ from core.constants import (
     TransactionActions,
 )
 from blueprint.schemas import AdditionalContextTransaction, ApplicantLogTransaction
+from core.constants import FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -375,8 +377,6 @@ async def get_portfolio(
                 status_code=HTTPStatus.NOT_FOUND,
             )
 
-        print(returned_address_ref, address, fetched_user_type)
-
         # - Resolve user's type and check on what to do.
         if (
             fetched_user_type is UserEntity.ORGANIZATION_DASHBOARD_USER
@@ -649,8 +649,15 @@ async def get_portfolio(
     resolved_user_basic_info = await database_instance.fetch_one(
         get_user_basic_info_query
     )
+    # - [7] Sort the containers.
+    resolved_tx_logs_container.sort(
+        key=lambda tx_context: tx_context.timestamp, reverse=True
+    )
+    resolved_tx_extra_container.sort(
+        key=lambda tx_context: tx_context.timestamp, reverse=True
+    )
 
-    # - [7] Return the pydantic model.
+    # - [8] Return the pydantic model.
     return Portfolio(
         address=confirmed_applicant_address,
         email=resolved_user_basic_info.email
@@ -719,11 +726,16 @@ async def get_portfolio_file(
         )
 
     # - [4] If it's allowed, check for the transaction mapping.
-    splitted_file_hash_ref: list[str] = file_hash.split("_")
-    # 1 Create path.
+    try:
+        splitted_file_hash_ref: list[str] = file_hash.split("_")
 
-    resolved_filename: str = splitted_file_hash_ref[0]
-    resolved_tx_hash: str = splitted_file_hash_ref[1]
+        # ! Divide the path parameter into the following variables.
+        resolved_filename: str = splitted_file_hash_ref[0]
+        resolved_tx_hash: str = splitted_file_hash_ref[1]
+    except IndexError:
+        raise HTTPException(
+            detail="File not found.", status_code=HTTPStatus.NOT_ACCEPTABLE
+        )
 
     # * Get the transaction mapping.
     get_tx_ref_query: Select = tx_content_mappings.select().where(
@@ -739,10 +751,8 @@ async def get_portfolio_file(
         )
 
     # - [5] Check if the file exists.
-    assumed_filename: str = f"{address_ref[3:]}{resolved_filename}"
-
     final_resolve_path_to_file: Path = Path(
-        f"{USER_FILES_FOLDER_NAME}/{assumed_filename}"
+        f"{USER_FILES_FOLDER_NAME}/{resolved_filename}"
     )
 
     if not final_resolve_path_to_file.exists():
@@ -751,12 +761,11 @@ async def get_portfolio_file(
         )
 
     # - [6] Decrypt the file.
-
     # @o Since the file has a cryptic filename, by looking at the method `insert_external_transaction` under the condition of handling the file from the `TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO` with an instance of a pydantic model of `ApplicantLogTransaction`, which has an actual instance of `StarletteFileUpload`, a.k.a `UploadFile` from the `file` field.
     # * We can see that we can decrypt the file.
 
     datetime_from_encryption: str = tx_ref.timestamp.strftime(
-        TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
+        FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
     )
     transaction_action_ref_length: int = len(str(TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO.value))  # type: ignore # ! No other transaction action can be specified.
 
@@ -770,12 +779,14 @@ async def get_portfolio_file(
         "utf-8"
     )
 
-    file_read_content: bytes
+    decrypted_file_content: bytes = b""
     async with aopen(final_resolve_path_to_file, "rb") as file_decrypter:
-        file_read_content = await file_decrypter.read()
+        file_read_content: bytes = await file_decrypter.read()
 
-    decrypter_instance: Fernet = Fernet(key=constructed_key_to_decrypt)
-    decrypted_file_content: bytes = decrypter_instance.decrypt(file_read_content)
+        decrypter_instance: Fernet = Fernet(
+            key=urlsafe_b64encode(constructed_key_to_decrypt)
+        )
+        decrypted_file_content: bytes = decrypter_instance.decrypt(file_read_content)
 
     return Response(content=decrypted_file_content, media_type="application/pdf")
 
@@ -870,7 +881,7 @@ async def save_portfolio_settings(
 
     if portfolio_expiration > datetime.now():
         raise HTTPException(
-            detail="Rate limited. Please comeback later.",
+            detail=f"Rate-limited, expires at {portfolio_expiration}. Please comeback later.",
             status_code=HTTPStatus.TOO_EARLY,
         )
 

@@ -70,6 +70,7 @@ from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK
+from core.constants import BLOCKCHAIN_FILENAME_RANDOM_CHAR_LENGTH
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -1222,6 +1223,8 @@ class BlockchainMechanism(ConsensusMechanism):
                             "utf-8"
                         )
 
+                        print("DEBUG ENSURE GET FILE", encrypter_key, end="\n\n\n")
+
                         file_encrypter: Fernet = Fernet(
                             urlsafe_b64encode(encrypter_key)
                         )
@@ -1254,11 +1257,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - Since we got the file and encrypted it, get the SHA256 of the payload.
                         # - And replace it on the field of the `data.context.file` so that we will get a reference when we refer from it.
                         data.context.file = HashUUID(
-                            sha256(
-                                raw_context.encode("utf-8")
-                                if isinstance(raw_context, str)
-                                else raw_context
-                            ).hexdigest()
+                            token_hex(BLOCKCHAIN_FILENAME_RANDOM_CHAR_LENGTH)
                         )
 
                         # - After hashing, rename the file to the hash so that it can be referred later.
@@ -1603,7 +1602,7 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({len(self.__transaction_container)}/{required_transactions} transaction/s) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
+                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({len(self.__transaction_container)}/{required_transactions} transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
             )
 
             # - Sleep first due to block timer.
