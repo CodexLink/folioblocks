@@ -56,6 +56,7 @@ from core.constants import (
     HashUUID,
     TransactionActions,
 )
+from blueprint.schemas import AdditionalContextTransaction, ApplicantLogTransaction
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -109,8 +110,6 @@ async def get_dashboard_data(
             detail="No information is provided from the user, but does exists.",
             status_code=HTTPStatus.NOT_FOUND,
         )
-
-    print(user_basic_context)
 
     return DashboardContext(
         address=entity_address_ref,
@@ -211,9 +210,7 @@ async def get_user_profile(
         [users.c.avatar, users.c.description, users.c.skills]
     ).where(users.c.unique_address == applicant_address_ref)
 
-    editable_infos: list[Mapping] = await database_instance.fetch_one(
-        get_editable_info_query
-    )
+    editable_infos = await database_instance.fetch_one(get_editable_info_query)
 
     return ApplicantEditableProperties(
         avatar=editable_infos.avatar,
@@ -317,7 +314,7 @@ async def get_portfolio(
                 UserEntity.APPLICANT_DASHBOARD_USER,
             ],
             return_address_from_token=True,
-            optionally_validate=True,
+            allow_anonymous=True,
         )
     ),
     address: AddressUUID
@@ -326,8 +323,6 @@ async def get_portfolio(
         title="The address of the applicant, which should render their portfolio, if allowed.",
     ),
 ) -> Portfolio:
-    print(address)
-
     if not isinstance(blockchain_instance, BlockchainMechanism):
         raise HTTPException(
             detail="Blockchain module is initializing, please try again later.",
@@ -341,53 +336,112 @@ async def get_portfolio(
 
     # ! Regardless of who accessed this endpoint, the portfolio is applied for both `AnonymousUsers` and `AuthenticatedApplicantUsers`.
     # # Condition
-    # @o For [1] 'anonymous users' and 'institution organization users', they need to fill the `portfolio_address_ref`. Otherwise they can't do anything.
-    # @o For [2] authenticated users, there's no need to fill the `portfolio_address_ref`, though if there is, it will get ignored. Should go back to their own and should be an applicant.
+    # @o For [1] 'anonymous users', they need to fill the `address` query parameter. Otherwise return `HTTPException`.
+    # @o For [2] authenticated users such as applicant, there's no need to fill the `address` query parameter, though if there is, it will get prohitibited for explicitly doing it.
+    # @o For [3] authenticated users such as organization, there's a need to fill the `address` query parameter, and ensure that address is associated from the organization's association address, otherwise, it will return an `HTTPException`.
 
     # - [0] Resolution the condition upon various roles.
 
-    # - Condition wherein the user is not authenticated and there's no `portfolio_address_ref` value.
+    # - Condition wherein the user is not authenticated and there's no `address` query parameter value.
+
     if address is None and returned_address_ref is None:
         raise HTTPException(
-            detail="Failed to access portfolio as the user is not authorized.",
+            detail="Failed to access portfolio as the parameter is empty or the user is not authorized to do so.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
-    # - This condition assumes that the 'anonymous' user tries to access the portfolio of someone else with reference from the `portfolio_address_ref`.
+    # - This condition assumes that the 'anonymous' user tries to access the portfolio of someone else with reference from the `address` query parameter.
     elif address is not None and returned_address_ref is None:
         authorized_anonymous_user = True
 
     # - Condition where we check that the `portfolio address is specified` but there is an authentication wherein the authorizer returns an address.
     # @o This is where we handle whether this accessor is an organization member or just an applicant.
-    elif address is not None and returned_address_ref is not None:
+
+    else:  # * Resolutes to checking the `returned_address_ref` while dynamically checking the `address` based on the scope of `APPLICANT_DASHBOARD_USER` and `ORGANIZATION_DASHBOARD_USER`.
+        # elif address is not None and returned_address_ref is not None:
+
+        # - Check the address first by getting its type.
         validate_user_type_query: Select = select([users.c.type]).where(
-            users.c.unique_address == address
+            users.c.unique_address
+            == (address if address is not None else returned_address_ref)
         )
 
         fetched_user_type: UserEntity | None = await database_instance.fetch_val(
             validate_user_type_query
         )
 
+        if fetched_user_type is None:
+            raise HTTPException(
+                detail="Specified portfolio address not found.",
+                status_code=HTTPStatus.NOT_FOUND,
+            )
+
         # - Resolve user's type and check on what to do.
-        if fetched_user_type is UserEntity.ORGANIZATION_DASHBOARD_USER:
+        if (
+            fetched_user_type is UserEntity.ORGANIZATION_DASHBOARD_USER
+            and returned_address_ref is not None
+            and address is not None
+        ):
             authorized_org_user = True  # * Allow organizations to access this portfolio, as long it belongs to their organization.
 
-        elif fetched_user_type is UserEntity.APPLICANT_DASHBOARD_USER:
-            # * Even though the applicant explicitly provides the `portfolio_address_ref` we should not allow since it may bypass other portfolio.
-            raise HTTPException(
-                detail="Explicit address is not allowed for applicants.",
-                status_code=HTTPStatus.FORBIDDEN,
+            # - Check if this organization associates within the address.
+            get_org_association_address_query: Select = select(
+                [users.c.association]
+            ).where(users.c.unique_address == returned_address_ref)
+
+            org_assocation_address = await database_instance.fetch_val(
+                get_org_association_address_query
             )
+
+            if org_assocation_address is None:
+                raise HTTPException(
+                    detail="Failed to get the association of then authenticated user. This should not be possible, please report this issue to the developers to get it fixed.",
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+
+            get_address_association_query: Select = select([users.c.association]).where(
+                users.c.unique_address == address
+                if address is not None
+                else returned_address_ref
+            )
+
+            applicant_address_association = await database_instance.fetch_val(
+                get_address_association_query
+            )
+
+            if applicant_address_association is None:
+                raise HTTPException(
+                    detail="Portfolio's association address does not exists. This is not possible, please report this to the developers to get it fixed.",
+                    status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                )
+
+            if applicant_address_association != org_assocation_address:
+                raise HTTPException(
+                    detail="The referred portfolio address does not associate from this organization's association address. Not allowed.",
+                    status_code=HTTPStatus.FORBIDDEN,
+                )
+
+            logger.info(
+                "Dashboard API, Portfolio Parser | Association address for both organization and applicant is correct."
+            )
+
+        elif (
+            fetched_user_type is UserEntity.APPLICANT_DASHBOARD_USER
+            and returned_address_ref is not None
+            and address is None
+        ):
+
+            # - By this point, the applicant was mostly validated due to `return_address_ref` and `fetched_user_type` queries.
+
+            logger.info(
+                "Dashboard API, Portfolio Parser | Applicant case already validates `unique_address` and `type`. Proceeding by doing nothing on this case ..."
+            )
+
         else:
             raise HTTPException(
-                detail="User is not authorized due to their role prohibited from accessing this endpoint.",
+                detail="Failed to proceed due to conditions being unmet. Either an explicit address is invoked when applicant is authenticated, or does organization tried to access with context missing. Please contact the developers if you think this is a mistake.",
                 status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
-    else:  # * Resolutes to `portfolio_address_ref` is None and `returned_address_ref` is None.
-        raise HTTPException(
-            detail="No specified portfolio address is found.",
-            status_code=HTTPStatus.NOT_FOUND,
-        )
 
     # - [1] Check if applicant has a `APPLICANT_BASE` tx_mapping with a variety of conditions handled.
 
@@ -397,7 +451,10 @@ async def get_portfolio(
         check_portfolio_validity_query: Select = select(
             [tx_content_mappings.c.address_ref]
         ).where(
-            (tx_content_mappings.c.address_ref == address)
+            (
+                tx_content_mappings.c.address_ref
+                == (address if address is not None else returned_address_ref)
+            )
             & (
                 tx_content_mappings.c.content_type
                 == TransactionContextMappingType.APPLICANT_BASE
@@ -434,7 +491,8 @@ async def get_portfolio(
 
             # - Since the authorizer returns the address of the user who accessed this endpoint, get its association.
             get_org_association_query: Select = select([users.c.association]).where(
-                users.c.unique_address == address
+                users.c.unique_address
+                == (address if address is not None else returned_address_ref)
             )
 
             org_association_ref: str | None = await database_instance.fetch_val(
@@ -465,7 +523,10 @@ async def get_portfolio(
         get_tx_ref_applicant_query: Select = select(
             [tx_content_mappings.c.address_ref]
         ).where(
-            (tx_content_mappings.c.address_ref == address)
+            (
+                tx_content_mappings.c.address_ref
+                == (address if address is not None else returned_address_ref)
+            )
             & (
                 tx_content_mappings.c.content_type
                 == TransactionContextMappingType.APPLICANT_BASE
@@ -476,7 +537,7 @@ async def get_portfolio(
 
         if tx_ref_applicant is None:
             raise HTTPException(
-                detail="Applicant transaction mapping not found.",
+                detail=f"Applicant transaction mapping not found. This may be you are an organization and not an authorized `{UserEntity.APPLICANT_DASHBOARD_USER.name}`.",
                 status_code=HTTPStatus.NOT_FOUND,
             )
 
@@ -493,7 +554,7 @@ async def get_portfolio(
         ]
     ).where(portfolio_settings.c.from_user == confirmed_applicant_address)
 
-    portfolio_properties = await database_instance.fetch_val(
+    portfolio_properties = await database_instance.fetch_one(
         get_portfolio_properties_query
     )
 
@@ -506,14 +567,14 @@ async def get_portfolio(
     # - [3] Fetch references of the `APPLICANT_LOG` and `APPLICANT_EXTRA` on the `tx_content_mappings` table.
     # * Seperated the query because we need to display both of them distinctively.
     tx_log_applicant_refs_query: Select = tx_content_mappings.select().where(
-        (tx_content_mappings.c.address == confirmed_applicant_address)
+        (tx_content_mappings.c.address_ref == confirmed_applicant_address)
         & (
             tx_content_mappings.c.content_type
             == TransactionContextMappingType.APPLICANT_LOG
         )
     )
     tx_extra_applicant_refs_query: Select = tx_content_mappings.select().where(
-        (tx_content_mappings.c.address == confirmed_applicant_address)
+        (tx_content_mappings.c.address_ref == confirmed_applicant_address)
         & (
             tx_content_mappings.c.content_type
             == TransactionContextMappingType.APPLICANT_ADDITIONAL
@@ -526,24 +587,23 @@ async def get_portfolio(
         tx_extra_applicant_refs_query
     )
 
-    print("DEBUG tx extra", tx_extra_applicant_refs)
-    print("DEBUG tx log", tx_log_applicant_refs)
-
     # - [4] Fetch those `logs` and `extras` inside the blockchain system.
     # - [5] If possible, filter the retrieved content by checking the conditions based from the portfolio settings, whether to hide a data or not.
     # @o Type-hint and container variables.
-    resolved_tx_logs_container: list[GroupTransaction] = []
-    resolved_tx_extra_container: list[GroupTransaction] = []
+    resolved_tx_logs_container: list[
+        AdditionalContextTransaction | ApplicantLogTransaction
+    ] = []
+    resolved_tx_extra_container: list[
+        AdditionalContextTransaction | ApplicantLogTransaction
+    ] = []
 
     if tx_log_applicant_refs is not None:
         for log_info in tx_log_applicant_refs:
-            resolved_tx_info: GroupTransaction | None = (
-                await blockchain_instance.get_content_from_chain(
-                    block_index=log_info.block_no_ref,
-                    tx_target=log_info.tx_ref,
-                    tx_timestamp=log_info.timestamp,
-                    show_file=portfolio_properties.show_files,
-                )
+            resolved_tx_info: AdditionalContextTransaction | ApplicantLogTransaction | None = await blockchain_instance.get_content_from_chain(
+                block_index=log_info.block_no_ref,
+                tx_target=log_info.tx_ref,
+                tx_timestamp=log_info.timestamp,
+                show_file=portfolio_properties.show_files,
             )
 
             if resolved_tx_info is not None:
@@ -551,7 +611,7 @@ async def get_portfolio(
 
     if tx_extra_applicant_refs is not None:
         for extra_info in tx_extra_applicant_refs:
-            resolved_tx_extra: GroupTransaction | None = await blockchain_instance.get_content_from_chain(
+            resolved_tx_extra: AdditionalContextTransaction | ApplicantLogTransaction | None = await blockchain_instance.get_content_from_chain(
                 block_index=extra_info.block_no_ref,
                 tx_target=extra_info.tx_ref,
                 tx_timestamp=extra_info.timestamp,
@@ -565,9 +625,17 @@ async def get_portfolio(
     # @o Type-hints.
 
     get_user_basic_info_query: Select = select(
-        [users.c.email, users.c.program, users.c.skills]
+        [
+            users.c.association,
+            users.c.avatar,
+            users.c.description,
+            users.c.email,
+            users.c.preferred_role,
+            users.c.program,
+            users.c.skills,
+        ]
     ).where(users.c.unique_address == confirmed_applicant_address)
-    resolved_user_basic_info = await database_instance.fetch_val(
+    resolved_user_basic_info = await database_instance.fetch_one(
         get_user_basic_info_query
     )
 

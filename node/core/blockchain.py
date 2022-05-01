@@ -56,7 +56,8 @@ from blueprint.schemas import (
     TransactionOverview,
     TransactionSignatures,
 )
-from cryptography.fernet import Fernet
+from cryptography.exceptions import InvalidSignature
+from cryptography.fernet import Fernet, InvalidToken
 from databases import Database
 from fastapi import HTTPException
 from frozendict import frozendict
@@ -455,8 +456,8 @@ class BlockchainMechanism(ConsensusMechanism):
         for transaction in block_target_transactions:
             if tx_target == transaction["tx_hash"]:
                 # - For us to render the content with support from pydantic, ensure that we identify the transaction actions first.
-                identified_tx_content_type: TransactionContextMappingType = (
-                    TransactionContextMappingType(transaction["content_type"])
+                identified_tx_action: TransactionActions = TransactionActions(
+                    transaction["action"]
                 )
 
                 # - After filtering the transaction actions, attempt to decrypt the payload.
@@ -466,13 +467,13 @@ class BlockchainMechanism(ConsensusMechanism):
                 # @o Get the datetime from this action.
                 tx_action_str_literal: int = (
                     TRANSACTION_PAYLOAD_MIN_CHAR_COUNT
-                    if len(str(identified_tx_content_type.value)) == 2
+                    if len(str(identified_tx_action.value)) == 2
                     else TRANSACTION_PAYLOAD_MAX_CHAR_COUNT
                 )  # @o Enum shouldn't go past 99+ items.
 
                 # @o Construct the key.
                 constructed_key_to_decrypt: bytes = (
-                    str(identified_tx_content_type.value)
+                    str(identified_tx_action.value)
                     + transaction["from_address"][
                         :TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX
                     ]
@@ -481,22 +482,30 @@ class BlockchainMechanism(ConsensusMechanism):
                 ).encode("utf-8")
 
                 decrypter_key: bytes = urlsafe_b64encode(constructed_key_to_decrypt)
-                decrypter_instance: Fernet = Fernet(decrypter_key)
-                decrypted_content: bytes = decrypter_instance.decrypt(
-                    transaction["payload"]["context"].encode("utf-8")
-                )
 
-                resolved_raw_decrypted_content: dict = import_raw_json_to_dict(
-                    decrypted_content
-                )
+                try:
+                    decrypter_instance: Fernet = Fernet(decrypter_key)
+                    decrypted_content: bytes = decrypter_instance.decrypt(
+                        transaction["payload"]["context"].encode("utf-8")
+                    )
+
+                    resolved_raw_decrypted_content: dict = import_raw_json_to_dict(
+                        decrypted_content
+                    )
+
+                except (InvalidSignature, InvalidToken) as e:
+                    raise HTTPException(
+                        detail=f"Cannot decrypt the context due to key signature mismatch. | Info: {e}",
+                        status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                    )
 
                 # @o Type-hint.
                 resolved_payload: AdditionalContextTransaction | ApplicantLogTransaction
 
                 # - To resolve the dictionary, which should conform with the pydantic model, resolve its fields.
                 if (
-                    identified_tx_content_type
-                    is TransactionContextMappingType.APPLICANT_LOG
+                    identified_tx_action
+                    is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO
                 ):
                     resolved_payload = ApplicantLogTransaction(
                         address_origin=AddressUUID(
@@ -512,6 +521,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             f"{resolved_raw_decrypted_content['file']}_{tx_target}"
                         )
                         if show_file
+                        and resolved_raw_decrypted_content["file"] is not None
                         else None,
                         duration_start=datetime.fromisoformat(
                             resolved_raw_decrypted_content["duration_start"]
@@ -532,8 +542,8 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
 
                 elif (
-                    identified_tx_content_type
-                    is TransactionContextMappingType.APPLICANT_ADDITIONAL
+                    identified_tx_action
+                    is TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
                 ):
                     resolved_payload = AdditionalContextTransaction(
                         address_origin=AddressUUID(
@@ -1276,7 +1286,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - Why?
                 # @o We only need to verify the addresses contents, which was done from the API endpoint, there's nothing much going on in the case of `TransactionActions`.
                 logger.debug(
-                    f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO} or {TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO} by doing nothing due to there's nothing to process."
+                    f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO.name} or {TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO.name} by doing nothing due to there's nothing to process."
                 )
 
             else:
@@ -2397,13 +2407,13 @@ class BlockchainMechanism(ConsensusMechanism):
                     else TRANSACTION_PAYLOAD_MAX_CHAR_COUNT
                 )  # @o Enum shouldn't go past 99+ items.
 
-                constructed_context_to_key: bytes = (
+                constructed_key_to_encrypt: bytes = (
                     str(action.value)
                     + from_address[:TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX]
                     + to_address[-resolved_slicer_to_address:]
                     + timestamp_ref
                 ).encode("utf-8")
-                encrypter_key = urlsafe_b64encode(constructed_context_to_key)
+                encrypter_key = urlsafe_b64encode(constructed_key_to_encrypt)
 
             else:
                 error_message = "Payload is not a internal transaction but `to_address` field is empty! This is an implementation error, please contact the developer regarding this issue."
@@ -2419,7 +2429,7 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
         payload_to_encrypt: GroupTransaction | NodeTransaction = deepcopy(payload)
-        print("\n\nDEBUG PAYLOAD", payload_to_encrypt, end="\n\n")
+
         # - Hash the content of the payload.
         if not isinstance(payload_to_encrypt.context, str):
             payload_to_encrypt.context = HashUUID(

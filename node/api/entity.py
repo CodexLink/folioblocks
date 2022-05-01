@@ -337,8 +337,8 @@ async def login_entity(
             # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
                 raise HTTPException(
-                    detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username}` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}. Please logout other requests.",
-                    status_code=HTTPStatus.BAD_REQUEST,
+                    detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username}` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}. Please logout other tokens or wait for them to expire.",
+                    status_code=HTTPStatus.FORBIDDEN,
                 )
 
             # - If all other conditions are clear, then create the JWT token.
@@ -418,8 +418,8 @@ async def login_entity(
 
             except IntegrityError as e:
                 raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
                     detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Additional Info: {e}",
+                    status_code=HTTPStatus.BAD_REQUEST,
                 )
 
         raise HTTPException(
@@ -428,8 +428,8 @@ async def login_entity(
         )
 
     raise HTTPException(
-        status_code=HTTPStatus.NOT_FOUND,
         detail="User not found. Please check your credentials and try again.",
+        status_code=HTTPStatus.NOT_FOUND,
     )
 
 

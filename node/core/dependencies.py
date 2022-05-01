@@ -502,13 +502,13 @@ class EnsureAuthorized:
         blockchain_related: bool = False,
         return_token: bool = False,
         return_address_from_token: bool = False,
-        optionally_validate: bool = False,
+        allow_anonymous: bool = False,
     ) -> None:
         self.__as: UserEntity | list[UserEntity] | None = _as
         self.__blockchain_related: Final[bool] = blockchain_related
         self.__return_token: bool = return_token
         self.__return_address_from_token: bool = return_address_from_token
-        self.__optionally_validate: bool = optionally_validate
+        self.__allow_anonymous: bool = allow_anonymous
 
     async def __call__(
         self,
@@ -555,7 +555,7 @@ class EnsureAuthorized:
                     if user_role is self.__as:  # type: ignore
                         user_role_sufficient = True
 
-                if not user_role_sufficient and not self.__optionally_validate:
+                if not user_role_sufficient and not self.__allow_anonymous:
                     raise HTTPException(
                         detail=condition_unmet_message,
                         status_code=condition_unmet_http_code,
@@ -575,7 +575,7 @@ class EnsureAuthorized:
                 ):
                     return x_token
 
-                # - Code to execute whenthe instance of `user_role` is `UserEntity` and `_return_token` is not invoked and `__return_address_from_token` is `True`.
+                # - Code to execute when the instance of `user_role` is `UserEntity` and `__return_token` is not invoked and `__return_address_from_token` is `True`.
                 if (
                     not self.__return_token
                     and self.__return_address_from_token
@@ -583,6 +583,7 @@ class EnsureAuthorized:
                 ):
                     return AddressUUID(user_address)
 
+                # - Code to execute when both cases of returning token (via `__return_token`) and returning address (via `__return_address_from_token`). It is not possible as other users of this dependency will lead to potentially complex type-hinting issues.
                 if (
                     self.__return_token and self.__return_address_from_token
                 ):  # ! Ignore returned instance.
@@ -590,6 +591,10 @@ class EnsureAuthorized:
                         detail="Returning token and address is not possible. If you see this message, please report to the developers as this was an internal condition conflict.",
                         status_code=HTTPStatus.CONFLICT,
                     )
+
+                # - Code to execute when we are allowed to return an `address` even when `__allow_anonymous` is invoked from this method.
+                if self.__allow_anonymous and self.__return_address_from_token:
+                    return AddressUUID(user_address)
 
                 # - If no other specific conditions have been specified, ensure that we return if the token has been matched.
                 if user_address is not None:
@@ -607,8 +612,8 @@ class EnsureAuthorized:
             if certificate_count_count:
                 return None
 
-        if self.__optionally_validate:
-            return
+        if self.__allow_anonymous:
+            return None
 
         raise HTTPException(
             detail="You are unauthorized to access this endpoint.",

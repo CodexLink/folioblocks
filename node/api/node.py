@@ -538,7 +538,7 @@ async def receive_action_from_dashboard(
 @node_router.post(
     "/receive_context_log",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
-    summary="Receives a multiform content type specific to `ApplicationLogContentType`.",
+    summary="Receives a multiform content type specific to `ApplicationLogContentType` to insert a credential from a applicant/student.",
     description=f"A special API endpoint that is exclusive to a pyadantic model `ApplicantLogTransaction`, which accepts payload from the dashboard along with the file. Even without file, `ApplicantLogTransaction` is destined from this endpoint.",
 )
 async def receive_file_from_dashboard(
