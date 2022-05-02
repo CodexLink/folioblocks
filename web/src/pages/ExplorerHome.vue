@@ -1,0 +1,515 @@
+<template>
+  <q-layout view="hHh lpR lFf">
+    <q-page-container>
+      <div>
+        <h2>Welcome to Folioblocks Credential Receipt Explorer</h2>
+      </div>
+      <div class="search">
+        <q-input
+          class="searchbar"
+          v-model="search"
+          debounce="500"
+          filled
+          placeholder="Search by address, transaction hash, or even by block number."
+        >
+          <template v-slot:append>
+            <q-icon name="search" />
+          </template>
+        </q-input>
+      </div>
+
+      <q-card class="header">
+        <q-card-section>
+          <div class="text-h6">Blockchain Statistics</div>
+          <div class="text-subtitle1">
+            Some interesting minimal information about the blockchain's current
+            state.
+          </div>
+        </q-card-section>
+        <div class="profile status bg-cyan-2">
+          <q-avatar class="icon" icon="view_in_ar" />
+          <div>
+            <h4>Blocks</h4>
+            <p class="dataheader">{{ n_blocks }}</p>
+          </div>
+
+          <q-avatar class="icon" icon="mdi-sitemap" />
+          <div>
+            <h4>Transaction Mapping</h4>
+            <p class="dataheader">{{ txs_mapping_count }}</p>
+          </div>
+
+          <q-avatar class="icon" icon="swap_horiz" />
+          <div>
+            <h4>Transactions</h4>
+            <p class="dataheader">{{ txs_count }}</p>
+          </div>
+
+          <q-avatar class="icon" icon="person" />
+          <div>
+            <h4>Addresses</h4>
+            <p class="dataheader">{{ addresses }}</p>
+          </div>
+        </div>
+      </q-card>
+
+      <div class="main">
+        <div class="row gridblock">
+          <h5>Latest Transactions</h5>
+          <q-btn
+            class="viewall"
+            rounded
+            color="accent"
+            text-color="black"
+            label="View All"
+            to="/explorer/transactions"
+          />
+        </div>
+        <div class="row">
+          <h5>Latest Blocks</h5>
+          <q-btn
+            class="viewall"
+            rounded
+            color="accent"
+            text-color="black"
+            label="View All"
+            to="/explorer/blocks"
+          />
+        </div>
+
+        <q-table
+          :rows="transaction_rows"
+          :columns="transaction_cols"
+          row-key="name"
+          :loading="txs_loading_state"
+          :hide-pagination="true"
+        />
+        <q-table
+          :rows="block_rows"
+          :columns="block_cols"
+          row-key="name"
+          :loading="blocks_loading_state"
+          @row-click="link()"
+          :hide-pagination="true"
+        />
+      </div>
+    </q-page-container>
+  </q-layout>
+</template>
+
+<script>
+import { defineComponent, ref } from 'vue';
+import { useQuasar } from 'quasar';
+import axios from 'axios';
+import { resolvedNodeAPIURL } from '/utils/constants.js';
+import { useRoute, useRouter } from 'vue-router';
+
+const block_cols = [
+  {
+    name: 'Block ID',
+    align: 'center',
+    label: 'Block ID',
+    field: 'id',
+    sortable: true,
+  },
+  {
+    name: 'Content Bytes Size',
+    align: 'center',
+    label: 'Content Byte Size',
+    field: 'content_bytes_size',
+    sortable: true,
+  },
+  {
+    name: 'Validator',
+    align: 'center',
+    label: 'Validator',
+    field: 'validator',
+  },
+  {
+    name: 'Timestamp',
+    align: 'center',
+    label: 'Timestamp',
+    field: 'timestamp',
+    sortable: true,
+  },
+];
+
+const transaction_cols = [
+  {
+    name: 'Transaction Hash',
+    align: 'center',
+    label: 'Transaction Hash',
+    field: 'tx_hash',
+  },
+  {
+    name: 'Action',
+    align: 'center',
+    label: 'Transaction Action',
+    field: 'action',
+  },
+  {
+    name: 'From Address',
+    align: 'center',
+    label: 'From Address',
+    field: 'from_address',
+  },
+  {
+    name: 'To Address',
+    align: 'center',
+    label: 'To Address',
+    field: 'to_address',
+  },
+  {
+    name: 'Timestamp',
+    align: 'center',
+    label: 'Timestamp',
+    field: 'timestamp',
+    sortable: true,
+  },
+];
+
+export default defineComponent({
+  name: 'ExplorerDashboard',
+  data() {
+    return {
+      n_blocks: ref('—'),
+      txs_mapping_count: ref('—'),
+      txs_count: ref('—'),
+      addresses: ref('—'),
+      txs_loading_state: ref(true),
+      blocks_loading_state: ref(true),
+    };
+  },
+
+  setup() {
+    return {
+      transaction_cols,
+      transaction_rows: ref([]),
+      block_cols,
+      block_rows: ref([]),
+      search: ref(''),
+    };
+  },
+  mounted() {
+    this.updateDashboard(); // ! Run it first.
+
+    // - Then do it recursively by n-inner + n-outer seconds.
+    setTimeout(() => {
+      this.txs_loading_state = true;
+      this.blocks_loading_state = true;
+
+      setTimeout(() => this.updateDashboard(), 5000); // Slightly-delay the fetch by 5 seconds.
+    }, 30000); // 30 seconds.
+  },
+  methods: {
+    updateDashboard() {
+      axios
+        .get(`http://${resolvedNodeAPIURL}/explorer/chain`)
+        .then((response) => {
+          this.n_blocks = response.data.node_info.total_blocks;
+          this.txs_mapping_count = response.data.node_info.total_tx_mappings;
+          this.txs_count = response.data.node_info.total_transactions;
+          this.addresses = response.data.node_info.total_addresses;
+          this.transaction_rows = response.data.transactions;
+          this.block_rows = response.data.blocks;
+
+          this.txs_loading_state = false;
+          this.blocks_loading_state = false;
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'red',
+            position: 'top',
+            message:
+              'There was an error when fetching from the node. Please come back and try again later.',
+            timeout: 10000,
+            progress: true,
+            icon: 'mdi-cancel',
+          });
+        });
+    },
+  },
+});
+</script>
+
+<style scoped>
+.my-card-blocksdata {
+  width: 100%;
+  height: 60%;
+}
+
+/* User Info and Block info */
+.header {
+  display: grid;
+  margin: 2% 25%;
+  margin-bottom: 5%;
+  gap: 1.5rem;
+}
+
+.profile {
+  height: 100%;
+}
+
+.alias {
+  font-family: 'Poppins';
+  font-size: 1.3em;
+  text-align: center;
+  margin-bottom: 5%;
+}
+
+.btn {
+  display: grid;
+  gap: 1em;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 1%;
+  font-size: 1em;
+}
+
+.status {
+  display: grid;
+  grid-template-columns: 25% 25% 25% 25%;
+}
+.icon {
+  font-size: 150px;
+  margin-left: 20%;
+}
+
+.dataheader {
+  font-size: 2em;
+  font-family: 'Poppins';
+  font-weight: 500;
+  line-height: 0px;
+  margin-left: 10%;
+}
+
+h4 {
+  font-family: 'Poppins';
+  font-size: 1.8em;
+  font-weight: 400;
+  margin-left: 10%;
+}
+/* User Info and Block info end */
+
+.search {
+  display: grid;
+  margin: 6%;
+  margin-bottom: 2%;
+  margin-top: 2%;
+}
+
+.searchbar {
+  width: 50%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Table */
+
+.main {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+  margin: 6%;
+  margin-bottom: 0%;
+  padding-bottom: 3%;
+  margin-top: 2%;
+}
+
+h5 {
+  font-family: 'Poppins';
+  font-weight: 500;
+  margin: 0%;
+}
+
+h2 {
+  font-family: 'Poppins';
+  font-size: 2.5em;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1%;
+  word-break: break-all;
+}
+
+.viewall {
+  margin-left: 5%;
+}
+
+.gridblock {
+  grid-row-start: 1;
+}
+
+@media (max-width: 90em) {
+  .header {
+    display: grid;
+    margin: 6%;
+    gap: 1.5rem;
+    grid-template-columns: repeat(1, 1fr);
+  }
+
+  .status {
+    display: grid;
+    grid-template-columns: 25% 25% 25% 25%;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1.5rem;
+    margin: 6%;
+    margin-bottom: 0%;
+    padding-bottom: 3%;
+    margin-top: 2%;
+  }
+
+  .gridblock {
+    grid-row-start: 3;
+  }
+
+  .icon {
+    font-size: 100px;
+    margin-left: 40%;
+  }
+
+  h4 {
+    font-family: 'Poppins';
+    font-size: 0.8em;
+    font-weight: 400;
+    line-height: 30px;
+    margin-left: 0%;
+  }
+
+  p {
+    font-size: 1em;
+    font-family: 'Poppins';
+  }
+  .dataheader {
+    font-size: 1em;
+    font-family: 'Poppins';
+    font-weight: 500;
+    line-height: 0px;
+    margin-left: 0%;
+  }
+  h5 {
+    font-size: 1.3em;
+    font-family: 'Poppins';
+    font-weight: 500;
+    margin: 0%;
+  }
+
+  .btn {
+    display: grid;
+    gap: 1em;
+    grid-template-columns: repeat(1, 1fr);
+    padding: 1%;
+    font-size: 0.5em;
+  }
+
+  .viewall {
+    margin-left: 5%;
+    font-size: 0.8em;
+  }
+
+  h2 {
+    font-family: 'Poppins';
+    font-size: 2em;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 1%;
+    overflow: hidden;
+  }
+
+  .alias {
+    font-family: 'Poppins';
+    font-size: 1em;
+    text-align: center;
+    margin-bottom: 5%;
+  }
+}
+
+@media (max-width: 60em) {
+  .header {
+    display: grid;
+    margin: 6%;
+    gap: 1.5rem;
+    grid-template-columns: repeat(1, 1fr);
+  }
+
+  .status {
+    display: grid;
+    grid-template-columns: 25% 25% 25% 25%;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1.5rem;
+    margin: 6%;
+    margin-bottom: 0%;
+    padding-bottom: 3%;
+    margin-top: 2%;
+  }
+
+  .gridblock {
+    grid-row-start: 3;
+  }
+
+  .icon {
+    font-size: 90px;
+    margin-left: 1%;
+  }
+
+  h4 {
+    font-family: 'Poppins';
+    font-size: 0.8em;
+    font-weight: 400;
+    line-height: 15px;
+    margin-left: 0%;
+  }
+
+  p {
+    font-size: 1em;
+    font-family: 'Poppins';
+  }
+  .dataheader {
+    font-size: 1em;
+    font-family: 'Poppins';
+    font-weight: 500;
+    line-height: 0px;
+    margin-left: 0%;
+  }
+  h5 {
+    font-size: 1.3em;
+    font-family: 'Poppins';
+    font-weight: 500;
+    margin: 0%;
+  }
+
+  .btn {
+    display: grid;
+    gap: 1em;
+    grid-template-columns: repeat(1, 1fr);
+    padding: 1%;
+    font-size: 0.5em;
+  }
+
+  .viewall {
+    margin-left: 5%;
+    font-size: 0.8em;
+  }
+
+  h2 {
+    font-family: 'Poppins';
+    font-size: 2em;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 1%;
+  }
+
+  .alias {
+    font-family: 'Poppins';
+    font-size: 1em;
+    text-align: center;
+    margin-bottom: 5%;
+  }
+}
+</style>

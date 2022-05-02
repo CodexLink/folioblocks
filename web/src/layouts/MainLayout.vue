@@ -1,6 +1,6 @@
 <template>
   <q-layout view="hHh Lpr lff">
-    <q-header elevated class="bg-purple text-white">
+    <q-header elevated class="bg-cyan text-white">
       <q-toolbar>
         <q-btn
           dense
@@ -245,7 +245,7 @@ export default defineComponent({
             color: 'red',
             position: 'top',
             message: e.response.data.detail,
-            timeout: 3000,
+            timeout: 10000,
             progress: true,
             icon: 'mdi-cancel',
           });
@@ -280,7 +280,7 @@ export default defineComponent({
         color: 'green',
         position: 'top',
         message: 'Logout successful! See you next time!',
-        timeout: 3000,
+        timeout: 10000,
         progress: true,
         icon: 'mdi-account-check',
       });
@@ -293,11 +293,14 @@ export default defineComponent({
         // ! Condition for prohibiting non-applicant users from accessing respective pages, except for portfolio.
         (this.$route.path.includes('/user_info') &&
           this.role !== 'Applicant Dashboard User') ||
+        // ! Condition for prohibiting applicants accessing `/org` endpoints.
         (this.$route.path.includes('/org') &&
           this.role !== 'Organization Dashboard User') ||
+        // ! Condition for prohibiting organization members attempting to access portfolio endpoint with no path parameter.
         (this.$route.path.includes('/portfolio') &&
           this.$route.params.addressable === '' &&
           this.role === 'Organization Dashboard User') ||
+        // ! Condition for prohibiting applicant users from accessing portfolio endpoint with path parameter, which may have the intention of checking other portfolio.
         (this.$route.path.includes('/portfolio') &&
           this.$route.params.addressable.length > 0 &&
           this.role === 'Applicant Dashboard User')
@@ -311,7 +314,7 @@ export default defineComponent({
           color: 'red',
           position: 'top',
           message: 'You are unauthorized to navigate the requested page.',
-          timeout: 3000,
+          timeout: 10000,
           progress: true,
           icon: 'mdi-cancel',
         });
