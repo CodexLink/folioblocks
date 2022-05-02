@@ -2,7 +2,7 @@
   <q-layout>
     <q-header elevated class="bg-warning text-black nav">
       <q-toolbar>
-        <div class="lt-md">
+        <div class="md">
           <q-btn
             dense
             flat
@@ -13,13 +13,24 @@
           />
         </div>
         <q-toolbar-title class="title text-white">
-          <strong>Folioblocks</strong>
+          <strong>FolioBlocks</strong>
         </q-toolbar-title>
 
         <div class="gt-md">
           <q-btn
             flat
-            rounde
+            rounded
+            v-if="isAuthorized"
+            align="around"
+            class="btn-fixed-width"
+            color="white"
+            label="Dashboard"
+            icon="mdi-view-dashboard"
+            to="/dashboard"
+          />
+          <q-btn
+            flat
+            rounded
             align="around"
             class="btn-fixed-width"
             color="white"
@@ -30,7 +41,12 @@
         </div>
       </q-toolbar>
 
-      <q-drawer v-model="leftDrawerOpen" overlay :width="200" :breakpoint="500">
+      <q-drawer
+        v-model="leftDrawerOpen"
+        overlay
+        :width="200"
+        :breakpoint="2000"
+      >
         <q-scroll-area class="fit">
           <q-list padding class="menu-list">
             <q-item clickable v-ripple to="/explorer">
@@ -39,6 +55,27 @@
               </q-item-section>
 
               <q-item-section> Explorer </q-item-section>
+            </q-item>
+            <q-item clickable v-if="isAuthorized" v-ripple to="/dashboard">
+              <q-item-section avatar>
+                <q-icon name="mdi-view-dashboard" />
+              </q-item-section>
+
+              <q-item-section> Dashboard </q-item-section>
+            </q-item>
+            <q-item clickable v-ripple to="/entry/login">
+              <q-item-section avatar>
+                <q-icon name="mdi-login" />
+              </q-item-section>
+
+              <q-item-section> Login </q-item-section>
+            </q-item>
+            <q-item clickable v-ripple to="/entry/register">
+              <q-item-section avatar>
+                <q-icon name="mdi-account-plus" />
+              </q-item-section>
+
+              <q-item-section> Register </q-item-section>
             </q-item>
           </q-list>
         </q-scroll-area>
@@ -111,16 +148,24 @@
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
+import { useQuasar } from 'quasar';
 
 export default defineComponent({
   name: 'PageIndex',
-  components: {},
 
   setup() {
+    const $q = useQuasar();
+
     const leftDrawerOpen = ref(false);
+    const containsAuth = $q.localStorage.getItem('token') !== null;
+
+    const isAuthorized = ref(containsAuth);
+
+    console.log(isAuthorized.value, $q.localStorage.getItem('token'));
 
     return {
       leftDrawerOpen,
+      isAuthorized,
       toggleLeftDrawer() {
         leftDrawerOpen.value = !leftDrawerOpen.value;
       },

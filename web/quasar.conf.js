@@ -17,7 +17,7 @@ module.exports = configure(function (ctx) {
       tsCheckerConfig: {
         eslint: {
           enabled: false,
-          files: './src/**/*.{ts,tsx,js,jsx,vue}',
+          files: './src/**/*.{ts,tsx,js,jsx}',
         },
       },
     },

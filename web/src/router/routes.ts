@@ -8,7 +8,7 @@ const routes: RouteRecordRaw[] = [
   },
 
   {
-    path: '/dashboard',
+    path: '/',
     component: () => import('layouts/MainLayout.vue'),
     children: [
       {
@@ -20,42 +20,41 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ExplorerHome.vue'),
       },
       {
-        path: '/transactions',
+        path: '/explorer/transactions',
         component: () => import('pages/ExplorerTransaction.vue'),
       },
       {
-        path: '/explorerblocks',
+        path: '/explorer/blocks',
         component: () => import('pages/ExplorerBlocks.vue'),
       },
       {
-        path: '/exploreraccountdetails',
+        path: '/explorer/account/:address',
         component: () => import('pages/ExplorerAccountDetails.vue'),
       },
       {
-        path: '/explorerblockdetails',
+        path: '/explorer/block/:id(\\d+)',
         component: () => import('pages/ExplorerBlockDetails.vue'),
       },
       {
-        path: '/transaction/:tx_hash',
+        path: '/explorer/transaction/:tx_hash',
         component: () => import('pages/ExplorerTransactionDetails.vue'),
       },
       {
-        path: '/insert',
-        component: () => import('pages/Insert.vue'),
-      },
-
-      {
-        path: '/view',
-        component: () => import('pages/View.vue'),
+        path: '/org/insert/',
+        component: () => import('pages/InsertContextView.vue'),
       },
       {
-        path: '/settings',
-        component: () => import('pages/Setting.vue'),
+        path: '/portfolio/:addressable?',
+        component: () => import('pages/PortfolioView.vue'),
+      },
+      {
+        path: '/user_info',
+        component: () => import('pages/UserSettingView.vue'),
       },
     ],
   },
 
-  { path: '/entry/:action', component: () => import('pages/EntryForm.vue') },
+  { path: '/entry/:action(login|register)', component: () => import('pages/EntryForm.vue') },
 
 
   {

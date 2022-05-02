@@ -94,22 +94,22 @@ export default defineComponent({
 
   data() {
     return {
-      user: ref(null),
-      alias: ref(null),
+      user: ref('-'),
+      alias: ref('-'),
 
-      blocks: ref(null),
-      time: ref(null),
-      txs: ref(null),
-      addresses: ref(null),
+      blocks: ref('-'),
+      time: ref('-'),
+      txs: ref('-'),
+      addresses: ref('-'),
 
-      newblock: ref(null),
-      transactions: ref(null),
-      totalblocks: ref(null),
-      certificates: ref(null),
-      bouncerate: ref(null),
-      visits: ref(null),
-      seminars: ref(null),
-      activity: ref(null),
+      newblock: ref('-'),
+      transactions: ref('-'),
+      totalblocks: ref('-'),
+      certificates: ref('-'),
+      bouncerate: ref('-'),
+      visits: ref('-'),
+      seminars: ref('-'),
+      activity: ref('-'),
     };
   },
   setup() {

@@ -2,6 +2,7 @@
   "extends": "@quasar/app/tsconfig-preset",
   "compilerOptions": {
     "jsx": "preserve",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "checkJs": false // Initial author of this `web` uses TypeScript for no reason. It's dumb when I'm not even ready to invoke types when coding in JS yet.
   }
 }
