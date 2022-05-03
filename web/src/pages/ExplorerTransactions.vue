@@ -12,16 +12,16 @@
         />
       </div>
       <q-separator color="black" />
-      <h5>Blocks</h5>
+      <h5>Transactions</h5>
       <q-separator color="black" />
 
       <div class="q-pa-md">
         <q-table
-          :rows="block_rows"
-          :columns="block_cols"
+          :rows="tx_rows"
+          :columns="tx_cols"
           row-key="id"
-          :loading="block_loading_state"
-          :rows-per-page-options="[default_block_rows]"
+          :loading="txs_loading_state"
+          :rows-per-page-options="[default_tx_rows]"
         >
           <template v-slot:top-right>
             <q-btn
@@ -29,32 +29,32 @@
               icon-right="refresh"
               label="Refresh"
               no-caps
-              @click="getBlocks"
+              @click="getTransactions"
             />
           </template>
           <template v-slot:body="props">
             <q-tr :props="props">
-              <q-td key="Block ID" :props="props">
-                <router-link
-                  :to="'/explorer/block/' + props.row.id"
-                  style="text-decoration: none; color: inherit"
-                  >{{ props.row.id }}</router-link
-                ></q-td
-              >
-
-              <q-td key="Block Content Byte Size" :props="props">{{
-                props.row.content_bytes_size
+              <q-td key="Transaction Number" :props="props">{{
+                props.row.id
               }}</q-td>
-
-              <q-td key="Transaction Count" :props="props">{{
-                props.row.tx_count
+              <q-td key="Transaction Hash" :props="props">{{
+                props.row.tx_hash
               }}</q-td>
-
-              <q-td key="Validator" :props="props">
+              <q-td key="Transaction Action" :props="props">{{
+                props.row.action
+              }}</q-td>
+              <q-td key="From Address" :props="props">
                 <router-link
-                  :to="'/explorer/address/' + props.row.validator"
+                  :to="'/explorer/address/' + props.row.from_address"
                   style="text-decoration: none; color: inherit"
-                  >{{ props.row.validator }}</router-link
+                  >{{ props.row.from_address }}</router-link
+                >
+              </q-td>
+              <q-td key="To Address" :props="props">
+                <router-link
+                  :to="'/explorer/address/' + props.row.to_address"
+                  style="text-decoration: none; color: inherit"
+                  >{{ props.row.to_address }}</router-link
                 >
               </q-td>
               <q-td key="Timestamp" :props="props">{{
@@ -79,33 +79,44 @@ import {
 } from '/utils/constants.js';
 import { useRoute, useRouter } from 'vue-router';
 
-const block_cols = [
+const tx_cols = [
   {
-    name: 'Block ID',
+    name: 'Transaction Number',
     align: 'center',
-    label: 'Block ID',
+    label: 'Transaction #',
     field: 'id',
+    required: true,
     sortable: true,
   },
   {
-    name: 'Block Content Byte Size',
+    name: 'Transaction Hash',
     align: 'center',
-    label: 'Block Content Byte Size',
-    field: 'content_bytes_size',
+    label: 'Transaction Hash',
+    field: 'tx_hash',
+    required: true,
     sortable: true,
   },
   {
-    name: 'Transaction Count',
+    name: 'Transaction Action',
     align: 'center',
-    label: 'Transaction Count',
-    field: 'tx_count',
+    label: 'Action',
+    field: 'action',
     sortable: true,
   },
   {
-    name: 'Validator',
+    name: 'From Address',
     align: 'center',
-    label: 'Validator',
-    field: 'validator',
+    label: 'From Address',
+    field: 'from_address',
+    sortable: true,
+  },
+
+  {
+    name: 'To Address',
+    align: 'center',
+    label: 'To Address',
+    field: 'to_address',
+    sortable: true,
   },
   {
     name: 'Timestamp',
@@ -119,51 +130,50 @@ const block_cols = [
 export default defineComponent({
   name: 'ExplorerTransaction',
   components: {},
-
   data() {
     return {
-      block_loading_state: ref(false),
+      txs_loading_state: ref(true),
       first_instance: ref(true),
     };
   },
-
   setup() {
     return {
-      block_cols,
-      block_rows: ref([]),
-      default_block_rows: ref(TABLE_DEFAULT_ROW_COUNT),
+      tx_cols,
+      tx_rows: ref([]),
+      default_tx_rows: ref(TABLE_DEFAULT_ROW_COUNT),
     };
   },
   mounted() {
-    this.getBlocks();
+    this.getTransactions();
   },
   methods: {
-    getBlocks() {
-      this.block_loading_state = true;
+    getTransactions() {
+      this.txs_loading_state = true;
       setTimeout(() => {
         axios
-          .get(`http://${resolvedNodeAPIURL}/explorer/blocks`)
+          .get(`http://${resolvedNodeAPIURL}/explorer/transactions`)
           .then((response) => {
             // * Assign from the tmeporary variable to modify transaction actions.
-            let resolved_blocks = [];
+            let resolved_txs = [];
+            let tx_count = 1;
 
             // ! Resolve transaction actions to understandable context.
-            for (let fetched_block of response.data) {
-              fetched_block.action = resolveTransactionActions(
-                fetched_block.action
-              );
+            for (let fetched_tx of response.data) {
+              fetched_tx.action = resolveTransactionActions(fetched_tx.action);
+              fetched_tx.id = tx_count;
 
-              resolved_blocks.push(fetched_block);
+              tx_count += 1;
+              resolved_txs.push(fetched_tx);
             }
 
-            this.block_rows = resolved_blocks;
-            this.block_loading_state = false;
+            this.tx_rows = resolved_txs.reverse();
+            this.txs_loading_state = false;
 
             if (!this.first_instance)
               this.$q.notify({
                 color: 'green',
                 position: 'top',
-                message: 'Block table updated!',
+                message: 'Transaction table updated!',
                 timeout: 10000,
                 progress: true,
                 icon: 'mdi-account-check',
@@ -190,6 +200,63 @@ export default defineComponent({
 </script>
 
 <style scoped>
+/* Navigation bar*/
+
+.drawer {
+  display: grid;
+  text-align: center;
+  margin: 6%;
+  margin-top: 50%;
+  gap: 3.5rem;
+}
+
+.btndrawer {
+  font-size: 1.3em;
+  font-family: 'Poppins';
+}
+
+h2 {
+  font-family: 'Poppins';
+  font-size: 2.5em;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 1%;
+}
+
+h4 {
+  font-family: 'Poppins';
+  font-size: 1.4em;
+}
+
+p {
+  font-size: 1.3em;
+}
+
+img {
+  height: 50px;
+  width: 50px;
+  float: left;
+  margin: 5%;
+}
+
+.toolbar-items {
+  font-size: 0.8em;
+  font-family: 'Poppins';
+  margin-left: 5%;
+}
+
+.webtitle {
+  font-family: 'Poppins';
+  margin-left: 1%;
+}
+
+.logo {
+  margin-right: 1.5%;
+  margin: 0.5%;
+}
+
+/* Navigation bar end*/
+
 .header {
   display: grid;
   margin: 1%;

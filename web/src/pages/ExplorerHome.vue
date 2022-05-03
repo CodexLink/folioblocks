@@ -78,20 +78,66 @@
         </div>
 
         <q-table
+          style="max-width: 90%"
           :rows="transaction_rows"
           :columns="transaction_cols"
           row-key="name"
           :loading="txs_loading_state"
           :hide-pagination="true"
-        />
+        >
+          <template v-slot:body="props">
+            <q-tr :props="props">
+              <q-td key="Transaction Hash" :props="props">{{
+                props.row.tx_hash
+              }}</q-td>
+              <q-td key="To Address" :props="props">
+                <router-link
+                  :to="'/explorer/address/' + props.row.to_address"
+                  style="text-decoration: none; color: inherit"
+                  >{{ props.row.to_address }}</router-link
+                >
+              </q-td>
+              <q-td key="Timestamp" :props="props">{{
+                props.row.timestamp
+              }}</q-td>
+            </q-tr>
+          </template>
+        </q-table>
+
         <q-table
+          style="max-width: 90%"
           :rows="block_rows"
           :columns="block_cols"
           row-key="name"
           :loading="blocks_loading_state"
-          @row-click="link()"
           :hide-pagination="true"
-        />
+        >
+          <template v-slot:body="props">
+            <q-tr :props="props">
+              <q-td key="Block ID" :props="props">
+                <router-link
+                  :to="'/explorer/block/' + props.row.id"
+                  style="text-decoration: none; color: inherit"
+                  >{{ props.row.id }}</router-link
+                >
+              </q-td>
+              <q-td key="Transaction Count" :props="props">{{
+                props.row.tx_count
+              }}</q-td>
+
+              <q-td key="Validator" :props="props">
+                <router-link
+                  :to="'/explorer/address/' + props.row.validator"
+                  style="text-decoration: none; color: inherit"
+                  >{{ props.row.validator }}</router-link
+                >
+              </q-td>
+              <q-td key="Timestamp" :props="props">{{
+                props.row.timestamp
+              }}</q-td>
+            </q-tr>
+          </template>
+        </q-table>
       </div>
     </q-page-container>
   </q-layout>
@@ -113,10 +159,10 @@ const block_cols = [
     sortable: true,
   },
   {
-    name: 'Content Bytes Size',
+    name: 'Transaction Count',
     align: 'center',
-    label: 'Content Byte Size',
-    field: 'content_bytes_size',
+    label: 'Transaction Count',
+    field: 'tx_count',
     sortable: true,
   },
   {
@@ -140,18 +186,6 @@ const transaction_cols = [
     align: 'center',
     label: 'Transaction Hash',
     field: 'tx_hash',
-  },
-  {
-    name: 'Action',
-    align: 'center',
-    label: 'Transaction Action',
-    field: 'action',
-  },
-  {
-    name: 'From Address',
-    align: 'center',
-    label: 'From Address',
-    field: 'from_address',
   },
   {
     name: 'To Address',
@@ -191,15 +225,11 @@ export default defineComponent({
     };
   },
   mounted() {
-    this.updateDashboard(); // ! Run it first.
+    this.txs_loading_state = true;
+    this.blocks_loading_state = true;
 
     // - Then do it recursively by n-inner + n-outer seconds.
-    setTimeout(() => {
-      this.txs_loading_state = true;
-      this.blocks_loading_state = true;
-
-      setTimeout(() => this.updateDashboard(), 5000); // Slightly-delay the fetch by 5 seconds.
-    }, 30000); // 30 seconds.
+    setTimeout(() => this.updateDashboard(), 1200);
   },
   methods: {
     updateDashboard() {
@@ -216,13 +246,13 @@ export default defineComponent({
           this.txs_loading_state = false;
           this.blocks_loading_state = false;
         })
-        .catch((e) => {
+        .catch((_e) => {
           this.$q.notify({
             color: 'red',
             position: 'top',
             message:
               'There was an error when fetching from the node. Please come back and try again later.',
-            timeout: 10000,
+            Interval: 10000,
             progress: true,
             icon: 'mdi-cancel',
           });

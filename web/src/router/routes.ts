@@ -21,14 +21,14 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: '/explorer/transactions',
-        component: () => import('pages/ExplorerTransaction.vue'),
+        component: () => import('pages/ExplorerTransactions.vue'),
       },
       {
         path: '/explorer/blocks',
         component: () => import('pages/ExplorerBlocks.vue'),
       },
       {
-        path: '/explorer/account/:address',
+        path: '/explorer/address/:address',
         component: () => import('pages/ExplorerAccountDetails.vue'),
       },
       {
