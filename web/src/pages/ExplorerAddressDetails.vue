@@ -1,67 +1,57 @@
 <template>
   <q-layout view="hHh lpR lFf">
     <q-page-container>
-      <div class="header">
+      <div class="first-header">
         <q-btn
-          class="back"
-          outline
-          round
-          color="black"
+          color="secondary"
+          label="Go back"
+          rounded
           icon="arrow_back"
-          to="/explorer/blocks"
+          to="/explorer/addresses"
         />
       </div>
-      <q-separator color="black" />
-      <h5>Block #{{ nth_block }}</h5>
-      <q-separator color="black" />
+      <div class="second-header wrap-content">
 
-      <q-card class="my-card wrapped-content">
-        <q-linear-progress
-          v-if="associated_tx_loading_state"
-          query
-          color="secondary"
-          class="q-mt-sm"
-        />
-        <q-card-section>
-          <div class="text-h6">Block Information</div>
-          <div class="text-subtitle1">
-            Here contains extra information regarding this block.
+        <div>
+          <h3 style="line-height: initial;">{{ user_address }}</h3>
+          <p style="line-height: initial;">
+          <div v-if="association_address">
+            Association Context: {{ association_address }} |
+            <strong>{{ association_context }}</strong>
           </div>
-        </q-card-section>
-
-        <q-card-section class="details">
-          <div>
-            <p>
-              Hash Block: <strong>{{ hash_block_ref }}</strong>
-            </p>
-            <p>Prev Hash Block: {{ prev_hash_block_ref }}</p>
-            <p>Nonce: {{ calc_nonce }}</p>
-            <p>Content Bytes: {{ block_content_size }}</p>
-            <router-link
-              :to="'/explorer/address/' + validator"
-              style="text-decoration: none"
-            >
-              <p>
-                Validator:
-                <strong>{{ validator }}</strong>
-              </p>
-            </router-link>
-            <p>Timestamp: {{ timestamp }}</p>
+          <div v-else>
+            No Association.
           </div>
-        </q-card-section>
-      </q-card>
+          </p>
+        </div>
+      </div>
 
-      <div class="q-pa-md my-card">
+      <div>
+        <q-card class="my-card wrap-content">
+          <q-linear-progress
+            v-if="associated_tx_loading_state"
+            query
+            color="secondary"
+            class="q-mt-sm"
+          />
+          <q-card-section class="details">
+            <p>User Type: {{ user_type }}</p>
+            <p v-if="tx_bindings">Transaction Bindings: {{ tx_bindings }}</p>
+            <p v-if="negotiations">Consensus Negotiations: {{ negotiations }}</p>
+            <p v-if="description">Description: {{ description }}</p>
+          </q-card-section>
+        </q-card>
+      </div>
+
+      <div class="q-pa-md table">
         <q-table
           :rows="tx_rows"
           :columns="tx_cols"
-          row-key="id"
           :loading="associated_tx_loading_state"
-          :rows-per-page-options="[default_tx_rows]"
           title="Associated Transactions"
-          no-data-label="No associated transactions from this block, or failed to fetch data from the chain."
+          row-key="name"
         >
-          <template v-slot:body="props">
+        <template v-slot:body="props">
             <q-tr :props="props">
               <q-td key="Transaction Number" :props="props">{{
                 props.row.id
@@ -106,9 +96,9 @@ import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
 import {
+  resolveContextType,
   resolvedNodeAPIURL,
   resolveTransactionActions,
-  TABLE_DEFAULT_ROW_COUNT,
 } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -153,56 +143,59 @@ const tx_cols = [
 ];
 
 export default defineComponent({
-  name: 'ExplorerBlockDetails',
+  name: 'ExplorerAccountDetails',
   components: {},
   data() {
     return {
-      nth_block: ref('—'),
-      block_content_size: ref('—'),
-      hash_block_ref: ref('—'),
-      prev_hash_block_ref: ref('—'),
-      calc_nonce: ref('—'),
-      validator: ref('—'),
-      timestamp: ref('—'),
+      tx_rows: ref([]),
       associated_tx_loading_state: ref(true),
-      default_tx_rows: ref(TABLE_DEFAULT_ROW_COUNT),
+      user_name: ref('—'),
+      user_address: ref('—'),
+      association_context: ref('—'),
+      association_address: ref('—'),
+      description: ref('—'),
+      negotiations: ref('—'),
+      tx_bindings: ref('—'),
+      user_type: ref('—'),
     };
   },
   setup() {
     const $route = useRoute();
     const $router = useRouter();
+    const $q = useQuasar();
+
     return {
       tx_cols,
-      tx_rows: ref([]),
     };
   },
-  mounted() {
-    this.getBlockContext();
-  },
   methods: {
-    getBlockContext() {
+    getAddressContext() {
       this.associated_tx_loading_state = true;
       axios
         .get(
-          `http://${resolvedNodeAPIURL}/explorer/block/${this.$route.params.id}`
+          `http://${resolvedNodeAPIURL}/explorer/address/${this.$route.params.uuid}`
         )
         .then((response) => {
-          // * Assign context from the block information.
-          this.nth_block = response.data.id;
-          this.block_content_size = response.data.content_bytes_size;
-          this.hash_block_ref = response.data.hash_block;
-          this.prev_hash_block_ref = response.data.prev_hash_block;
-          this.calc_nonce = response.data.contents.nonce;
-          this.validator = response.data.contents.validator;
-          this.timestamp = response.data.contents.timestamp;
+          // * Assign context from the variables.
+          this.user_address = response.data.uuid;
+          this.association_address = response.data.association_uuid;
+          this.user_type = response.data.entity_type;
+          this.tx_bindings = response.data.tx_bindings_count
+          this.negotiations = response.data.negotiations_count
+          this.description = response.data.description
+          this.association_context = response.data.association_name
 
+          // * Resolve context for the transaction.
           // * Assign from the tmeporary variable to modify transaction actions.
           let resolved_txs = [];
+          let tx_count = 1;
 
           // ! Resolve transaction actions to understandable context.
-          for (let fetched_tx of response.data.contents.transactions) {
+          for (let fetched_tx of response.data.related_txs) {
             fetched_tx.action = resolveTransactionActions(fetched_tx.action);
+            fetched_tx.id = tx_count;
 
+            tx_count += 1;
             resolved_txs.push(fetched_tx);
           }
 
@@ -214,12 +207,12 @@ export default defineComponent({
             this.$q.notify({
               color: 'red',
               position: 'top',
-              message: 'Block not found.',
+              message: 'Address not found.',
               timeout: 5000,
               progress: true,
               icon: 'mdi-cancel',
             });
-            void this.$router.push({ path: '/explorer/blocks' });
+            void this.$router.push({ path: '/explorer/addresses' });
           } else {
             this.$q.notify({
               color: 'red',
@@ -235,22 +228,13 @@ export default defineComponent({
         });
     },
   },
+  mounted() {
+    this.getAddressContext();
+  },
 });
 </script>
 
 <style scoped>
-.header {
-  display: grid;
-  margin: 1%;
-  gap: 1.5rem;
-  grid-template-columns: repeat(2, 1fr);
-}
-.back {
-  margin: 1%;
-  height: 30px;
-  width: 30px;
-}
-
 h5 {
   font-family: 'Poppins';
   font-weight: 500;
@@ -258,16 +242,56 @@ h5 {
   margin-left: 4%;
 }
 
+h3 {
+  font-family: 'Poppins';
+  font-weight: 500;
+  margin-top: 7%;
+  line-height: 25px;
+}
+
+p {
+  font-family: 'Poppins';
+  font-size: 1.5em;
+}
+
+.usericon {
+  font-size: 200px;
+}
+
+.user {
+  font-family: 'Poppins';
+  font-size: 1.5em;
+}
+
+.table {
+  margin: 3%;
+  margin-top: 0%;
+  margin-bottom: 0%;
+}
+
 .my-card {
-  margin: 2%;
-  margin-left: auto;
-  margin-right: auto;
-  width: fit-content;
+  margin-left: 4%;
+  margin-right: 4%;
+  margin-bottom: 2%;
 }
 
 .details {
-  font-size: 1.5em;
+  font-size: 0.8em;
   padding: 2%;
+  padding-left: 4%;
+}
+
+.first-header {
+  display: grid;
+  margin: 3%;
+  margin-top: 1%;
+  width: 10%
+}
+
+.second-header {
+  margin: 3%;
+  margin-top: 1%;
+  margin-left: 4%;
 }
 
 .wrap-content {
@@ -275,10 +299,76 @@ h5 {
   overflow-wrap: break-word;
 }
 
-@media (max-width: 60em) {
-  .details {
+@media (max-width: 90em) {
+  .usericon {
+    font-size: 150px;
+  }
+
+  .user {
+    font-family: 'Poppins';
     font-size: 1.5em;
-    padding: 6%;
+    font-weight: 600;
+    line-height: 0px;
+  }
+
+  h3 {
+    font-family: 'Poppins';
+    font-weight: 500;
+    margin-top: 40px;
+    line-height: 25px;
+    margin-right: 3%;
+  }
+
+  .header {
+    display: grid;
+    margin: 3%;
+    margin-top: 1%;
+    grid-template-columns: 150px 500px;
+  }
+  .my-card {
+    margin-left: 5%;
+    margin-right: 5%;
+    margin-bottom: 2%;
+  }
+}
+
+@media (max-width: 40em) {
+  .usericon {
+    font-size: 100px;
+  }
+
+  .user {
+    font-family: 'Poppins';
+    font-size: 1em;
+    font-weight: 600;
+    line-height: 0px;
+  }
+
+  h3 {
+    font-size: 1.5em;
+    font-family: 'Poppins';
+    font-weight: 500;
+    margin-top: 20px;
+    line-height: 25px;
+    margin-right: 3%;
+  }
+
+  .header {
+    display: grid;
+    margin: 3%;
+    margin-top: 1%;
+    grid-template-columns: 30% 100%;
+  }
+
+  p {
+    font-family: 'Poppins';
+    font-size: 1em;
+  }
+
+  .my-card {
+    margin-left: 6%;
+    margin-right: 6%;
+    margin-bottom: 2%;
   }
 }
 </style>

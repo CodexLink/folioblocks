@@ -3,6 +3,12 @@
   <body>
     <RegisterContainer>
       <q-card>
+        <q-linear-progress
+          v-if="isProcessing"
+          query
+          color="secondary"
+          class="q-mt-sm"
+        />
         <q-tabs
           v-model="tab"
           class="text-grey tabs"
@@ -30,6 +36,7 @@
                 class="user"
                 color="secondary"
                 outlined
+                :disable="isProcessing"
                 v-model="login.username"
                 label="Username"
                 :rules="[
@@ -40,6 +47,7 @@
               <q-input
                 class="password"
                 outlined
+                :disable="isProcessing"
                 color="secondary"
                 v-model="login.password"
                 label="Password"
@@ -66,6 +74,7 @@
                   color="secondary"
                   label="Login"
                   type="submit"
+                  :disable="isProcessing"
                 />
               </div>
             </q-form>
@@ -213,7 +222,7 @@ import RegisterContainer from 'src/components/RegisterContainer.vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useQuasar } from 'quasar';
-import { resolvedNodeAPIURL } from '/utils/constants.js';
+import { resolvedNodeAPIURL } from '/utils/utils.js';
 export default defineComponent({
   name: 'EntryForm',
   components: { RegisterContainer },
@@ -230,6 +239,7 @@ export default defineComponent({
       associationname: ref(null),
       associationaddress: ref(null),
       associationdescription: ref(null),
+      isProcessing: ref(false),
 
       login: {
         username: ref(null),
@@ -254,6 +264,10 @@ export default defineComponent({
   },
   methods: {
     submitLoginRequest() {
+      this.isProcessing = true;
+      setTimeout(() => {
+        console.log(1);
+      }, 15000);
       axios
         .post(`http://${resolvedNodeAPIURL}/entity/login`, {
           username: this.login.username,
@@ -282,6 +296,7 @@ export default defineComponent({
                   'X-Token': response.data.jwt_token,
                 },
               });
+              this.isProcessing = false;
             } else {
               // * Clear out the local storage first.
               this.$q.localStorage.clear();
@@ -302,9 +317,11 @@ export default defineComponent({
 
               // * And redirect the user.
               this.$router.push({ path: '/dashboard' });
+              this.isProcessing = false;
             }
           } catch (e) {
             this.$q.clear();
+            this.isProcessing = false;
           }
         })
         .catch((e) => {
@@ -321,6 +338,7 @@ export default defineComponent({
             progress: true,
             icon: 'report_problem',
           });
+          this.isProcessing = false;
         });
     },
   },

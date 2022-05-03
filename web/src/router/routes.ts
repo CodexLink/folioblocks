@@ -20,20 +20,24 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ExplorerHome.vue'),
       },
       {
-        path: '/explorer/transactions',
-        component: () => import('pages/ExplorerTransactions.vue'),
+        path: '/explorer/addresses',
+        component: () => import('pages/ExplorerAddresses.vue'),
+      },
+      {
+        path: '/explorer/address/:uuid',
+        component: () => import('pages/ExplorerAddressDetails.vue'),
       },
       {
         path: '/explorer/blocks',
         component: () => import('pages/ExplorerBlocks.vue'),
       },
       {
-        path: '/explorer/address/:address',
-        component: () => import('pages/ExplorerAccountDetails.vue'),
-      },
-      {
         path: '/explorer/block/:id(\\d+)',
         component: () => import('pages/ExplorerBlockDetails.vue'),
+      },
+      {
+        path: '/explorer/transactions',
+        component: () => import('pages/ExplorerTransactions.vue'),
       },
       {
         path: '/explorer/transaction/:tx_hash',

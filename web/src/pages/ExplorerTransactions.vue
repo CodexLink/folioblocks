@@ -22,6 +22,7 @@
           row-key="id"
           :loading="txs_loading_state"
           :rows-per-page-options="[default_tx_rows]"
+          no-data-label="Failed to fetch from the chain or theres no transactions from chain to render."
         >
           <template v-slot:top-right>
             <q-btn
@@ -37,23 +38,27 @@
               <q-td key="Transaction Number" :props="props">{{
                 props.row.id
               }}</q-td>
-              <q-td key="Transaction Hash" :props="props">{{
-                props.row.tx_hash
-              }}</q-td>
+              <q-td key="Transaction Hash" :props="props">
+                <router-link
+                  :to="'/explorer/transaction/' + props.row.tx_hash"
+                  style="text-decoration: none"
+                  >{{ props.row.tx_hash }}</router-link
+                ></q-td
+              >
               <q-td key="Transaction Action" :props="props">{{
                 props.row.action
               }}</q-td>
               <q-td key="From Address" :props="props">
                 <router-link
                   :to="'/explorer/address/' + props.row.from_address"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.from_address }}</router-link
                 >
               </q-td>
               <q-td key="To Address" :props="props">
                 <router-link
                   :to="'/explorer/address/' + props.row.to_address"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.to_address }}</router-link
                 >
               </q-td>
@@ -76,7 +81,7 @@ import {
   resolvedNodeAPIURL,
   resolveTransactionActions,
   TABLE_DEFAULT_ROW_COUNT,
-} from '/utils/constants.js';
+} from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 const tx_cols = [
@@ -149,51 +154,48 @@ export default defineComponent({
   methods: {
     getTransactions() {
       this.txs_loading_state = true;
-      setTimeout(() => {
-        axios
-          .get(`http://${resolvedNodeAPIURL}/explorer/transactions`)
-          .then((response) => {
-            // * Assign from the tmeporary variable to modify transaction actions.
-            let resolved_txs = [];
-            let tx_count = 1;
+      axios
+        .get(`http://${resolvedNodeAPIURL}/explorer/transactions`)
+        .then((response) => {
+          // * Assign from the tmeporary variable to modify transaction actions.
+          let resolved_txs = [];
+          let tx_count = 1;
 
-            // ! Resolve transaction actions to understandable context.
-            for (let fetched_tx of response.data) {
-              fetched_tx.action = resolveTransactionActions(fetched_tx.action);
-              fetched_tx.id = tx_count;
+          // ! Resolve transaction actions to understandable context.
+          for (let fetched_tx of response.data) {
+            fetched_tx.action = resolveTransactionActions(fetched_tx.action);
+            fetched_tx.id = tx_count;
 
-              tx_count += 1;
-              resolved_txs.push(fetched_tx);
-            }
+            tx_count += 1;
+            resolved_txs.push(fetched_tx);
+          }
 
-            this.tx_rows = resolved_txs.reverse();
-            this.txs_loading_state = false;
+          this.tx_rows = resolved_txs.reverse();
+          this.txs_loading_state = false;
 
-            if (!this.first_instance)
-              this.$q.notify({
-                color: 'green',
-                position: 'top',
-                message: 'Transaction table updated!',
-                timeout: 10000,
-                progress: true,
-                icon: 'mdi-account-check',
-              });
-            this.first_instance = false;
-          })
-          .catch((_e) => {
+          if (!this.first_instance)
             this.$q.notify({
-              color: 'red',
+              color: 'green',
               position: 'top',
-              message:
-                'Failed to fetch transactions from the server. Please try again later.',
+              message: 'Transactions has been updated.',
               timeout: 10000,
               progress: true,
-              icon: 'mdi-cancel',
+              icon: 'mdi-account-check',
             });
-
-            this.txs_loading_state = false;
+          this.first_instance = false;
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'red',
+            position: 'top',
+            message: `Failed to fetch transactions from the server. Please try again later. Reason: ${e.message}.`,
+            timeout: 10000,
+            progress: true,
+            icon: 'mdi-cancel',
           });
-      }, 1000);
+
+          this.txs_loading_state = false;
+        });
     },
   },
 });

@@ -16,23 +16,19 @@
         </q-toolbar-title>
 
         <q-btn
-          class="exit"
           flat
           rounded
           ripple
-          v-if="!containsNoAuth"
           color="white"
-          icon="logout"
-          label="Logout"
-          v-on:click="logoutSession"
+          icon="people"
+          label="Addresses"
+          to="/explorer/addresses"
         />
 
-        <!-- # Buttons for Non Auhenticated Persons-->
         <q-btn
           flat
           rounded
           ripple
-          v-if="containsNoAuth"
           color="white"
           icon="home"
           label="Home"
@@ -47,6 +43,18 @@
           icon="login"
           label="Login"
           to="/entry/login"
+        />
+
+        <q-btn
+          class="exit"
+          flat
+          rounded
+          ripple
+          v-if="!containsNoAuth"
+          color="white"
+          icon="logout"
+          label="Logout"
+          v-on:click="logoutSession"
         />
         <q-btn
           flat
@@ -191,7 +199,7 @@
 import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { resolvedNodeAPIURL } from '/utils/constants.js';
+import { resolvedNodeAPIURL } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({

@@ -5,17 +5,21 @@
         <h2>Welcome to Folioblocks Credential Receipt Explorer</h2>
       </div>
       <div class="search">
-        <q-input
-          class="searchbar"
-          v-model="search"
-          debounce="500"
-          filled
-          placeholder="Search by address, transaction hash, or even by block number."
-        >
-          <template v-slot:append>
-            <q-icon name="search" />
-          </template>
-        </q-input>
+        <q-form @submit.prevent="onSearchSubmit" class="q-gutter-md">
+          <q-input
+            class="searchbar"
+            clearable
+            v-model="searchContext"
+            debounce="500"
+            filled
+            placeholder="Paste or type something here."
+            hint="Search by address, transaction hash, or even by block number."
+          >
+            <template v-slot:append>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+        </q-form>
       </div>
 
       <q-card class="header">
@@ -78,22 +82,26 @@
         </div>
 
         <q-table
-          style="max-width: 90%"
           :rows="transaction_rows"
           :columns="transaction_cols"
           row-key="name"
           :loading="txs_loading_state"
           :hide-pagination="true"
+          no-data-label="Failed to fetch from the chain or theres no transactions from chain to render."
         >
           <template v-slot:body="props">
             <q-tr :props="props">
-              <q-td key="Transaction Hash" :props="props">{{
-                props.row.tx_hash
-              }}</q-td>
+              <q-td key="Transaction Hash" :props="props">
+                <router-link
+                  :to="'/explorer/transaction/' + props.row.tx_hash"
+                  style="text-decoration: none"
+                  >{{ props.row.tx_hash }}</router-link
+                ></q-td
+              >
               <q-td key="To Address" :props="props">
                 <router-link
                   :to="'/explorer/address/' + props.row.to_address"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.to_address }}</router-link
                 >
               </q-td>
@@ -111,13 +119,14 @@
           row-key="name"
           :loading="blocks_loading_state"
           :hide-pagination="true"
+          no-data-label="Failed to fetch from the chain or theres no blocks from chain to render."
         >
           <template v-slot:body="props">
             <q-tr :props="props">
               <q-td key="Block ID" :props="props">
                 <router-link
                   :to="'/explorer/block/' + props.row.id"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.id }}</router-link
                 >
               </q-td>
@@ -128,7 +137,7 @@
               <q-td key="Validator" :props="props">
                 <router-link
                   :to="'/explorer/address/' + props.row.validator"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.validator }}</router-link
                 >
               </q-td>
@@ -147,8 +156,8 @@
 import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { resolvedNodeAPIURL } from '/utils/constants.js';
-import { useRoute, useRouter } from 'vue-router';
+import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { useRouter } from 'vue-router';
 
 const block_cols = [
   {
@@ -186,6 +195,7 @@ const transaction_cols = [
     align: 'center',
     label: 'Transaction Hash',
     field: 'tx_hash',
+    style: 'width: 50px',
   },
   {
     name: 'To Address',
@@ -212,16 +222,17 @@ export default defineComponent({
       addresses: ref('—'),
       txs_loading_state: ref(true),
       blocks_loading_state: ref(true),
+      searchContext: ref(''),
     };
   },
 
   setup() {
+    const $router = useRouter();
     return {
       transaction_cols,
       transaction_rows: ref([]),
       block_cols,
       block_rows: ref([]),
-      search: ref(''),
     };
   },
   mounted() {
@@ -229,7 +240,7 @@ export default defineComponent({
     this.blocks_loading_state = true;
 
     // - Then do it recursively by n-inner + n-outer seconds.
-    setTimeout(() => this.updateDashboard(), 1200);
+    this.updateDashboard();
   },
   methods: {
     updateDashboard() {
@@ -246,17 +257,49 @@ export default defineComponent({
           this.txs_loading_state = false;
           this.blocks_loading_state = false;
         })
-        .catch((_e) => {
+        .catch((e) => {
           this.$q.notify({
             color: 'red',
             position: 'top',
-            message:
-              'There was an error when fetching from the node. Please come back and try again later.',
+            message: `There was an error when fetching from the chain. Please come back and try again later. Reason: ${e.message}`,
             Interval: 10000,
             progress: true,
             icon: 'mdi-cancel',
           });
+
+          this.txs_loading_state = false;
+          this.blocks_loading_state = false;
         });
+    },
+    onSearchSubmit() {
+      // ! Directing to block.
+      if (Number.isInteger(parseInt(this.searchContext))) {
+        void this.$router.push({
+          path: `/explorer/block/${this.searchContext}`,
+        });
+      }
+      // ! Directing to address.
+      else if (this.searchContext.startsWith('fl:')) {
+        void this.$router.push({
+          path: `/explorer/address/${this.searchContext}`,
+        });
+      }
+      // ! Directing to transactions.
+      else if (this.searchContext.length == 64) {
+        void this.$router.push({
+          path: `/explorer/transaction/${this.searchContext}`,
+        });
+      } else {
+        this.$q.notify({
+          color: 'red',
+          position: 'top',
+          message:
+            'Failed to parse the context given, are you sure this is correct?',
+          timeout: 10000,
+          progress: true,
+          icon: 'mdi-cancel',
+        });
+      }
     },
   },
 });

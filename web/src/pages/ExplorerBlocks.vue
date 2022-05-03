@@ -22,6 +22,7 @@
           row-key="id"
           :loading="block_loading_state"
           :rows-per-page-options="[default_block_rows]"
+          no-data-label="Failed to fetch from the chain or theres no blocks from chain to render."
         >
           <template v-slot:top-right>
             <q-btn
@@ -37,7 +38,7 @@
               <q-td key="Block ID" :props="props">
                 <router-link
                   :to="'/explorer/block/' + props.row.id"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.id }}</router-link
                 ></q-td
               >
@@ -53,7 +54,7 @@
               <q-td key="Validator" :props="props">
                 <router-link
                   :to="'/explorer/address/' + props.row.validator"
-                  style="text-decoration: none; color: inherit"
+                  style="text-decoration: none"
                   >{{ props.row.validator }}</router-link
                 >
               </q-td>
@@ -76,7 +77,7 @@ import {
   resolvedNodeAPIURL,
   resolveTransactionActions,
   TABLE_DEFAULT_ROW_COUNT,
-} from '/utils/constants.js';
+} from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 const block_cols = [
@@ -140,50 +141,47 @@ export default defineComponent({
   methods: {
     getBlocks() {
       this.block_loading_state = true;
-      setTimeout(() => {
-        axios
-          .get(`http://${resolvedNodeAPIURL}/explorer/blocks`)
-          .then((response) => {
-            // * Assign from the tmeporary variable to modify transaction actions.
-            let resolved_blocks = [];
+      axios
+        .get(`http://${resolvedNodeAPIURL}/explorer/blocks`)
+        .then((response) => {
+          // * Assign from the tmeporary variable to modify transaction actions.
+          let resolved_blocks = [];
 
-            // ! Resolve transaction actions to understandable context.
-            for (let fetched_block of response.data) {
-              fetched_block.action = resolveTransactionActions(
-                fetched_block.action
-              );
+          // ! Resolve transaction actions to understandable context.
+          for (let fetched_block of response.data) {
+            fetched_block.action = resolveTransactionActions(
+              fetched_block.action
+            );
 
-              resolved_blocks.push(fetched_block);
-            }
+            resolved_blocks.push(fetched_block);
+          }
 
-            this.block_rows = resolved_blocks;
-            this.block_loading_state = false;
+          this.block_rows = resolved_blocks;
+          this.block_loading_state = false;
 
-            if (!this.first_instance)
-              this.$q.notify({
-                color: 'green',
-                position: 'top',
-                message: 'Block table updated!',
-                timeout: 10000,
-                progress: true,
-                icon: 'mdi-account-check',
-              });
-            this.first_instance = false;
-          })
-          .catch((_e) => {
+          if (!this.first_instance)
             this.$q.notify({
-              color: 'red',
+              color: 'green',
               position: 'top',
-              message:
-                'Failed to fetch transactions from the server. Please try again later.',
+              message: 'Blocks has been updated.',
               timeout: 10000,
               progress: true,
-              icon: 'mdi-cancel',
+              icon: 'mdi-account-check',
             });
-
-            this.txs_loading_state = false;
+          this.first_instance = false;
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'red',
+            position: 'top',
+            message: `Failed to fetch transactions from the server. Please try again later. Reason: ${e.message}.`,
+            timeout: 10000,
+            progress: true,
+            icon: 'mdi-cancel',
           });
-      }, 1000);
+
+          this.block_loading_state = false;
+        });
     },
   },
 });

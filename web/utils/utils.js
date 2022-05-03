@@ -26,6 +26,23 @@ export const TransactionActions = Object.freeze(
 		ORGANIZATION_REFER_EXTRA_INFO: 11,
 	}
 )
+export const TransactionContentMappingType = Object.freeze(
+	{
+		APPLICANT_BASE: 1,
+		APPLICANT_LOG: 2,
+		APPLICANT_ADDITIONAL: 3,
+	}
+)
+
+export const NodeTransactionInternalActions = Object.freeze(
+	{
+		CONSENSUS: 1,
+		INIT: 2,
+		SYNC: 3,
+	}
+)
+
+
 
 export function resolveTransactionActions(action) {
 
@@ -56,4 +73,49 @@ export function resolveTransactionActions(action) {
 		default:
 			return 'Unidentified Action.'
 	}
+}
+
+export function resolveContextType(typeField) {
+	let identifiedType = typeField.hasOwnProperty('content_type') ? 'User Transaction' : 'Internal Transaction'
+	let resolvedTypeValue = null
+
+
+	// ! Resolve this content type from the `User Transaction Content Mapping`.
+	if (typeField.hasOwnProperty('content_type')) {
+		switch (typeField.content_type) {
+			case TransactionContentMappingType.APPLICANT_BASE:
+				resolvedTypeValue = 'Applicant Base Portfolio'
+				break
+			case TransactionContentMappingType.APPLICANT_LOG:
+				resolvedTypeValue = 'Applicant Log from Orgs'
+				break
+			case TransactionContentMappingType.APPLICANT_ADDITIONAL:
+				resolvedTypeValue = 'Applicant Additional Info / Remarks'
+				break
+			default:
+				resolvedTypeValue = 'Unidentified'
+				break
+		}
+	} else {
+		console.log('cxz')
+		switch (typeField.action) {
+			case NodeTransactionInternalActions.CONSENSUS: ;
+				resolvedTypeValue = 'Internal: Consensus Context'
+				break
+			case NodeTransactionInternalActions.INIT:
+				resolvedTypeValue = 'Internal: Context Initialization'
+				break
+			case NodeTransactionInternalActions.SYNC:
+				resolvedTypeValue = 'Internal: Sync from Communication'
+				break
+			default:
+				resolvedTypeValue = 'Unidentified'
+				break
+		}
+	}
+
+	console.log(identifiedType, resolveContextType)
+
+	return { identifiedType, resolvedTypeValue }
+
 }
