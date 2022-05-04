@@ -6,7 +6,7 @@
   />
   <body>
     <RegisterContainer>
-      <q-card style="">
+      <q-card>
         <q-linear-progress
           v-if="isProcessing"
           query
@@ -153,6 +153,7 @@
                 v-model="email"
                 type="email"
                 label="E-mail"
+                counter
                 lazy-rules
                 :disable="isProcessing"
                 :rules="[(val) => val.includes('@') || 'Invalid email format.']"
@@ -627,12 +628,11 @@ export default defineComponent({
             void this.$router.push({ path: '/' });
           })
           .catch((e) => {
-            console.log(e);
             this.$q.notify({
               color: 'negative',
               position: 'top',
               message: `There was an error when submitting your credentials. Reason: ${
-                e.response.data.detail || e.message
+                e.message || e.response.data.detail
               }.`,
               timeout: 15000,
               progress: true,

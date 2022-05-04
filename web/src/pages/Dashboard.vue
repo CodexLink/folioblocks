@@ -146,7 +146,7 @@ let dashboardOptions = {
   },
   organization: {
     buttons: ['Generate User', 'Refer Credentials'],
-    links: ['/org/insert', '/org/insert'],
+    links: ['/org/insert/new', '/org/insert/standby'],
     context: {
       left: {
         title: 'Logs vs Extra Info Dominance',
@@ -269,7 +269,7 @@ export default defineComponent({
             response.data.reports.total_associated_extra
           } out of ${
             response.data.reports.total_overall_info_outside
-          } transactions`;
+          } transactions.`;
           this.context_progress_bottom = '';
           // * Adjust the context for the applicant.
           // - Replace the button context.
@@ -280,7 +280,17 @@ export default defineComponent({
 
           // - Replace the cards context.
         })
-        .catch((e) => {});
+        .catch((_e) => {
+          this.$q.notify({
+            color: 'red',
+            position: 'top',
+            message:
+              'Failed to parse data from the dashboard. Please try again.',
+            timeout: 10000,
+            progress: true,
+            icon: 'mdi-cancel',
+          });
+        });
     },
   },
 });

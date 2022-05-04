@@ -254,7 +254,7 @@ export default defineComponent({
           this.$q.notify({
             color: 'red',
             position: 'top',
-            message: e.response.data.detail || e.message,
+            message: e.message || e.response.data.detail,
             timeout: 10000,
             progress: true,
             icon: 'mdi-cancel',

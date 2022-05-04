@@ -161,8 +161,6 @@ export default defineComponent({
 
     const isAuthorized = ref(containsAuth);
 
-    console.log(isAuthorized.value, $q.localStorage.getItem('token'));
-
     return {
       leftDrawerOpen,
       isAuthorized,

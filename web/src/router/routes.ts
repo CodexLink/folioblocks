@@ -44,7 +44,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/ExplorerTransactionDetails.vue'),
       },
       {
-        path: '/org/insert/',
+        path: '/org/insert/:action(new|standby)',
         component: () => import('pages/InsertContextView.vue'),
       },
       {
