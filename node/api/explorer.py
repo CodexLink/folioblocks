@@ -60,7 +60,7 @@ async def get_node_info() -> Blockchain:
     if isinstance(blockchain_instance, BlockchainMechanism):
 
         return Blockchain(
-            block=await blockchain_instance.get_blocks(limit_to=5),
+            blocks=await blockchain_instance.get_blocks(limit_to=5),
             transactions=await blockchain_instance.get_transactions(limit_to=5),
             node_info=await blockchain_instance.get_blockchain_public_state(),
         )
@@ -203,7 +203,7 @@ async def get_addresses(
 
     get_entity: Select = select(
         [users.c.unique_address, users.c.association, users.c.type]
-    ).where(users.c.type != UserEntity.MASTER_NODE_USER)
+    ).select_from(users)
 
     fetched_entities: list[Mapping[Any, Any]] = await database_instance.fetch_all(
         get_entity
@@ -214,7 +214,10 @@ async def get_addresses(
         node_negotiations_count: int = 0
 
         # - Fill other fields based on their role.
-        if entity.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
+        if (
+            entity.type is UserEntity.ARCHIVAL_MINER_NODE_USER
+            or entity.type is UserEntity.MASTER_NODE_USER
+        ):
             get_negotiation_count_query: Select = select([func.count()]).where(
                 consensus_negotiation.c.peer_address == entity.unique_address
             )
@@ -288,16 +291,22 @@ async def get_address(
     else:
 
         # - Fill the information of the field `description` if this user was a type `UserEntity.ORGANIZATION_DASHBOARD_USER`.
-        if user_props.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
+        if (
+            user_props.type is UserEntity.ORGANIZATION_DASHBOARD_USER
+            or user_props.type is UserEntity.APPLICANT_DASHBOARD_USER
+        ):
             user_description = user_props.description
 
-            get_association_name_query: Select = select([associations.c.name]).where(
-                associations.c.address == user_props.association
-            )
+            get_association_name_query: Select = select(
+                [associations.c.name, associations.c.group]
+            ).where(associations.c.address == user_props.association)
 
-            association_name = await database_instance.fetch_val(
+            association_context = await database_instance.fetch_one(
                 get_association_name_query
             )
+
+            if association_context is not None:
+                association_name = f"{association_context.name}, {association_context.group.name.title()} Group Type"
 
         # - Fill the information of the field `tx_bindings_count` if this user was a type `UserEntity.APPLICANT_DASHBOARD_USER`.
         elif user_props.type is UserEntity.APPLICANT_DASHBOARD_USER:
@@ -307,20 +316,14 @@ async def get_address(
 
             tx_count = await database_instance.fetch_val(user_tx_count_query)
 
-        # - FIll the information of the field `negotiations_count` if this user was a type `UserEntity.ARCHIVAL_MINER_NODE_USER`.
-        elif user_props.type is UserEntity.ARCHIVAL_MINER_NODE_USER:
+        # - FIll the information of the field `negotiations_count` for both `UserEntity.ARCHIVAL_MINER_NODE_USER` and `UserEntity.MASTER_NODE_USER`.
+        else:
             user_negotiation_count_query: Select = select(func.count()).where(
                 consensus_negotiation.c.peer_address == uuid
             )
 
             negotiation_count = await database_instance.fetch_val(
                 user_negotiation_count_query
-            )
-
-        else:
-            raise HTTPException(
-                detail="Failed to parse user due to out of scope type.",
-                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
 
         return EntityAddressDetail(

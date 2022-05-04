@@ -22,7 +22,6 @@ from blueprint.models import portfolio_settings, tx_content_mappings, users
 from blueprint.schemas import (
     ApplicantEditableProperties,
     DashboardContext,
-    GroupTransaction,
     Portfolio,
     PortfolioSettings,
     Student,
@@ -52,12 +51,10 @@ from core.constants import (
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
     FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX,
-    TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
     USER_FILES_FOLDER_NAME,
     HashUUID,
     TransactionActions,
 )
-from blueprint.schemas import AdditionalContextTransaction, ApplicantLogTransaction
 from core.constants import FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
 from blueprint.schemas import PortfolioLoadedContext
 

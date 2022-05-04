@@ -31,7 +31,6 @@ from core.constants import (
     URLAddress,
     UserActivityState,
     UserEntity,
-    UserRole,
 )
 from fastapi import UploadFile
 from pydantic import BaseModel, EmailStr, Field
@@ -301,6 +300,7 @@ class TransactionOverview(BaseModel):
     action: TransactionActions
     from_address: AddressUUID
     to_address: AddressUUID | None
+    timestamp: datetime | None
 
 
 class Transaction(TransactionOverview, BaseModel):
@@ -539,11 +539,12 @@ class Users(BaseModel):
 # # Explorer API (Seperatable) — START
 class BlockOverview(BaseBlock):
     validator: AddressUUID
+    tx_count: int
     timestamp: datetime
 
 
 class Blockchain(BaseModel):
-    block: list[BlockOverview] | None
+    blocks: list[BlockOverview] | None
     transactions: list[TransactionOverview] | None
     node_info: NodeMasterInformation | None
 

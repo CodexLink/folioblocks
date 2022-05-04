@@ -92,7 +92,7 @@ from core.constants import (
     BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
     BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
-    BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK,
+    BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK,
     BLOCKCHAIN_NAME,
     BLOCKCHAIN_NEGOTIATION_ID_LENGTH,
     BLOCKCHAIN_NODE_JSON_TEMPLATE,
@@ -182,7 +182,6 @@ class BlockchainMechanism(ConsensusMechanism):
         self.main_block_id: int = 1  # * The ID of the block that allocatable and appendable from the blockchain.
         self.leading_block_id: int = 0  # * The current block ID that is available to assign from a block. It initially refers to the value of `self.main_block_id`, wherein this leads to ensure that while the master node waits for `self.main_block_id` to return, it will render other blocks to avoid congestion.
         self.__cached_total_transactions: int = 0
-        self.__n_available_nodes: int = 0
 
         # # Instances
         self.node_identity = auth_tokens  # - Equivalent to get_identity_tokens()
@@ -364,6 +363,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 id=block["id"],
                 content_bytes_size=block["content_bytes_size"],
                 validator=block["contents"]["validator"],
+                tx_count=len(block["contents"]["transactions"]),
                 timestamp=block["contents"]["timestamp"],
             )
 
@@ -574,7 +574,6 @@ class BlockchainMechanism(ConsensusMechanism):
 
     @ensure_blockchain_ready()
     async def get_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
-        block_index: int = self.main_block_id - 2
 
         # ! This some kind of quadratic iteration, yes o of time, not sure by means of complexity, but all I know is that it will take too long.
 
@@ -617,7 +616,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     if was_external:
 
                         return TransactionDetail(
-                            from_block=block_index,
+                            from_block=block_idx + 1,
                             transaction=Transaction(
                                 tx_hash=HashUUID(each_transaction["tx_hash"]),
                                 action=TransactionActions(each_transaction["action"]),
@@ -634,6 +633,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                     ),
                                     context=HashUUID(payload_context),
                                 ),
+                                # timestamp=each_transaction["timestamp"],
+                                timestamp=None,
                             ),
                         )
 
@@ -787,7 +788,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
 
                         return TransactionDetail(
-                            from_block=block_index,
+                            from_block=block_idx,
                             transaction=Transaction(**each_transaction),
                         )
 
@@ -833,6 +834,8 @@ class BlockchainMechanism(ConsensusMechanism):
                             action=each_accounted_tx["action"],
                             from_address=each_accounted_tx["from_address"],
                             to_address=each_accounted_tx["to_address"],
+                            # timestamp=each_accounted_tx["timestamp"],
+                            timestamp=None,
                         )
                     )
 
@@ -1100,7 +1103,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             ):
                                 association_referred = True  # * We need this to avoid polluting blockchain content as a receipt.
                             else:
-                                exception_message = "The supplied parameter for the `association` address reference does not exist or the payload contains a certain fields that shouldn't exist based on condition."
+                                exception_message = "The supplied parameter for the `association` address reference does not exist is the association conflicts with the existing association or the payload contains a certain fields that shouldn't exist based on condition."
                                 exception_status = HTTPStatus.NOT_FOUND
 
                                 # ! To avoid complexity, just return here instead of going outer scope which is difficult.
@@ -1610,36 +1613,29 @@ class BlockchainMechanism(ConsensusMechanism):
         self.__time_elapsed_from_tx_collection = (
             time()
         )  # * Reset the timer from this point of execution.
-        first_instance: bool = True
         generated_block: Block | None = None
 
         while True:
             # - Wait until a number of sufficient transactions were received.
             # @o To save some processing time, we need to have a sufficient transactions before we process them to a block.
-            required_transactions: int = (
-                BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                if first_instance
-                or not self.__n_available_nodes  # - If blockchain is in its first instance or doesn't have any available nodes.
-                else (
-                    BLOCKCHAIN_MINIMUM_TRANSACTIONS_TO_BLOCK
-                    + (self.__n_available_nodes * BLOCKCHAIN_TRANSACTION_COUNT_PER_NODE)
-                )
-            )
+            calculated_user_tx: int = 0
+
+            for each_tx in self.__transaction_container:
+                if isinstance(each_tx.payload, GroupTransaction):
+                    calculated_user_tx += 1
 
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({len(self.__transaction_container)}/{required_transactions} transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
+                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({calculated_user_tx}/{                BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK} transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
             )
 
             # - Sleep first due to block timer.
             await sleep(self.block_timer_seconds)
 
             # - Since we already have a node, do not let this one go.
-            if (len(self.__transaction_container) >= required_transactions) and not len(
-                self.__unsent_block_container
-            ):
-                logger.info(
-                    f"Number of required transactions {len(self.__transaction_container)} were sufficient!"
-                )
+            if (
+                calculated_user_tx >= BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK
+            ) and not len(self.__unsent_block_container):
+                logger.info(f"Number of required transactions were sufficient!")
 
                 # - Create a block from all of the transactions.
                 generated_block = await self.__create_block()
@@ -1949,9 +1945,6 @@ class BlockchainMechanism(ConsensusMechanism):
             return None
 
         logger.info(f"{len(available_nodes)} archival miner node candidate/s found!")
-
-        # - Assign currently online nodes.
-        self.__n_available_nodes = len(available_nodes)
 
         for candidate_idx, each_candidate in enumerate(available_nodes):
             try:
@@ -2466,6 +2459,20 @@ class BlockchainMechanism(ConsensusMechanism):
                 ).decode("utf-8")
             )
 
+        print(
+            "DEBUG THIS, encrypted.",
+            payload_to_encrypt.dict(),
+            export_to_json(payload_to_encrypt.dict()),
+            sha256(export_to_json(payload_to_encrypt.dict())).hexdigest(),
+        )
+
+        print(
+            "DEBUG THIS, raw",
+            payload.dict(),
+            export_to_json(payload.dict()),
+            sha256(export_to_json(payload.dict())).hexdigest(),
+        )
+
         # - Build the transaction
         try:
             built_internal_transaction: Transaction = Transaction(
@@ -2486,6 +2493,9 @@ class BlockchainMechanism(ConsensusMechanism):
                 if isinstance(payload_to_encrypt, NodeTransaction)
                 else AddressUUID(from_address),
                 to_address=AddressUUID(to_address) if to_address is not None else None,
+                timestamp=external_datetime_creation
+                if external_datetime_creation is not None
+                else datetime.now(),
             )
 
         except PydanticValidationError as e:

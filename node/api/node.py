@@ -31,7 +31,6 @@ from blueprint.schemas import (
     ConsensusToMasterPayload,
     GroupTransaction,
     NodeCertificateTransaction,
-    NodeConfirmMineConsensusTransaction,
     NodeConsensusInformation,
     NodeInformation,
     NodeMasterInformation,

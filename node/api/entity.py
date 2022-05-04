@@ -123,12 +123,14 @@ async def register_entity(
             detail="Provided `auth_token` is not found.",
             status_code=HTTPStatus.NOT_FOUND,
         )
-
-    if new_user_auth_register.account_type is UserEntity.ORGANIZATION_DASHBOARD_USER:
-        if (
+    print(credentials)
+    if (
+        new_user_auth_register.account_type is UserEntity.ORGANIZATION_DASHBOARD_USER
+        and (
             isinstance(credentials.first_name, str)
             and isinstance(credentials.last_name, str)
-        ) and (
+        )
+        and (
             (
                 isinstance(credentials.association_name, str)
                 and credentials.association_address is None
@@ -143,12 +145,14 @@ async def register_entity(
                 and credentials.association_founded is None
                 and credentials.association_description is None
             )
-        ):
+        )
+    ):
 
-            # - Ensure that this only runs when other nodes registered, this is not applied for `MASTER_NODE`.
-            # @o When registering a user, there is a need of special handling, as things are recorded in the blockchain.
-            if isinstance(blockchain_instance, BlockchainMechanism):
-                new_user_insertion_response: HTTPException | None = await blockchain_instance.insert_external_transaction(
+        # - Ensure that this only runs when other nodes registered, this is not applied for `MASTER_NODE`.
+        # @o When registering a user, there is a need of special handling, as things are recorded in the blockchain.
+        if isinstance(blockchain_instance, BlockchainMechanism):
+            new_user_insertion_response: HTTPException | None = (
+                await blockchain_instance.insert_external_transaction(
                     action=TransactionActions.ORGANIZATION_USER_REGISTER,
                     from_address=blockchain_instance.node_identity[0],
                     to_address=None,
@@ -171,36 +175,50 @@ async def register_entity(
                         ),
                     ),
                 )
-
-                if isinstance(new_user_insertion_response, HTTPException):
-                    raise new_user_insertion_response
-
-            dispose_auth_code_for_org: Update = (
-                auth_codes.update()
-                .where(auth_codes.c.code == new_user_auth_register.code)
-                .values(is_used=True)
             )
 
-            await database_instance.execute(dispose_auth_code_for_org)
+            if isinstance(new_user_insertion_response, HTTPException):
+                raise new_user_insertion_response
 
-            return JSONResponse(
-                content={
-                    "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
-                },
-                status_code=HTTPStatus.ACCEPTED,
-            )
-        else:
-            raise HTTPException(
-                detail=f"Your role is `{new_user_auth_register.account_type.value}` and fields given were insufficient.",
-                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            )
+        dispose_auth_code_for_org: Update = (
+            auth_codes.update()
+            .where(auth_codes.c.code == new_user_auth_register.code)
+            .values(is_used=True)
+        )
+
+        await database_instance.execute(dispose_auth_code_for_org)
+
+        return JSONResponse(
+            content={
+                "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
+            },
+            status_code=HTTPStatus.ACCEPTED,
+        )
 
     elif new_user_auth_register.account_type is UserEntity.APPLICANT_DASHBOARD_USER:
         raise HTTPException(
             detail="You are registering as an applicant, which is not allowed by external. Please go to any organization to have your account setup and verified.",
             status_code=HTTPStatus.FORBIDDEN,
         )
-    else:
+    elif (
+        new_user_auth_register.account_type is UserEntity.ARCHIVAL_MINER_NODE_USER
+        or new_user_auth_register.account_type is UserEntity.MASTER_NODE_USER
+    ):
+
+        if (
+            credentials.association_name is not None
+            or credentials.association_address is not None
+            or credentials.association_type is not None
+            or credentials.association_founded is not None
+            or credentials.association_description is not None
+            or credentials.first_name is not None
+            or credentials.last_name is not None
+        ):
+            raise HTTPException(
+                detail=f"Fields for the organization registration were detected. Are you trying to register as a {UserEntity.ARCHIVAL_MINER_NODE_USER.name} or {UserEntity.MASTER_NODE_USER.name}? Please use the `folioblocks-node-cli`.",
+                status_code=HTTPStatus.FORBIDDEN,
+            )
+
         dict_credentials: dict[str, Any] = credentials.dict()
 
         # - Our auth code should contain the information if that is applicable at certain role.
@@ -276,17 +294,22 @@ async def register_entity(
                         ),
                     )
 
+                    return EntityRegisterResult(
+                        user_address=user_new_uuid,
+                        username=credentials.username,
+                        date_registered=datetime.now(),
+                        role=dict_credentials["type"],
+                    )
+
         except IntegrityError as e:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
                 detail=f"Your credential already exists. Please request to replace your password if you already have an account. | Info: {e}",
             )
-
-        return EntityRegisterResult(
-            user_address=user_new_uuid,
-            username=credentials.username,
-            date_registered=datetime.now(),
-            role=dict_credentials["type"],
+    else:
+        raise HTTPException(
+            detail=f"Cannot proceed when field and the given role conditions (received {new_user_auth_register.account_type.name}) were unmet. Please remove other fields with respect to your given role by your representative/s.",
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         )
 
 

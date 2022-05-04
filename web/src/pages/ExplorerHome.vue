@@ -279,13 +279,16 @@ export default defineComponent({
         });
       }
       // ! Directing to address.
-      else if (this.searchContext.startsWith('fl:')) {
+      else if (
+        this.searchContext.startsWith('fl:') &&
+        this.searchContext.length === 35
+      ) {
         void this.$router.push({
           path: `/explorer/address/${this.searchContext}`,
         });
       }
       // ! Directing to transactions.
-      else if (this.searchContext.length == 64) {
+      else if (this.searchContext.length === 64) {
         void this.$router.push({
           path: `/explorer/transaction/${this.searchContext}`,
         });
