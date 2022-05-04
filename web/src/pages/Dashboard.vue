@@ -248,7 +248,7 @@ export default defineComponent({
           // - Update Card #1.
           this.context_right_top =
             dashboardOptions.organization.context.right_top.title;
-          this.context_right_top_primary = `Currently, there was ${response.data.reports.total_associated} out of ${response.data.reports.total_users} users from the system.`;
+          this.context_right_top_primary = `Currently, there was ${response.data.reports.total_associated} out of ${response.data.reports.total_users} associated users from the system.`;
           this.context_progress_top =
             response.data.reports.total_associated /
             response.data.reports.total_users;

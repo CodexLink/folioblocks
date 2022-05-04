@@ -38,12 +38,18 @@
     <div class="form absolute-center">
       <div class="absolute-center insertdata">
         <q-card v-show="existing_user" class="my-card">
+          <q-linear-progress
+            v-if="isProcessing"
+            query
+            color="secondary"
+            class="q-mt-sm"
+          />
           <q-tabs
             v-model="tab"
             dense
             class="text-grey"
-            active-color="black"
-            indicator-color="black"
+            active-color="secondary"
+            indicator-color="secondary"
             align="justify"
           >
             <q-tab name="addinfo" label="Add Document" class="tab" />
@@ -54,40 +60,90 @@
 
           <q-tab-panels v-model="tab" animated class="panels">
             <q-tab-panel name="addinfo">
-              <form>
+              <q-form
+                @submit.prevent="submitLog"
+                @validation-error="errorOnLog"
+                :autofocus="true"
+              >
+                <q-card-section class="title">
+                  <p class="text-left">
+                    Insert a Document or a Information to Refer at Student
+                  </p>
+                </q-card-section>
+                <p class="text-justify" style="padding: 2%">
+                  This form allows you to insert a reference with a
+                  <strong>proof</strong> from the student. It can be a
+                  certification, work experience, promotion, and any other proof
+                  that a document or an information can infer.
+                </p>
+                <p class="text-justify" style="padding: 0 2%">
+                  <strong>Note that</strong>, it is your
+                  <strong>responsibility</strong> to mask out any detailed
+                  information regarding this student. This system does not
+                  pseudonymize information within the document and is only
+                  designed as a source origin of this claims.
+                </p>
                 <q-input
                   class="input"
                   outlined
                   color="secondary"
-                  v-model="name"
-                  label="Name"
-                />
-
-                <q-input
-                  class="input"
-                  outlined
-                  color="secondary"
-                  v-model="description"
-                  label="Description"
+                  v-model="new_log_name"
                   :disable="isProcessing"
-                  hint=""
+                  counter
+                  label="Log Name"
+                  hint="The name of this log or the general context of it, please keep it concise and easy to understand."
+                  :rules="[
+                    (val) =>
+                      (val && val.length >= 8) ||
+                      'This is required. Must have 8 characters and above. ',
+                  ]"
+                  lazy-rules
                 />
 
-                <q-select
+                <q-input
                   class="input"
-                  color="secondary"
                   outlined
-                  v-model="model"
-                  :options="options"
-                  label="Role"
+                  color="secondary"
+                  v-model="new_log_description"
+                  label="Log Description"
+                  :disable="isProcessing"
+                  counter
+                  hint="The context of this log. Please provide enough information as possible, but keep it clean."
+                  :rules="[
+                    (val) =>
+                      (val && val.length >= 8) ||
+                      'This is required. Must have 8 characters and above. ',
+                  ]"
+                  lazy-rules
+                />
+
+                <q-input
+                  class="input"
+                  outlined
+                  color="secondary"
+                  v-model="new_log_role"
+                  label="Student's Role"
+                  :disable="isProcessing"
+                  counter
+                  hint="The student's role from this log, generally more of a role from the job, keep it concise as possible."
+                  :rules="[
+                    (val) =>
+                      (val && val.length >= 4) ||
+                      'This is required. Must have 4 characters and above. ',
+                  ]"
+                  lazy-rules
                 />
 
                 <q-file
                   class="input"
-                  v-model="files"
-                  label="Upload files"
+                  v-model="new_log_file"
+                  label="Document Proof (PDF Files Only)"
+                  hint="Must contain no sensitive information and should be kept as a proof as a supporting context."
                   filled
                   multiple
+                  counter
+                  :disable="isProcessing"
+                  accept=".pdf"
                 >
                   <template v-slot:prepend>
                     <q-icon name="attach_file" />
@@ -96,41 +152,108 @@
 
                 <q-input
                   class="input"
-                  v-model="datestart"
                   filled
-                  type="date"
-                  prefix="Duration Start"
-                />
+                  v-model="new_log_date_start"
+                  mask="date"
+                  :rules="['new_log_date_start']"
+                  label="Log Date Start"
+                  :disable="isProcessing"
+                  hint="The date from where this log has started."
+                >
+                  <template v-slot:append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy
+                        ref="qDateProxy"
+                        cover
+                        transition-show="scale"
+                        transition-hide="scale"
+                      >
+                        <q-date
+                          v-model="new_log_date_start"
+                          today-btn
+                          :options="optionsFn"
+                          color="secondary"
+                        >
+                          <div class="row items-center justify-end">
+                            <q-btn
+                              v-close-popup
+                              label="Close"
+                              color="primary"
+                              flat
+                            />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
 
                 <q-input
                   class="input"
-                  v-model="dateend"
                   filled
-                  type="date"
-                  prefix="Duration End"
-                />
+                  v-model="new_log_date_end"
+                  mask="date"
+                  :disable="isProcessing"
+                  :rules="['new_log_date_end']"
+                  label="Log Date End"
+                  hint="The date from where this log has ended. This should not start as early as the `Log Date Start`!"
+                >
+                  <template v-slot:append>
+                    <q-icon name="event" class="cursor-pointer">
+                      <q-popup-proxy
+                        ref="qDateProxy"
+                        cover
+                        transition-show="scale"
+                        transition-hide="scale"
+                      >
+                        <q-date
+                          v-model="new_log_date_end"
+                          today-btn
+                          :options="optionsFn"
+                          color="secondary"
+                        >
+                          <div class="row items-center justify-end">
+                            <q-btn
+                              v-close-popup
+                              label="Close"
+                              color="primary"
+                              flat
+                            />
+                          </div>
+                        </q-date>
+                      </q-popup-proxy>
+                    </q-icon>
+                  </template>
+                </q-input>
 
                 <div class="text-center q-ma-md">
                   <q-btn
                     outline
                     class="close"
-                    color="secondary"
-                    label="Close"
-                    @click="existing_user = false"
+                    color="red"
+                    label="Clear Fields"
+                    @click="clearLogForm"
+                    :disable="isProcessing"
                   />
 
                   <q-btn
                     outline
+                    type="submit"
                     class="insert"
                     color="secondary"
+                    :disable="isProcessing"
                     label="Insert"
                   />
                 </div>
-              </form>
+              </q-form>
             </q-tab-panel>
 
             <q-tab-panel name="addremarks">
-              <form>
+              <q-form
+                @submit.prevent="submitRemark"
+                @validation-error="errorOnRemark"
+                :autofocus="true"
+              >
                 <q-input
                   class="input"
                   outlined
@@ -163,7 +286,7 @@
                     label="Insert"
                   />
                 </div>
-              </form>
+              </q-form>
             </q-tab-panel>
           </q-tab-panels>
         </q-card>
@@ -178,7 +301,7 @@
             class="q-mt-sm"
           />
           <q-card-section class="title">
-            <p class="text-left">Insert New Student</p>
+            <p class="text-left">Insert a New Student</p>
           </q-card-section>
           <p class="text-justify" style="padding: 2%">
             This form was intended for providing students the capability to
@@ -388,8 +511,8 @@
                 class="close"
                 color="red"
                 label="Clear Fields"
-                :disable="isProcessing"
                 @click="clearRegistrationForm"
+                :disable="isProcessing"
               />
 
               <q-btn
@@ -424,8 +547,6 @@ export default {
       tab: ref('addinfo'),
       tabinsert: ref('insertnewuser'),
 
-      model: ref(null),
-      options: ['Institution', 'Applicant'],
       datestart: ref(''),
       dateend: ref(''),
     };
@@ -458,12 +579,19 @@ export default {
       new_user: ref(false),
       isProcessing: ref(false),
 
-      name: '',
-      description: '',
+      new_log_name: ref(''),
+      new_log_description: ref(''),
+      new_log_role: ref(''),
+
+      new_log_date_start: ref(null),
+      new_log_date_end: ref(
+        new Date().toISOString().slice(0, 10).replaceAll('-', '/')
+      ),
+
       title: '',
       extradescription: '',
 
-      files: ref(''),
+      new_log_file: ref(null),
 
       username: ref(''),
     };
@@ -560,6 +688,52 @@ export default {
         icon: 'mdi-account-check',
       });
     },
+    submitLog() {
+      this.isProcessing = true;
+    },
+    errorOnLog() {
+      this.$q.notify({
+        color: 'negative',
+        position: 'top',
+        message:
+          'There was an error from one of the log fields. Please check and ensure that all conditions are met, then try again.',
+        timeout: 10000,
+        progress: true,
+        icon: 'report_problem',
+      });
+    },
+    clearLogForm() {
+      this.new_log_name = '';
+      this.new_log_description = '';
+      this.new_log_role = '';
+      this.new_log_date_start = null;
+      this.new_log_date_end = null;
+
+      this.$q.notify({
+        color: 'green',
+        position: 'top',
+        message: 'Log referral fields has been cleared!',
+        timeout: 10000,
+        progress: true,
+        icon: 'mdi-account-check',
+      });
+    },
+
+    submitRemark() {},
+    errorOnRemark() {},
+    clearLogForm() {},
+    optionsFn(org_date) {
+      let datePlusOne = new Date();
+
+      // * Modify the new instance, 'date' + 1.
+      datePlusOne.setDate(datePlusOne.getDate() + 1);
+
+      return (
+        new Date(null).toISOString().slice(0, 10).replaceAll('-', '/') >=
+          org_date ||
+        org_date <= datePlusOne.toISOString().slice(0, 10).replaceAll('-', '/')
+      );
+    },
   },
 };
 </script>
@@ -597,7 +771,7 @@ export default {
 .form {
   background-color: #a7eaff;
   border-style: solid;
-  height: 92%;
+  height: 95%;
   width: 60%;
   margin-left: 10%;
   margin-top: 2%;
