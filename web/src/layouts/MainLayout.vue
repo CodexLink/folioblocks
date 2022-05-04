@@ -22,6 +22,7 @@
           color="white"
           icon="people"
           label="Addresses"
+          v-if="onExplorer"
           to="/explorer/addresses"
         />
 
@@ -210,6 +211,7 @@ export default defineComponent({
     return {
       user: ref('0x000000000000000'),
       role: ref('Unidentified.'),
+      onExplorer: ref(false),
     };
   },
   setup() {
@@ -252,7 +254,7 @@ export default defineComponent({
           this.$q.notify({
             color: 'red',
             position: 'top',
-            message: e.response.data.detail,
+            message: e.response.data.detail || e.message,
             timeout: 10000,
             progress: true,
             icon: 'mdi-cancel',
@@ -294,7 +296,6 @@ export default defineComponent({
       });
     },
     checkPathAndAuth() {
-      console.log(this.$route);
       if (
         // ! Whenever a user goes from a different path without getting itself authenticate, go back to its recent page.
         (!this.$route.path.includes('/explorer') && this.containsNoAuth) ||
@@ -327,7 +328,9 @@ export default defineComponent({
           icon: 'mdi-cancel',
         });
       }
-      console.log(this.$route.path, this.role, this.$route.params.addressable);
+
+      // * Check if we are in explorer.
+      this.onExplorer = this.$route.path.includes('/explorer') ? true : false;
     },
   },
   updated() {

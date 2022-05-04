@@ -69,6 +69,12 @@ class PortfolioLoadedContext(BaseModel):
 # # Dashboard API — START
 
 
+class PortfolioSettings(BaseModel):
+    enable_sharing: bool
+    expose_email_info: bool
+    show_files: bool
+
+
 class ApplicantEditableProperties(BaseModel):
     avatar: UploadFile | str | None
     description: str | None
@@ -76,19 +82,23 @@ class ApplicantEditableProperties(BaseModel):
 
 
 class DashboardApplicant(BaseModel):
-    tx_associated_count: int
-    last_update: datetime
+    total_txs_overall: int  # * (logs_associated + extras_associated) / total from chain
 
+    # - For Total Credentials Associated.
+    logs_associated_count: float
+    extra_associated_count: float
 
-class DashboardArchival(BaseModel):
-    negotiation_count: int
-    last_block_hashed: int
+    # - For Portfolio.
+    portfolio: PortfolioSettings
 
 
 class DashboardOrganization(BaseModel):
-    total_students: int
+    # ! Note, for total org transactions, do total_associated_logs + total_associated_extra.
+    total_associated: int
+    total_users: int
     total_associated_logs: int
     total_associated_extra: int
+    total_overall_info_outside: int  # ! This was going to be the baseline for calculating percetange of both fields above of this comment.
 
 
 class DashboardContext(BaseModel):
@@ -97,13 +107,7 @@ class DashboardContext(BaseModel):
     last_name: str | None
     username: str
     role: UserEntity
-    reports: DashboardApplicant | DashboardArchival | DashboardOrganization | None
-
-
-class PortfolioSettings(BaseModel):
-    enable_sharing: bool
-    expose_email_info: bool
-    show_files: bool
+    reports: DashboardApplicant | DashboardOrganization
 
 
 class PortfolioLogMinimal(BaseModel):

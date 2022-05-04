@@ -468,6 +468,7 @@ export default {
 .add {
   width: 20%;
   font-family: 'Poppins';
+  margin-bottom: 1%;
 }
 
 .insert {

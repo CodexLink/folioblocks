@@ -57,6 +57,7 @@ from core.constants import (
 )
 from core.constants import FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
 from blueprint.schemas import PortfolioLoadedContext
+from blueprint.schemas import DashboardApplicant, DashboardOrganization
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -100,6 +101,7 @@ async def get_dashboard_data(
             users.c.last_name,
             users.c.username,
             users.c.type,
+            users.c.association,
         ]
     ).where(users.c.unique_address == entity_address_ref)
 
@@ -111,13 +113,130 @@ async def get_dashboard_data(
             status_code=HTTPStatus.NOT_FOUND,
         )
 
+    resolved_reports: DashboardApplicant | DashboardOrganization | None = None
+
+    if user_basic_context.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
+        # - Get reports from the `users` for the the number of associated people from the association.
+        get_associates_query: Select = select(
+            [func.count(), users.c.unique_address]
+        ).where(users.c.association == user_basic_context.association)
+
+        associates = await database_instance.fetch_one(get_associates_query)
+
+        # - Get reports from the `tx_content_mapping` for the number of associated logs and extra.
+        associate_log_count: int = 0
+        associate_extra_count: int = 0
+
+        for each_associate in associates.unique_address:
+            get_associated_logs_query: Select = select([func.count()]).where(
+                (tx_content_mappings.c.address_ref == each_associate)
+                & (
+                    tx_content_mappings.c.content_type
+                    == TransactionContextMappingType.APPLICANT_LOG
+                )
+            )
+
+            associate_logs_count = await database_instance.fetch_val(
+                get_associated_logs_query
+            )
+
+            if associate_log_count is not None and isinstance(associate_log_count, int):
+                associate_log_count += associate_logs_count
+
+            get_associated_extra_query: Select = select([func.count()]).where(
+                (tx_content_mappings.c.address_ref == each_associate)
+                & (
+                    tx_content_mappings.c.content_type
+                    == TransactionContextMappingType.APPLICANT_ADDITIONAL
+                )
+            )
+
+            associate_extra_related = await database_instance.fetch_val(
+                get_associated_extra_query
+            )
+
+            if associate_extra_related is not None and isinstance(
+                associate_extra_related, int
+            ):
+                associate_extra_count += associate_extra_related
+
+        # - Get the overall count of the transaction to get the calculation fine.
+        get_overall_tx_count_query: Select = select([func.count()]).select_from(
+            tx_content_mappings
+        )
+
+        overall_tx_count = await database_instance.fetch_val(get_overall_tx_count_query)
+
+        # - Get the overall user count from the system.
+        get_overall_user_count_query: Select = select([func.count()]).select_from(users)
+
+        user_count = await database_instance.fetch_val(get_overall_user_count_query)
+
+        resolved_reports = DashboardOrganization(
+            total_associated=associates.count,
+            total_users=user_count,
+            total_associated_logs=associate_log_count,
+            total_associated_extra=associate_extra_count,
+            total_overall_info_outside=overall_tx_count,
+        )
+
+    elif user_basic_context.type is UserEntity.APPLICANT_DASHBOARD_USER:
+        # - Get count of associated logs from this applicant.
+        get_logs_associated_count_query: Select = select([func.count()]).where(
+            tx_content_mappings.c.address_ref == entity_address_ref
+        )
+
+        logs_count = await database_instance.fetch_val(get_logs_associated_count_query)
+
+        # - Get count of associated extra from this applicant.
+        get_extra_associated_count_query: Select = select([func.count()]).where(
+            tx_content_mappings.c.address_ref == entity_address_ref
+        )
+
+        extra_count = await database_instance.fetch_val(
+            get_extra_associated_count_query
+        )
+
+        # - Get the overall count of the transaction to get the calculation fine.
+        overall_tx_count_query: Select = select([func.count()]).select_from(
+            tx_content_mappings
+        )
+
+        overall_tx_count = await database_instance.fetch_val(overall_tx_count_query)
+
+        # - Get portfolio of this user for client-side calculation.
+        get_portfolio_context_query: Select = portfolio_settings.select().where(
+            portfolio_settings.c.from_user == entity_address_ref
+        )
+
+        portfolio_context = await database_instance.fetch_one(
+            get_portfolio_context_query
+        )
+
+        resolved_reports = DashboardApplicant(
+            extra_associated_count=extra_count,
+            logs_associated_count=logs_count,
+            total_txs_overall=overall_tx_count,
+            portfolio=PortfolioSettings(
+                enable_sharing=portfolio_context.sharing_state,
+                expose_email_info=portfolio_context.expose_email_state,
+                show_files=portfolio_context.show_files,
+            ),
+        )
+
+    else:
+        raise HTTPException(
+            detail="Cannot parse this user's information due to its role unqualified to access the dashboard.",
+            status_code=HTTPStatus.FORBIDDEN,
+        )
+
     return DashboardContext(
         address=entity_address_ref,
         first_name=user_basic_context.first_name,
         last_name=user_basic_context.last_name,
         username=user_basic_context.username,
         role=user_basic_context.type,
-        reports=None,  # # For now.
+        reports=resolved_reports,
     )
 
 
