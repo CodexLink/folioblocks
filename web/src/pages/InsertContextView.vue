@@ -687,6 +687,7 @@ export default {
             progress: true,
             icon: 'report_problem',
           });
+          this.clearRegistrationForm(false);
         })
         .catch((e) => {
           this.$q.notify({
@@ -714,7 +715,7 @@ export default {
         icon: 'report_problem',
       });
     },
-    clearRegistrationForm() {
+    clearRegistrationForm(showMessage = true) {
       this.new_student_first_name = '';
       this.new_student_last_name = '';
       this.new_student_username = '';
@@ -726,14 +727,15 @@ export default {
       this.new_student_recorded_year_level = '';
       this.new_student_prefer_role = '';
 
-      this.$q.notify({
-        color: 'green',
-        position: 'top',
-        message: 'Student registration fields has been cleared!',
-        timeout: 10000,
-        progress: true,
-        icon: 'mdi-account-check',
-      });
+      if (showMessage)
+        this.$q.notify({
+          color: 'green',
+          position: 'top',
+          message: 'Student registration fields has been cleared!',
+          timeout: 10000,
+          progress: true,
+          icon: 'mdi-account-check',
+        });
     },
     submitLog() {
       this.isProcessing = true;
@@ -812,6 +814,7 @@ export default {
               progress: true,
               icon: 'report_problem',
             });
+            this.clearLogForm(false);
           })
           .catch((e) => {
             this.$q.notify({
@@ -837,7 +840,7 @@ export default {
         icon: 'report_problem',
       });
     },
-    clearLogForm() {
+    clearLogForm(showMessage = true) {
       this.new_log_name = '';
       this.new_log_description = '';
       this.new_log_role = '';
@@ -845,14 +848,15 @@ export default {
       this.new_log_date_start = null;
       this.new_log_date_end = null;
 
-      this.$q.notify({
-        color: 'green',
-        position: 'top',
-        message: 'Log referral fields has been cleared!',
-        timeout: 10000,
-        progress: true,
-        icon: 'mdi-account-check',
-      });
+      if (showMessage)
+        this.$q.notify({
+          color: 'green',
+          position: 'top',
+          message: 'Log referral fields has been cleared!',
+          timeout: 10000,
+          progress: true,
+          icon: 'mdi-account-check',
+        });
     },
 
     submitRemark() {
@@ -891,6 +895,7 @@ export default {
               progress: true,
               icon: 'report_problem',
             });
+            this.clearRemarkForm(false);
           })
           .catch((e) => {
             this.$q.notify({
@@ -916,18 +921,19 @@ export default {
         icon: 'report_problem',
       });
     },
-    clearRemarkForm() {
+    clearRemarkForm(showMessage = true) {
       this.new_remark_title = '';
       this.new_remark_description = '';
 
-      this.$q.notify({
-        color: 'green',
-        position: 'top',
-        message: 'Student remark fields has been cleared!',
-        timeout: 10000,
-        progress: true,
-        icon: 'mdi-account-check',
-      });
+      if (showMessage)
+        this.$q.notify({
+          color: 'green',
+          position: 'top',
+          message: 'Student remark fields has been cleared!',
+          timeout: 10000,
+          progress: true,
+          icon: 'mdi-account-check',
+        });
     },
     optionsFn(org_date) {
       let datePlusOne = new Date();

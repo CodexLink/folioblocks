@@ -85,8 +85,8 @@ class DashboardApplicant(BaseModel):
     total_txs_overall: int  # * (logs_associated + extras_associated) / total from chain
 
     # - For Total Credentials Associated.
-    logs_associated_count: float
-    extra_associated_count: float
+    logs_associated_count: int
+    extra_associated_count: int
 
     # - For Portfolio.
     portfolio: PortfolioSettings

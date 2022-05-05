@@ -117,19 +117,19 @@ async def get_dashboard_data(
 
     if user_basic_context.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
         # - Get reports from the `users` for the the number of associated people from the association.
-        get_associates_query: Select = select(
-            [func.count(), users.c.unique_address]
-        ).where(users.c.association == user_basic_context.association)
+        get_associates_query: Select = select([users.c.unique_address]).where(
+            users.c.association == user_basic_context.association
+        )
 
-        associates = await database_instance.fetch_one(get_associates_query)
+        associates = await database_instance.fetch_all(get_associates_query)
 
         # - Get reports from the `tx_content_mapping` for the number of associated logs and extra.
         associate_log_count: int = 0
         associate_extra_count: int = 0
 
-        for each_associate in associates.unique_address:
+        for each_associate in associates:
             get_associated_logs_query: Select = select([func.count()]).where(
-                (tx_content_mappings.c.address_ref == each_associate)
+                (tx_content_mappings.c.address_ref == each_associate.unique_address)
                 & (
                     tx_content_mappings.c.content_type
                     == TransactionContextMappingType.APPLICANT_LOG
@@ -144,7 +144,7 @@ async def get_dashboard_data(
                 associate_log_count += associate_logs_count
 
             get_associated_extra_query: Select = select([func.count()]).where(
-                (tx_content_mappings.c.address_ref == each_associate)
+                (tx_content_mappings.c.address_ref == each_associate.unique_address)
                 & (
                     tx_content_mappings.c.content_type
                     == TransactionContextMappingType.APPLICANT_ADDITIONAL
@@ -173,7 +173,7 @@ async def get_dashboard_data(
         user_count = await database_instance.fetch_val(get_overall_user_count_query)
 
         resolved_reports = DashboardOrganization(
-            total_associated=associates.count,
+            total_associated=len(associates),
             total_users=user_count,
             total_associated_logs=associate_log_count,
             total_associated_extra=associate_extra_count,
@@ -183,14 +183,14 @@ async def get_dashboard_data(
     elif user_basic_context.type is UserEntity.APPLICANT_DASHBOARD_USER:
         # - Get count of associated logs from this applicant.
         get_logs_associated_count_query: Select = select([func.count()]).where(
-            tx_content_mappings.c.address_ref == entity_address_ref
+            (tx_content_mappings.c.address_ref == entity_address_ref) & (tx_content_mappings.c.content_type == TransactionContextMappingType.APPLICANT_LOG)
         )
 
         logs_count = await database_instance.fetch_val(get_logs_associated_count_query)
 
         # - Get count of associated extra from this applicant.
         get_extra_associated_count_query: Select = select([func.count()]).where(
-            tx_content_mappings.c.address_ref == entity_address_ref
+            (tx_content_mappings.c.address_ref == entity_address_ref) & (tx_content_mappings.c.content_type == TransactionContextMappingType.APPLICANT_ADDITIONAL)
         )
 
         extra_count = await database_instance.fetch_val(

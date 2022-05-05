@@ -272,7 +272,7 @@ export default defineComponent({
       if (this.containsNoAuth) return;
 
       await axios.post(
-        `http://${resolvednodeapiurl}/entity/logout`,
+        `http://${resolvedNodeAPIURL}/entity/logout`,
         {
           /* ... data */
         },

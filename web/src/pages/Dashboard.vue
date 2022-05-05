@@ -43,13 +43,13 @@
       <div class="main">
         <q-card class="blocks">
           <q-linear-progress
-            :value="context_progress_top"
+            :value="context_right_progress_top"
             rounded
             reverse
             color="red"
           />
           <q-icon
-            name="mdi-account-group"
+            :name="context_right_top_icon"
             color="red"
             size="6em"
             style="padding-left: 20px; padding-top: 10px"
@@ -93,21 +93,23 @@
 
         <q-card class="transaction">
           <q-linear-progress
-            :value="context_progress_bottom"
+            :value="context_right_progress_bottom"
             rounded
             reverse
             color="secondary"
           />
           <q-icon
-            name="today"
+            :name="context_right_bottom_icon"
             class="secondary"
             size="6em"
             color="secondary"
-            style="padding-left: 20px; padding-top: 10px"
+            style="padding-left: 20px; padding-top: 12px"
           />
           <div class="output">
             <p class="data">{{ context_right_bottom }}</p>
-            <p class="title">{{ context_right_bottom_primary }}</p>
+            <p class="title">
+              {{ context_right_bottom_primary }}
+            </p>
           </div>
         </q-card>
       </div>
@@ -128,19 +130,19 @@ let dashboardOptions = {
     links: ['/portfolio', '/user_info'],
     context: {
       left: {
-        title: 'Portfolio Current Settings',
-        subtitle:
-          'Here contains the settings of your portfolio, please check them in portfolio section to change these values.',
-      },
-      right_top: {
-        title: 'Total Credentials',
-        subtitle:
-          'The number of credentials you received from your institution, out of other credentials.',
-      },
-      right_bottom: {
         title: 'Percentage of Logs vs Extra Info',
         subtitle:
-          'You have the following percetange makes up of your portfolio.',
+          'Here contains the progress bar-based visualization on how much you have from both the logs and extra info.',
+        another:
+          'Note that this is the last state since the page has been loaded. Refresh to update this information.',
+      },
+      right_top: {
+        title: 'Total Associated Credentials',
+        icon: 'mdi-file-star',
+      },
+      right_bottom: {
+        title: 'Portfolio Current Settings',
+        icon: 'mdi-file-cog',
       },
     },
   },
@@ -157,12 +159,11 @@ let dashboardOptions = {
       },
       right_top: {
         title: 'Total Associations',
-        subtitle:
-          'The number of associations that associates to your organization.',
+        icon: 'mdi-account-group',
       },
       right_bottom: {
         title: 'Total Transactions Invoked',
-        subtitle: 'The number of transactions you have thrown at the students',
+        icon: 'mdi-file-multiple',
       },
     },
   },
@@ -187,22 +188,26 @@ export default defineComponent({
       user_name: ref('—'),
 
       context_left: ref('—'),
+      context_left_primary: ref('—'),
+      context_left_secondary: ref('—'),
+
       context_right_top: ref('—'),
       context_right_bottom: ref('—'),
 
-      context_left_primary: ref('—'),
       context_right_top_primary: ref('—'),
       context_right_bottom_primary: ref('—'),
 
-      context_left_secondary: ref('—'),
       context_right_top_secondary: ref('—'),
       context_right_bottom_secondary: ref('—'),
 
-      context_left_progress_top: ref(0.69),
-      context_left_progress_bottom: ref(0.42),
+      context_left_progress_top: ref(0),
+      context_left_progress_bottom: ref(0),
 
-      context_progress_top: ref(0.42),
-      context_progress_bottom: ref(0.69),
+      context_right_top_icon: ref(''),
+      context_right_bottom_icon: ref(''),
+
+      context_right_progress_top: ref(0),
+      context_right_progress_bottom: ref(0),
     };
   },
   setup() {
@@ -228,60 +233,123 @@ export default defineComponent({
           this.user_role = response.data.role;
           this.user_name = response.data.username;
 
-          // * Adjust the context for the organization.
-          // - Replace the button context.
-          this.button_left = dashboardOptions.organization.buttons[0];
-          this.button_left_link = dashboardOptions.organization.links[0];
-          this.button_right = dashboardOptions.organization.buttons[1];
-          this.button_right_link = dashboardOptions.organization.links[1];
+          if (this.user_role === 'Organization Dashboard User') {
+            // * Adjust the context for the organization.
+            // - Replace the button context.
+            this.button_left = dashboardOptions.organization.buttons[0];
+            this.button_left_link = dashboardOptions.organization.links[0];
+            this.button_right = dashboardOptions.organization.buttons[1];
+            this.button_right_link = dashboardOptions.organization.links[1];
 
-          // - Replace the cards context.
-          this.context_left = dashboardOptions.organization.context.left.title;
-          this.context_left_primary =
-            dashboardOptions.organization.context.left.subtitle;
-          this.context_left_secondary =
-            dashboardOptions.organization.context.left.another;
+            // # Replace the cards context.
 
-          // this.context_left_progress_top =
-          // this.context_left_progress_bottom =
+            // - Update Card #1.
+            this.context_right_top_icon =
+              dashboardOptions.organization.context.right_top.icon;
+            this.context_right_top =
+              dashboardOptions.organization.context.right_top.title;
+            this.context_right_top_primary = `Currently, there was ${response.data.reports.total_associated} out of ${response.data.reports.total_users} associated users from the system.`;
+            this.context_right_progress_top =
+              response.data.reports.total_associated /
+              response.data.reports.total_users;
 
-          // - Update Card #1.
-          this.context_right_top =
-            dashboardOptions.organization.context.right_top.title;
-          this.context_right_top_primary = `Currently, there was ${response.data.reports.total_associated} out of ${response.data.reports.total_users} associated users from the system.`;
-          this.context_progress_top =
-            response.data.reports.total_associated /
-            response.data.reports.total_users;
-
-          // - Update Card #2.
-          this.context_left_progress_top =
-            response.data.reports.total_associated_logs /
-            response.data.reports.total_overall_info_outside;
-          this.context_left_progress_bottom =
-            response.data.reports.total_associated_extra /
-            response.data.reports.total_overall_info_outside;
-
-          // - Update Card #3.
-          this.context_right_bottom =
-            dashboardOptions.organization.context.right_bottom.title;
-          this.context_right_bottom_primary = `Your organization was able to insert ${
-            response.data.reports.total_associated_logs +
-            response.data.reports.total_associated_extra
-          } out of ${
-            response.data.reports.total_overall_info_outside
-          } transactions.`;
-          this.context_progress_bottom =
-            response.data.reports.total_associated_logs +
-            response.data.reports.total_associated_extra /
+            // - Update Card #2.
+            this.context_left =
+              dashboardOptions.organization.context.left.title;
+            this.context_left_primary =
+              dashboardOptions.organization.context.left.subtitle;
+            this.context_left_secondary =
+              dashboardOptions.organization.context.left.another;
+            this.context_left_progress_top =
+              response.data.reports.total_associated_logs /
               response.data.reports.total_overall_info_outside;
-          // * Adjust the context for the applicant.
-          // - Replace the button context.
-          // this.button_left = dashboardOptions.applicant.buttons[0];
-          // this.button_left_link = dashboardOptions.applicant.links[0];
-          // this.button_right = dashboardOptions.applicant.buttons[1];
-          // this.button_right_link = dashboardOptions.applicant.links[1];
+            this.context_left_progress_bottom =
+              response.data.reports.total_associated_extra /
+              response.data.reports.total_overall_info_outside;
 
-          // - Replace the cards context.
+            // - Update Card #3.
+            this.context_right_bottom_icon =
+              dashboardOptions.organization.context.right_bottom.icon;
+            this.context_right_bottom =
+              dashboardOptions.organization.context.right_bottom.title;
+            this.context_right_bottom_primary = `Your organization was able to insert ${
+              response.data.reports.total_associated_logs +
+              response.data.reports.total_associated_extra
+            } out of ${
+              response.data.reports.total_overall_info_outside
+            } transactions.`;
+            this.context_right_progress_bottom =
+              (response.data.reports.total_associated_logs +
+                response.data.reports.total_associated_extra) /
+              response.data.reports.total_overall_info_outside;
+          } else {
+            // * Adjust the context for the applicant.
+            // - Replace the button context.
+            this.button_left = dashboardOptions.applicant.buttons[0];
+            this.button_left_link = dashboardOptions.applicant.links[0];
+            this.button_right = dashboardOptions.applicant.buttons[1];
+            this.button_right_link = dashboardOptions.applicant.links[1];
+
+            // - Replace the cards context.
+
+            // - Update Card #1.
+            this.context_right_top =
+              dashboardOptions.applicant.context.right_top.title;
+            this.context_right_top_primary = `You currently have ${
+              response.data.reports.logs_associated_count +
+              response.data.reports.extra_associated_count
+            } credential/s given by your association. (Out of ${
+              response.data.reports.total_txs_overall
+            } credential/s)`;
+            this.context_right_progress_top =
+              (response.data.reports.logs_associated_count +
+                response.data.reports.extra_associated_count) /
+              response.data.reports.total_txs_overall;
+            this.context_right_top_icon =
+              dashboardOptions.applicant.context.right_top.icon;
+
+            // - Update Card #2.
+            this.context_left = dashboardOptions.applicant.context.left.title;
+            this.context_left_primary =
+              dashboardOptions.applicant.context.left.subtitle;
+            this.context_left_secondary =
+              dashboardOptions.applicant.context.left.another;
+
+            this.context_left_progress_top =
+              response.data.reports.logs_associated_count /
+              response.data.reports.total_txs_overall;
+            this.context_left_progress_bottom =
+              response.data.reports.extra_associated_count /
+              response.data.reports.total_txs_overall;
+
+            // - Update Card #3.
+            this.context_right_bottom =
+              dashboardOptions.applicant.context.right_bottom.title;
+            this.context_right_bottom_primary = `Currently '${
+              response.data.reports.portfolio.enable_sharing
+                ? 'public'
+                : 'private'
+            }', e-mail contact info is currently '${
+              response.data.reports.portfolio.expose_email_info
+                ? 'exposed'
+                : 'hidden'
+            }, and files were '${
+              response.data.reports.portfolio.show_files ? 'viewable' : 'hidden'
+            }'`;
+            this.context_right_bottom_icon =
+              dashboardOptions.applicant.context.right_bottom.icon;
+
+            // * Count the number of `true` over `false`.
+            portfolio_truthy_count = 0;
+            portfolio_total_props = 0;
+            for (let portfolio_property in response.data.reports.portfolio) {
+              if (portfolio_property) portfolio_truthy_count++;
+              portfolio_total_props++;
+            }
+
+            this.context_right_progress_bottom =
+              portfolio_truthy_count / portfolio_total_props;
+          }
         })
         .catch((_e) => {
           this.$q.notify({
