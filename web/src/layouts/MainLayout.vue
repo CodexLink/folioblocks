@@ -264,7 +264,7 @@ export default defineComponent({
         },
         {
           headers: {
-            'x-token': this.$q.localStorage.getItem('token'),
+            'X-Token': this.$q.localStorage.getItem('token'),
           },
         }
       );

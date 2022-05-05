@@ -482,9 +482,8 @@
               hint="Similar to description but is specified to student's capability. Seperate the contents in comma. Be wary of the initial input as it will be imprinted in blockchain. Student can change this later on."
               :rules="[
                 (val) =>
-                  !val.length ||
-                  (val.length >= 8 && val.length <= 256) ||
-                  'Cannot go less than 8 characters or more than 256 characters.',
+                  (val && val.length >= 8) ||
+                  'This is required. Must have 8 characters and above.',
               ]"
               lazy-rules
               :disable="isProcessing"
@@ -536,7 +535,7 @@
               v-model="new_student_prefer_role"
               label="Preferred Employment Role"
               :disable="isProcessing"
-              hint="The preferred role the student infers. Please note that it is NOT changeable due to implementation issues. Please ask the student first before inputting values here."
+              hint="The preferred role the student infers. This is interchangeable but please provide an initial input. Therefore, ask your student regarding one."
               counter
               :rules="[
                 (val) =>
@@ -592,7 +591,7 @@
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue';
+import { ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
 import { resolvedNodeAPIURL } from '/utils/utils.js';

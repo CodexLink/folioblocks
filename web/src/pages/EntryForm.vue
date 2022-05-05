@@ -746,7 +746,7 @@ h4 {
 }
 
 .tabs {
-  height: 60px;
+  height: 50px;
 }
 
 @media (max-width: 60em) {

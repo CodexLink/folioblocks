@@ -53,10 +53,7 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
-
   { path: '/entry/:action(login|register)', component: () => import('pages/EntryForm.vue') },
-
-
   {
     path: '/:catchAll(.*)*',
     component: () => import('pages/Error404.vue'),

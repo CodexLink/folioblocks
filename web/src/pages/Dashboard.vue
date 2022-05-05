@@ -34,6 +34,7 @@
                 color="white"
                 :label="button_right"
                 :to="button_right_link"
+                :disable="user_role === 'Applicant Dashboard User'"
               />
             </div>
           </q-card-section>
@@ -126,8 +127,8 @@ import { useRoute, useRouter } from 'vue-router';
 
 let dashboardOptions = {
   applicant: {
-    buttons: ['View Portfolio', 'Edit Personal Info'],
-    links: ['/portfolio', '/user_info'],
+    buttons: ['View Portfolio', '—'],
+    links: ['/portfolio', '#'],
     context: {
       left: {
         title: 'Percentage of Logs vs Extra Info',

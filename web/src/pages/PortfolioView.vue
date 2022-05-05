@@ -46,62 +46,7 @@
       <span class="text-weight-bold q-ma-sm q-ml-lg"> Description:</span>
       {{ description }}
     </p>
-
-    <div class="text-right q-pr-xl">
-      <q-btn outline color="black" label="Log History" @click="card = true" />
-    </div>
   </div>
-
-  <q-dialog v-model="card" persistent>
-    <q-card class="my-card">
-      <div>
-        <h2 class="text-h4 text-weight-medium q-ma-md">Logs</h2>
-        <p class="text-h7 q-ma-md">
-          Here are the recent logs from this user's portfolio.
-        </p>
-      </div>
-      <q-card-section>
-        <div class="log">
-          <q-scroll-area style="height: 100%; max-width: 100%">
-            <q-item
-              class="logdata"
-              v-for="list in lists"
-              :key="list.id"
-              clickable
-              v-ripple
-            >
-              <q-item-section class="text-h6">
-                <q-item-label class="q-mb-sm">
-                  <span class="text-weight-bold q-ma-sm q-mb-sm"> Hash:</span
-                  >{{ list.title }}</q-item-label
-                >
-
-                <q-item-label class="q-mb-sm">
-                  <span class="text-weight-bold q-ma-sm q-mb-sm"> From:</span
-                  >{{ list.title }}</q-item-label
-                >
-              </q-item-section>
-              <q-item-section top side>
-                <div class="text-grey-8 q-gutter-md">
-                  <q-badge outline color="black" label="Type" />
-                </div>
-              </q-item-section>
-            </q-item>
-          </q-scroll-area>
-        </div>
-      </q-card-section>
-
-      <q-card-actions align="right">
-        <q-btn
-          v-close-popup
-          outline
-          color="secondary"
-          label="Close"
-          class="q-mr-md"
-        />
-      </q-card-actions>
-    </q-card>
-  </q-dialog>
 
   <div class="row">
     <div class="logs">
@@ -243,66 +188,226 @@
     </q-card>
   </q-dialog>
 
-  <q-page-sticky position="bottom-right" :offset="[18, 18]">
-    <q-btn fab glossy icon="add" color="blue-10" @click="share = true" />
+  <q-page-sticky position="bottom-right" :offset="[24, 24]">
+    <q-btn
+      fab
+      v-ripple
+      icon="mdi-file-cog"
+      color="red"
+      @click="portfolio_modal = true"
+    />
   </q-page-sticky>
 
-  <q-dialog v-model="share" class="modal" persistent>
-    <q-card style="width: 100%; height: 50%">
-      <q-card-section class="row q-ma-md">
-        <div class="text-h6 text-weight-bold">Share Settings</div>
-        <q-space></q-space>
-        <q-btn v-close-popup flat dense round color="black" icon="close" />
-      </q-card-section>
+  <q-dialog v-model="portfolio_modal" class="modal">
+    <q-card style="width: 100%">
+      <q-linear-progress
+        v-if="isProgressing"
+        rounded
+        query
+        indeterminate
+        color="red"
+      />
+      <q-tabs
+        v-model="selected_settings"
+        dense
+        class="text-grey"
+        active-color="secondary"
+        indicator-color="secondary"
+        align="justify"
+        style="height: 50px"
+      >
+        <q-tab
+          name="share_settings"
+          label="Settings"
+          class="tab"
+          :disable="isProcessing"
+        />
+        <q-tab
+          name="editable_infos"
+          label="Editables"
+          class="tab"
+          :disable="isProcessing"
+        />
+      </q-tabs>
 
-      <div class="q-pa-md q-pl-xl q-mr-md text-h7 text-justify">
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-        tempor incididunt ut labore et dolore magna aliqua.
-      </div>
+      <q-separator />
 
-      <div>
-        <q-item tag="label" v-ripple class="q-ml-xl q-mr-xl text-h6">
-          <q-item-section>
-            <q-item-label>Enable Sharing</q-item-label>
-          </q-item-section>
-          <q-item-section avatar>
-            <q-toggle color="blue" v-model="sharing" />
-          </q-item-section>
-        </q-item>
+      <q-tab-panels v-model="selected_settings" animated class="panels">
+        <q-tab-panel name="share_settings">
+          <q-card-section>
+            <div class="text-h6 text-weight-bold">Share Settings</div>
+          </q-card-section>
 
-        <q-item tag="label" v-ripple class="q-ml-xl q-mr-xl text-h6">
-          <q-item-section>
-            <q-item-label>Expose Email Info</q-item-label>
-          </q-item-section>
-          <q-item-section avatar>
-            <q-toggle color="blue" v-model="exposeemail" />
-          </q-item-section>
-        </q-item>
+          <q-card-section class="text-justify">
+            The following switches are states that can greatly affect the output
+            of your portfolio. <strong>Be careful</strong>, by applying changes
+            (in the means of clicking the apply button) will subject you to
+            rate-limitation of <strong>3 minutes.</strong>
+          </q-card-section>
 
-        <q-item tag="label" v-ripple class="q-ml-xl q-mr-xl text-h6">
-          <q-item-section>
-            <q-item-label>Time-limit Sharing to 10 minutes</q-item-label>
-          </q-item-section>
-          <q-item-section avatar>
-            <q-toggle color="blue" v-model="timelimit" />
-          </q-item-section>
-        </q-item>
+          <q-list style="padding-top: 3%">
+            <q-item tag="label" v-ripple>
+              <q-item-section>
+                <q-item-label>Enable Portfolio Sharing</q-item-label>
+                <q-item-label caption
+                  >Allow others to see this portfolio by explicitly referring to
+                  your address.</q-item-label
+                >
+              </q-item-section>
+              <q-item-section side>
+                <q-toggle
+                  color="red"
+                  :disable="isProcessing"
+                  v-model="portfolio_sharing_state"
+                />
+              </q-item-section>
+            </q-item>
 
-        <q-item tag="label" v-ripple class="q-ml-xl q-mr-xl text-h6">
-          <q-item-section>
-            <q-item-label>Allow File View</q-item-label>
-          </q-item-section>
-          <q-item-section avatar>
-            <q-toggle color="blue" v-model="allowfile" />
-          </q-item-section>
-        </q-item>
-      </div>
+            <q-item tag="label" v-ripple>
+              <q-item-section>
+                <q-item-label>Show Email Info</q-item-label>
+                <q-item-label caption
+                  >Allow others to see your email for contacting purposes. We
+                  recommend doing this <strong>ONLY</strong> when you are
+                  currently at job application.</q-item-label
+                >
+              </q-item-section>
+              <q-item-section side top>
+                <q-toggle
+                  color="red"
+                  :disable="isProcessing"
+                  v-model="portfolio_show_email_state"
+                />
+              </q-item-section>
+            </q-item>
+
+            <q-item tag="label" v-ripple>
+              <q-item-section>
+                <q-item-label>Allow Files</q-item-label>
+                <q-item-label caption
+                  >Allow others to view and download your files.
+                  <strong>Note that</strong>, these are your proof or supporting
+                  context behind these logs and extra information.
+                  <strong>You are not liable</strong> when there's a data
+                  leakage as you are not the one who inserts these
+                  information.</q-item-label
+                >
+              </q-item-section>
+              <q-item-section side top>
+                <q-toggle
+                  color="red"
+                  :disable="isProcessing"
+                  v-model="portfolio_allow_file_state"
+                />
+              </q-item-section>
+            </q-item>
+
+            <q-card-actions align="right">
+              <q-btn
+                flat
+                style="color: #ff0080"
+                :disable="isProcessing"
+                label="Apply Settings"
+                @click="submitPortfolioSettings"
+              />
+            </q-card-actions>
+          </q-list>
+        </q-tab-panel>
+
+        <q-tab-panel name="editable_infos">
+          <q-form
+            @submit.prevent="submitEditableInfo"
+            @validation-error="submitEditableInfoOnError"
+            :autofocus="true"
+          >
+            <q-card-section>
+              <div class="text-h6 text-weight-bold">Editable Information</div>
+            </q-card-section>
+
+            <q-card-section class="text-justify">
+              Here are the fields that you can interchange even when blockchain
+              already imprints the initial state of these fields.
+              <strong>Be careful</strong>, change only if necessary.
+            </q-card-section>
+
+            <q-card-section>
+              <q-input
+                class="input"
+                outlined
+                dense
+                color="secondary"
+                v-model="editable_info_preferred_role"
+                label="Preferred Role"
+                counter
+                lazy-rules
+                hint="Your preferred role in the industry or in works."
+                :disable="isProcessing"
+                :rules="[
+                  (val) =>
+                    (val.length >= 4 && val.length <= 32) ||
+                    'This should contain not less than 4 characters or more than 32 characters.',
+                ]"
+              />
+              <q-input
+                class="input"
+                outlined
+                dense
+                color="secondary"
+                v-model="editable_info_personal_skills"
+                label="Personal Skills"
+                counter
+                hint="Similar to description but is specified to student's capability. Seperate the contents in comma. Please note only important or significant skills that you have."
+                :rules="[
+                  (val) =>
+                    (val && val.length >= 8) ||
+                    'This is required. Must have 8 characters and above.',
+                ]"
+                lazy-rules
+                :disable="isProcessing"
+              />
+
+              <q-input
+                class="input"
+                outlined
+                dense
+                color="secondary"
+                v-model="editable_info_description"
+                type="textarea"
+                label="Description"
+                hint="Literally, the description about you, but keep it professional as it was shown in your portfolio."
+                :disable="isProcessing"
+                counter
+                :rules="[
+                  (val) =>
+                    (val && val.length >= 8) ||
+                    'This is required. Must have 8 characters and above.',
+                ]"
+                lazy-rules
+              />
+            </q-card-section>
+
+            <q-card-actions align="right">
+              <q-btn
+                flat
+                type="submit"
+                style="color: #ff0080"
+                label="Apply New Info"
+              />
+            </q-card-actions>
+          </q-form>
+        </q-tab-panel>
+      </q-tab-panels>
     </q-card>
   </q-dialog>
 </template>
 
 <script>
 import { defineComponent, ref } from 'vue';
+
+import { useQuasar } from 'quasar';
+import axios from 'axios';
+import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({
   data() {
@@ -391,35 +496,215 @@ export default defineComponent({
   },
 
   setup() {
+    const $q = useQuasar();
+    const $router = useRouter();
+
     return {
       card: ref(false),
       log: ref(false),
-      share: ref(false),
       sharing: ref(true),
       exposeemail: ref(true),
       timelimit: ref(true),
       allowfile: ref(true),
+
+      portfolio_modal: ref(false),
+      selected_settings: ref('share_settings'),
+      isProcessing: ref(false),
+
+      portfolio_sharing_state: ref(false),
+      portfolio_show_email_state: ref(false),
+      portfolio_allow_file_state: ref(false),
+
+      editable_info_description: ref(''),
+      editable_info_preferred_role: ref(''),
+      editable_info_personal_skills: ref(''),
     };
   },
+  mounted() {
+    if (this.$q.localStorage.getItem('token') !== null) {
+      this.loadPortfolioSettings();
+      this.loadEditableInfo();
+    }
+  },
   methods: {
-    Clicked: function (list) {
-      // eslint-disable-next-line
-      this.nameinfo = list.name;
-      // eslint-disable-next-line
-      this.addressinfo = list.address;
-      // eslint-disable-next-line
-      this.roleinfo = list.role;
-      // eslint-disable-next-line
-      this.descriptioninfomodal = list.description;
-      // eslint-disable-next-line
-      this.validatedbyinfo = list.validatedby;
-      // eslint-disable-next-line
-      this.fileinfo = list.file;
-      // eslint-disable-next-line
-      this.durationstartinfo = list.durationstart;
-      // eslint-disable-next-line
-      this.durationendinfo = list.durationend;
+    loadPortfolioSettings() {
+      this.isProcessing = true;
+      axios
+        .get(`http://${resolvedNodeAPIURL}/dashboard/portfolio_settings`, {
+          headers: {
+            'X-Token': this.$q.localStorage.getItem('token'),
+          },
+        })
+        .then((response) => {
+          console.log(response.data);
+          this.portfolio_sharing_state = response.data.enable_sharing;
+          this.portfolio_show_email_state = response.data.expose_email_info;
+          this.portfolio_allow_file_state = response.data.show_files;
+
+          this.isProcessing = false;
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `There was an error when fetching your information. Due to this, switches will be disabled. Please refresh and try again. Reason: ${e.response.data.detail}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
     },
+    loadEditableInfo() {
+      this.isProcessing = true;
+      axios
+        .get(`http://${resolvedNodeAPIURL}/dashboard/user_profile`, {
+          headers: {
+            'X-Token': this.$q.localStorage.getItem('token'),
+          },
+        })
+        .then((response) => {
+          this.editable_info_description = response.data.description;
+          this.editable_info_preferred_role = response.data.preferred_role;
+          this.editable_info_personal_skills = response.data.personal_skills;
+
+          this.isProcessing = false;
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `There was an error when fetching your information. Due to this, fields will be disabled. Please refresh and try again. Reason: ${e.response.data.detail}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
+    },
+    submitEditableInfo() {
+      this.isProcessing = true;
+
+      // ! Set up the FormData(), this was intended for avatar reuse purposes.
+      // - Though it's implementation is not yet added.
+      let editableInfoForm = new FormData();
+
+      editableInfoForm.append('description', this.editable_info_description);
+      editableInfoForm.append(
+        'personal_skills',
+        this.editable_info_personal_skills
+      );
+      editableInfoForm.append(
+        'preferred_role',
+        this.editable_info_preferred_role
+      );
+      axios
+        .post(
+          `http://${resolvedNodeAPIURL}/dashboard/apply_profile_changes`,
+          editableInfoForm,
+          {
+            headers: {
+              'X-Token': this.$q.localStorage.getItem('token'),
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        )
+        .then((response) => {
+          this.$q.notify({
+            color: 'green',
+            position: 'top',
+            message:
+              'Editable information has been saved! Refreshing in 3 seconds.',
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+          setTimeout(() => {
+            this.$router.go();
+          }, 3000);
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `There was an error when submitting new information. Reason: ${e.response.data.detail}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
+      this.isProcessing = false;
+    },
+    submitEditableInfoOnError() {
+      this.$q.notify({
+        color: 'negative',
+        position: 'top',
+        message:
+          'There was an error from one of the fields. Please check and try again.',
+        timeout: 10000,
+        progress: true,
+        icon: 'report_problem',
+      });
+    },
+    submitPortfolioSettings() {
+      this.isProcessing = true;
+      axios
+        .post(
+          `http://${resolvedNodeAPIURL}/dashboard/apply_portfolio_settings`,
+          {
+            enable_sharing: this.portfolio_sharing_state,
+            expose_email_info: this.portfolio_show_email_state,
+            show_files: this.portfolio_allow_file_state,
+          },
+          {
+            headers: {
+              'X-Token': this.$q.localStorage.getItem('token'),
+            },
+          }
+        )
+        .then((response) => {
+          this.$q.notify({
+            color: 'green',
+            position: 'top',
+            message:
+              'Portfolio settings has been saved! Refreshing in 3 seconds.',
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+          setTimeout(() => {
+            this.$router.go();
+          }, 3000);
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `There was an error when submitting portfolio settings. Due to this, lease refresh and try again. Reason: ${e.response.data.detail}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
+      this.isProcessing = false;
+    },
+    getPortfolio() {},
+    // Clicked: function (list) {
+    //   // eslint-disable-next-line
+    //   this.nameinfo = list.name;
+    //   // eslint-disable-next-line
+    //   this.addressinfo = list.address;
+    //   // eslint-disable-next-line
+    //   this.roleinfo = list.role;
+    //   // eslint-disable-next-line
+    //   this.descriptioninfomodal = list.description;
+    //   // eslint-disable-next-line
+    //   this.validatedbyinfo = list.validatedby;
+    //   // eslint-disable-next-line
+    //   this.fileinfo = list.file;
+    //   // eslint-disable-next-line
+    //   this.durationstartinfo = list.durationstart;
+    //   // eslint-disable-next-line
+    //   this.durationendinfo = list.durationend;
+    // },
   },
 });
 </script>
@@ -443,6 +728,10 @@ export default defineComponent({
   height: 150px;
   width: 10%;
   float: left;
+}
+
+.input {
+  margin-top: 3%;
 }
 
 .usericon {
