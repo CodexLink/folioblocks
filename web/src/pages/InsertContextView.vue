@@ -6,34 +6,39 @@
       color="secondary"
       label="New Student"
       icon="mdi-plus"
+      :disable="isProcessing"
       @click="
         new_user = true;
         existing_user = false;
       "
     />
 
-    <div class="users">
+    <q-card class="users">
+      <q-linear-progress v-if="isFetchingStudent" query color="red" />
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item
-          v-for="list in lists"
-          :key="list.id"
+          v-for="student in students"
+          :key="student.id"
           clickable
           v-ripple
+          :disable="isProcessing"
           @click="
             existing_user = true;
             new_user = false;
+            setActiveFieldForForm(student.id);
           "
         >
           <q-item-section avatar>
-            <q-avatar class="icon" icon="account_circle" size="5em"> </q-avatar>
+            <q-avatar class="icon" icon="account_circle" size="3em" />
           </q-item-section>
           <q-item-section class="text-h6"
-            >{{ list.name }}
-            <q-item-label caption>{{ list.address }}</q-item-label>
+            >{{ student.first_name }} {{ student.last_name }}
+            <q-item-label overline>{{ student.program }}</q-item-label>
+            <q-item-label caption>{{ student.address }}</q-item-label>
           </q-item-section>
         </q-item>
       </q-scroll-area>
-    </div>
+    </q-card>
 
     <div class="form absolute-center">
       <div class="absolute-center insertdata">
@@ -45,21 +50,31 @@
             class="q-mt-sm"
           />
           <q-tabs
-            v-model="tab"
+            v-model="selected_section"
             dense
             class="text-grey"
             active-color="secondary"
             indicator-color="secondary"
             align="justify"
           >
-            <q-tab name="addinfo" label="Add Document" class="tab" />
-            <q-tab name="addremarks" label="Add Remarks" class="tab" />
+            <q-tab
+              name="insert_docs"
+              label="Add Document"
+              class="tab"
+              :disable="isProcessing"
+            />
+            <q-tab
+              name="insert_remarks"
+              label="Add Remarks"
+              class="tab"
+              :disable="isProcessing"
+            />
           </q-tabs>
 
           <q-separator />
 
-          <q-tab-panels v-model="tab" animated class="panels">
-            <q-tab-panel name="addinfo">
+          <q-tab-panels v-model="selected_section" animated class="panels">
+            <q-tab-panel name="insert_docs">
               <q-form
                 @submit.prevent="submitLog"
                 @validation-error="errorOnLog"
@@ -81,7 +96,7 @@
                   <strong>responsibility</strong> to mask out any detailed
                   information regarding this student. This system does not
                   pseudonymize information within the document and is only
-                  designed as a source origin of this claims.
+                  designed as a source origin of this claim.
                 </p>
                 <q-input
                   class="input"
@@ -95,7 +110,7 @@
                   :rules="[
                     (val) =>
                       (val && val.length >= 8) ||
-                      'This is required. Must have 8 characters and above. ',
+                      'This is required. Must have 8 characters and above.',
                   ]"
                   lazy-rules
                 />
@@ -112,7 +127,7 @@
                   :rules="[
                     (val) =>
                       (val && val.length >= 8) ||
-                      'This is required. Must have 8 characters and above. ',
+                      'This is required. Must have 8 characters and above.',
                   ]"
                   lazy-rules
                 />
@@ -129,7 +144,7 @@
                   :rules="[
                     (val) =>
                       (val && val.length >= 4) ||
-                      'This is required. Must have 4 characters and above. ',
+                      'This is required. Must have 4 characters and above.',
                   ]"
                   lazy-rules
                 />
@@ -138,12 +153,14 @@
                   class="input"
                   v-model="new_log_file"
                   label="Document Proof (PDF Files Only)"
-                  hint="Must contain no sensitive information and should be kept as a proof as a supporting context."
+                  hint="This is optional but is recommended as this can be used as a supporting context. Also, must contain no sensitive information."
                   filled
                   multiple
+                  clearable
                   counter
                   :disable="isProcessing"
                   accept=".pdf"
+                  max-file-size="5242880"
                 >
                   <template v-slot:prepend>
                     <q-icon name="attach_file" />
@@ -196,7 +213,7 @@
                   :disable="isProcessing"
                   :rules="['new_log_date_end']"
                   label="Log Date End"
-                  hint="The date from where this log has ended. This should not start as early as the `Log Date Start`!"
+                  hint="The date from where this log has ended. This is optional. However, when it contains a date, it should not start as early as the `Log Date Start`!"
                 >
                   <template v-slot:append>
                     <q-icon name="event" class="cursor-pointer">
@@ -248,41 +265,84 @@
               </q-form>
             </q-tab-panel>
 
-            <q-tab-panel name="addremarks">
+            <q-tab-panel name="insert_remarks">
               <q-form
                 @submit.prevent="submitRemark"
                 @validation-error="errorOnRemark"
                 :autofocus="true"
               >
+                <q-card-section class="title">
+                  <p class="text-left">
+                    Insert Extra Information / Remarks from the Student
+                  </p>
+                </q-card-section>
+                <p class="text-justify" style="padding: 2%">
+                  This form allows you to insert an extra information that
+                  wasn't significant but is necessary for other people to know.
+                  <strong>Note that,</strong> regardless of the context,
+                  professionalism must be invoked as this extra information is
+                  <strong>NOT interchangeable</strong> as it was imprinted in
+                  blockchain.
+                </p>
+                <p class="text-justify" style="padding: 0 2%">
+                  Any mistakes or misconceptions regarding the representation of
+                  this context towards to the student will be held liable to
+                  you, as the
+                  <strong>source origin was also recorded</strong>. Please be
+                  careful and make it sure the context was finalized before
+                  submitting this form.
+                </p>
                 <q-input
                   class="input"
                   outlined
                   color="secondary"
-                  v-model="title"
-                  label="Title"
+                  v-model="new_remark_title"
+                  :disable="isProcessing"
+                  label="Remark Title"
+                  counter
+                  hint="The general context of this remark. Make it concise but minimal as possible."
+                  :rules="[
+                    (val) =>
+                      (val && val.length >= 4) ||
+                      'This is required. Must have 4 characters and above.',
+                  ]"
+                  lazy-rules
                 />
 
                 <q-input
                   class="input"
                   outlined
                   color="secondary"
-                  v-model="extradescription"
-                  label="Description"
+                  type="textarea"
+                  :disable="isProcessing"
+                  hint="Please describe in detail regarding this context."
+                  counter
+                  v-model="new_remark_description"
+                  label="Remark Description"
+                  :rules="[
+                    (val) =>
+                      (val && val.length >= 8) ||
+                      'This is required. Must have 8 characters and above.',
+                  ]"
+                  lazy-rules
                 />
 
                 <div class="text-center q-ma-md">
                   <q-btn
                     outline
                     class="close"
-                    color="secondary"
-                    label="Close"
-                    @click="existing_user = false"
+                    color="red"
+                    @click="clearRemarkForm"
+                    :disable="isProcessing"
+                    label="Clear Fields"
                   />
 
                   <q-btn
                     outline
                     class="insert"
                     color="secondary"
+                    type="submit"
+                    :disable="isProcessing"
                     label="Insert"
                   />
                 </div>
@@ -543,26 +603,16 @@ export default {
     const $q = useQuasar();
     const $route = useRoute();
     const $router = useRouter();
-    return {
-      tab: ref('addinfo'),
-      tabinsert: ref('insertnewuser'),
 
-      datestart: ref(''),
-      dateend: ref(''),
+    return {
+      selected_section: ref('insert_docs'),
+      targetted_address: ref(null),
     };
   },
 
   data() {
     return {
-      lists: [
-        {
-          id: 1,
-          name: 'Applicant 1',
-          address: '0x7zd7a8ds6dsa',
-        },
-      ],
-
-      basic: ref(false),
+      students: ref([]),
 
       new_student_first_name: ref(''),
       new_student_last_name: ref(''),
@@ -578,22 +628,18 @@ export default {
       existing_user: ref(false),
       new_user: ref(false),
       isProcessing: ref(false),
+      isFetchingStudent: ref(true),
 
       new_log_name: ref(''),
       new_log_description: ref(''),
       new_log_role: ref(''),
-
-      new_log_date_start: ref(null),
-      new_log_date_end: ref(
-        new Date().toISOString().slice(0, 10).replaceAll('-', '/')
-      ),
-
-      title: '',
-      extradescription: '',
-
       new_log_file: ref(null),
 
-      username: ref(''),
+      new_log_date_start: ref(null),
+      new_log_date_end: ref(null),
+
+      new_remark_title: ref(''),
+      new_remark_description: ref(''),
     };
   },
   mounted() {
@@ -601,9 +647,10 @@ export default {
       this.existing_user = false;
       this.new_user = true;
     } else {
-      this.existing_user = true;
+      this.existing_user = false;
       this.new_user = false;
     }
+    this.getStudents();
   },
   methods: {
     submitNewStudent() {
@@ -647,7 +694,7 @@ export default {
             position: 'top',
             message: `There was an error when submitting your credentials. Reason: ${
               e.response.data.detail || e.message
-            }.`,
+            }`,
             timeout: 15000,
             progress: true,
             icon: 'report_problem',
@@ -690,6 +737,94 @@ export default {
     },
     submitLog() {
       this.isProcessing = true;
+
+      // ! Force require `new_log_date_start` field.
+      if (this.new_log_date_start == null) {
+        this.$q.notify({
+          color: 'negative',
+          position: 'top',
+          message: 'Duration start field is required!',
+          timeout: 10000,
+          progress: true,
+          icon: 'report_problem',
+        });
+      } else {
+        // ! Validate the date of the duration if 'new_log_date_end' is not None.
+        if (this.new_log_date_end !== null) {
+          let validateDateEnd = new Date(this.new_log_date_start);
+          let validateDateStart = new Date(this.new_log_date_end);
+
+          if (validateDateEnd > validateDateStart) {
+            this.$q.notify({
+              color: 'negative',
+              position: 'top',
+              message:
+                'Duration start and end is impossible. Please ensure that the duration end doesnt start earlier than the duration start.',
+              timeout: 10000,
+              progress: true,
+              icon: 'report_problem',
+            });
+            this.isProcessing = false;
+            return;
+          }
+        }
+        // * Handle the request.
+        let logForm = new FormData();
+
+        logForm.append('address_origin', this.targetted_address);
+        logForm.append('content_type', 2); // * See TransactionContextMappingType.APPLICANT_LOG.
+        logForm.append('name', this.new_log_name);
+        logForm.append('description', this.new_log_description);
+        logForm.append('role', this.new_log_role);
+        logForm.append(
+          'duration_start',
+          new Date(this.new_log_date_start).toISOString()
+        );
+
+        if (this.new_log_date_end !== null) {
+          logForm.append(
+            'duration_end',
+            new Date(this.new_log_date_end).toISOString()
+          );
+        }
+
+        if (this.new_log_file !== null) {
+          logForm.append('file', this.new_log_file[0]);
+        }
+
+        axios
+          .post(
+            `http://${resolvedNodeAPIURL}/node/receive_context_log`,
+            logForm,
+            {
+              headers: {
+                'X-Token': this.$q.localStorage.getItem('token'),
+                'Content-Type': 'multipart/form-data',
+              },
+            }
+          )
+          .then((response) => {
+            this.$q.notify({
+              color: 'green',
+              position: 'top',
+              message: `Log information has been sent from the node to blockchain! Remember about the notice regarding taking the new information in-effect. | Info: ${response.data.detail}`,
+              timeout: 10000,
+              progress: true,
+              icon: 'report_problem',
+            });
+          })
+          .catch((e) => {
+            this.$q.notify({
+              color: 'negative',
+              position: 'top',
+              message: `There was an error when submitting log information. Reason: ${e.response.data.detail}`,
+              timeout: 10000,
+              progress: true,
+              icon: 'report_problem',
+            });
+          });
+      }
+      this.isProcessing = false;
     },
     errorOnLog() {
       this.$q.notify({
@@ -706,6 +841,7 @@ export default {
       this.new_log_name = '';
       this.new_log_description = '';
       this.new_log_role = '';
+      this.new_log_file = null;
       this.new_log_date_start = null;
       this.new_log_date_end = null;
 
@@ -719,9 +855,80 @@ export default {
       });
     },
 
-    submitRemark() {},
-    errorOnRemark() {},
-    clearLogForm() {},
+    submitRemark() {
+      this.isProcessing = true;
+
+      if (this.targetted_address == null) {
+        this.$q.notify({
+          color: 'negative',
+          position: 'top',
+          message: `There was an error when submitting extra information. Reason: ${e.request.statusText}`,
+          timeout: 10000,
+          progress: true,
+          icon: 'report_problem',
+        });
+      } else {
+        axios
+          .post(
+            `http://${resolvedNodeAPIURL}/node/receive_context`,
+            {
+              address_origin: this.targetted_address,
+              title: this.new_remark_title,
+              description: this.new_remark_description,
+            },
+            {
+              headers: {
+                'X-Token': this.$q.localStorage.getItem('token'),
+              },
+            }
+          )
+          .then((response) => {
+            this.$q.notify({
+              color: 'green',
+              position: 'top',
+              message: `Extra information has been sent from the nodes to blockchain! Remember about the notice regarding taking the new information in-effect. | Info: ${response.data.detail}`,
+              timeout: 10000,
+              progress: true,
+              icon: 'report_problem',
+            });
+          })
+          .catch((e) => {
+            this.$q.notify({
+              color: 'negative',
+              position: 'top',
+              message: `There was an error when submitting extra information. Reason: ${e.response.data.detail}`,
+              timeout: 10000,
+              progress: true,
+              icon: 'report_problem',
+            });
+          });
+      }
+      this.isProcessing = false;
+    },
+    errorOnRemark() {
+      this.$q.notify({
+        color: 'negative',
+        position: 'top',
+        message:
+          'There was an error from one of the remark fields. Please check and ensure that all conditions are met, then try again.',
+        timeout: 10000,
+        progress: true,
+        icon: 'report_problem',
+      });
+    },
+    clearRemarkForm() {
+      this.new_remark_title = '';
+      this.new_remark_description = '';
+
+      this.$q.notify({
+        color: 'green',
+        position: 'top',
+        message: 'Student remark fields has been cleared!',
+        timeout: 10000,
+        progress: true,
+        icon: 'mdi-account-check',
+      });
+    },
     optionsFn(org_date) {
       let datePlusOne = new Date();
 
@@ -733,6 +940,41 @@ export default {
           org_date ||
         org_date <= datePlusOne.toISOString().slice(0, 10).replaceAll('-', '/')
       );
+    },
+    setActiveFieldForForm(id) {
+      this.targetted_address = this.students[id - 1].address;
+    },
+    getStudents() {
+      this.isFetchingStudent = true;
+      axios
+        .get(`http://${resolvedNodeAPIURL}/dashboard/students`, {
+          headers: {
+            'X-Token': this.$q.localStorage.getItem('token'),
+          },
+        })
+        .then((response) => {
+          let student_index = 1;
+          let resolved_students = [];
+
+          for (let each_student of response.data) {
+            each_student.id = student_index;
+            student_index += 1;
+            resolved_students.push(each_student);
+          }
+          this.students = resolved_students;
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `Cannot fetch students. Reason: ${e.message}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
+
+      this.isFetchingStudent = false;
     },
   },
 };

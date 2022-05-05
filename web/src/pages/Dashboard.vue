@@ -177,8 +177,8 @@ export default defineComponent({
       button_left: ref('—'),
       button_right: ref('—'),
 
-      button_left_link: ref('—'),
-      button_right_link: ref('—'),
+      button_left_link: ref('#'),
+      button_right_link: ref('#'),
 
       first_name: ref('—'),
       last_name: ref('—'),
@@ -198,10 +198,10 @@ export default defineComponent({
       context_right_top_secondary: ref('—'),
       context_right_bottom_secondary: ref('—'),
 
-      context_left_progress_top: ref(0.4),
-      context_left_progress_bottom: ref(0.6),
+      context_left_progress_top: ref(0.69),
+      context_left_progress_bottom: ref(0.42),
 
-      context_progress_top: ref(0.3),
+      context_progress_top: ref(0.42),
       context_progress_bottom: ref(0.69),
     };
   },
@@ -270,7 +270,10 @@ export default defineComponent({
           } out of ${
             response.data.reports.total_overall_info_outside
           } transactions.`;
-          this.context_progress_bottom = '';
+          this.context_progress_bottom =
+            response.data.reports.total_associated_logs +
+            response.data.reports.total_associated_extra /
+              response.data.reports.total_overall_info_outside;
           // * Adjust the context for the applicant.
           // - Replace the button context.
           // this.button_left = dashboardOptions.applicant.buttons[0];

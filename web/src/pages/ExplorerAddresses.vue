@@ -199,7 +199,7 @@ export default defineComponent({
           this.$q.notify({
             color: 'red',
             position: 'top',
-            message: `Failed to fetch transactions from the server. Please try again later. Reason: ${e.message}.`,
+            message: `Failed to fetch transactions from the server. Please try again later. Reason: ${e.message}`,
             timeout: 10000,
             progress: true,
             icon: 'mdi-cancel',

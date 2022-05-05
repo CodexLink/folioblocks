@@ -633,7 +633,7 @@ export default defineComponent({
               position: 'top',
               message: `There was an error when submitting your credentials. Reason: ${
                 e.message || e.response.data.detail
-              }.`,
+              }`,
               timeout: 15000,
               progress: true,
               icon: 'report_problem',

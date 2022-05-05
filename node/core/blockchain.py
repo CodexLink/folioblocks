@@ -1175,10 +1175,15 @@ class BlockchainMechanism(ConsensusMechanism):
                             inserter_context: str | None = None
                             # * Get context of the inserter for the new users to refer.
                             if data.context.inserter is not None:
-                                get_inserter_context_query: Select = select([users.c.first_name, users.c.last_name, users.c.type]).where(users.c.data)
+                                get_inserter_context_query: Select = select(
+                                    [
+                                        users.c.first_name,
+                                        users.c.last_name,
+                                        users.c.type,
+                                    ]
+                                ).where(users.c.data)
 
-                                inserter_context = f"</b>Inserter: <b>{data.context.inserter}</b> <{}>"
-
+                                # inserter_context = f"</b>Inserter: <b>{data.context.inserter}</b> <{}>"
 
                             create_task(
                                 self.__email_service.send(

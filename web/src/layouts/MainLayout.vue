@@ -123,7 +123,7 @@
             <q-item
               clickable
               v-ripple
-              to="/org/insert"
+              to="/org/insert/standby"
               :active="activeLink === 'new-credentials'"
               @click="activeLink = 'new-credentials'"
               active-class="active-state"
@@ -272,7 +272,7 @@ export default defineComponent({
       if (this.containsNoAuth) return;
 
       await axios.post(
-        `http://${resolvedNodeAPIURL}/entity/logout`,
+        `http://${resolvednodeapiurl}/entity/logout`,
         {
           /* ... data */
         },
@@ -335,6 +335,10 @@ export default defineComponent({
   },
   updated() {
     this.checkPathAndAuth();
+
+    // * Ensure that other actions for the `org/insert/:action` endpoint is also handled.
+    if (this.$route.path.includes('/org/insert'))
+      this.activeLink = 'new-credentials';
   },
 });
 </script>

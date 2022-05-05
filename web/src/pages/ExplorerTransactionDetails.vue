@@ -193,7 +193,7 @@ export default defineComponent({
             this.$q.notify({
               color: 'red',
               position: 'top',
-              message: `There was an error when fetching from the chain. Please come back and try again later. Reason: ${e.message}.`,
+              message: `There was an error when fetching from the chain. Please come back and try again later. Reason: ${e.message}`,
               Interval: 10000,
               progress: true,
               icon: 'mdi-cancel',
