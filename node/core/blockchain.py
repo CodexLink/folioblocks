@@ -1638,7 +1638,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     calculated_user_tx += 1
 
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({calculated_user_tx}/{                BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK} transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
+                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({calculated_user_tx}/{                BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK} user transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
             )
 
             # - Sleep first due to block timer.

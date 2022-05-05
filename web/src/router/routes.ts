@@ -51,10 +51,6 @@ const routes: RouteRecordRaw[] = [
         path: '/portfolio/:addressable?',
         component: () => import('pages/PortfolioView.vue'),
       },
-      {
-        path: '/user_info',
-        component: () => import('pages/UserSettingView.vue'),
-      },
     ],
   },
 

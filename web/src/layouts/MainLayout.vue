@@ -154,20 +154,6 @@
 
               <q-item-section> Portfolio </q-item-section>
             </q-item>
-            <q-item
-              clickable
-              v-ripple
-              to="/user_info"
-              :active="activeLink === 'portfolio-settings'"
-              @click="activeLink = 'portfolio-settings'"
-              active-class="active-state"
-            >
-              <q-item-section avatar>
-                <q-icon name="mdi-book-cog" />
-              </q-item-section>
-
-              <q-item-section> Portfolio Editables </q-item-section>
-            </q-item>
           </div>
         </q-list>
       </q-scroll-area>
@@ -210,7 +196,7 @@ export default defineComponent({
   data() {
     return {
       user: ref('0x000000000000000'),
-      role: ref('Unidentified.'),
+      role: ref('Unidentified'),
       onExplorer: ref(false),
     };
   },
@@ -296,10 +282,15 @@ export default defineComponent({
       });
     },
     checkPathAndAuth() {
+      console.log(
+        this.role,
+        this.$route.params.addressable === '',
+        this.$route.params.addressable,
+        this.$route.path.includes('/portfolio')
+      );
       if (
-        // ! Whenever a user goes from a different path without getting itself authenticate, go back to its recent page.
-        (!this.$route.path.includes('/explorer') && this.containsNoAuth) ||
-        // ! Condition for prohibiting non-applicant users from accessing respective pages, except for portfolio.
+        // - Conditions for prohibiting non-applicant users from accessing respective pages, except for portfolio.
+        (this.$route.path.includes('/dashboard') && this.containsNoAuth) ||
         (this.$route.path.includes('/user_info') &&
           this.role !== 'Applicant Dashboard User') ||
         // ! Condition for prohibiting applicants accessing `/org` endpoints.
@@ -312,7 +303,11 @@ export default defineComponent({
         // ! Condition for prohibiting applicant users from accessing portfolio endpoint with path parameter, which may have the intention of checking other portfolio.
         (this.$route.path.includes('/portfolio') &&
           this.$route.params.addressable.length > 0 &&
-          this.role === 'Applicant Dashboard User')
+          this.role === 'Applicant Dashboard User') ||
+        // ! Condition for prohibiting anonymous users from accessing the portfolio when its `addressable` params were invalid.
+        (this.$route.path.includes('/portfolio') &&
+          this.$route.params.addressable.length !== 35 &&
+          this.role === 'Unidentified')
       ) {
         void this.$router.push({
           path: this.containsNoAuth ? '/' : '/dashboard',

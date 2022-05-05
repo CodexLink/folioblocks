@@ -183,14 +183,22 @@ async def get_dashboard_data(
     elif user_basic_context.type is UserEntity.APPLICANT_DASHBOARD_USER:
         # - Get count of associated logs from this applicant.
         get_logs_associated_count_query: Select = select([func.count()]).where(
-            (tx_content_mappings.c.address_ref == entity_address_ref) & (tx_content_mappings.c.content_type == TransactionContextMappingType.APPLICANT_LOG)
+            (tx_content_mappings.c.address_ref == entity_address_ref)
+            & (
+                tx_content_mappings.c.content_type
+                == TransactionContextMappingType.APPLICANT_LOG
+            )
         )
 
         logs_count = await database_instance.fetch_val(get_logs_associated_count_query)
 
         # - Get count of associated extra from this applicant.
         get_extra_associated_count_query: Select = select([func.count()]).where(
-            (tx_content_mappings.c.address_ref == entity_address_ref) & (tx_content_mappings.c.content_type == TransactionContextMappingType.APPLICANT_ADDITIONAL)
+            (tx_content_mappings.c.address_ref == entity_address_ref)
+            & (
+                tx_content_mappings.c.content_type
+                == TransactionContextMappingType.APPLICANT_ADDITIONAL
+            )
         )
 
         extra_count = await database_instance.fetch_val(
@@ -326,7 +334,7 @@ async def get_user_profile(
 ) -> ApplicantEditableProperties:
     # - Get the information of this user.
     get_editable_info_query: Select = select(
-        [users.c.avatar, users.c.description, users.c.skills]
+        [users.c.avatar, users.c.description, users.c.skills, users.c.preferred_role]
     ).where(users.c.unique_address == applicant_address_ref)
 
     editable_infos = await database_instance.fetch_one(get_editable_info_query)
@@ -335,6 +343,7 @@ async def get_user_profile(
         avatar=editable_infos.avatar,
         description=editable_infos.description,
         personal_skills=editable_infos.skills,
+        preferred_role=editable_infos.preferred_role,
     )
 
 
@@ -362,6 +371,8 @@ async def save_user_profile(
         None,
         title="Skills that can be displayed from the portfolio to show extra bits of this user.",
     ),
+    preferred_role: str
+    | None = Form(None, title="The student's preference over something to work on."),
 ) -> Response:
     # * State variables.
     resolved_avatar_dir: str = ""
@@ -373,7 +384,12 @@ async def save_user_profile(
         )
 
     # - Check for the fields.
-    if avatar is None and description is None and personal_skills is None:
+    if (
+        avatar is None
+        and description is None
+        and personal_skills is None
+        and preferred_role is None
+    ):
         return Response(status_code=HTTPStatus.ACCEPTED)
 
     # - When there's a avatar, just save, don't make it complicated bro.
@@ -402,6 +418,7 @@ async def save_user_profile(
                 avatar=resolved_avatar_dir,
                 description=description,
                 skills=personal_skills,
+                preferred_role=preferred_role,
             )
         )
         await database_instance.execute(update_user_editable_info)
@@ -780,7 +797,7 @@ async def get_portfolio(
         if portfolio_properties.expose_email_state
         else None,
         program=resolved_user_basic_info.program,
-        prefer_role=resolved_user_basic_info.preferred_role,
+        preferred_role=resolved_user_basic_info.preferred_role,
         association=resolved_user_basic_info.association,
         avatar=resolved_user_basic_info.avatar,
         description=resolved_user_basic_info.description,

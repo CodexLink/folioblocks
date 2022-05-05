@@ -283,6 +283,7 @@ export default defineComponent({
                 response.data.reports.total_associated_extra) /
               response.data.reports.total_overall_info_outside;
           } else {
+            console.log(response);
             // * Adjust the context for the applicant.
             // - Replace the button context.
             this.button_left = dashboardOptions.applicant.buttons[0];
@@ -298,9 +299,9 @@ export default defineComponent({
             this.context_right_top_primary = `You currently have ${
               response.data.reports.logs_associated_count +
               response.data.reports.extra_associated_count
-            } credential/s given by your association. (Out of ${
+            } out of ${
               response.data.reports.total_txs_overall
-            } credential/s)`;
+            } given credential/s by your association.`;
             this.context_right_progress_top =
               (response.data.reports.logs_associated_count +
                 response.data.reports.extra_associated_count) /
@@ -340,8 +341,9 @@ export default defineComponent({
               dashboardOptions.applicant.context.right_bottom.icon;
 
             // * Count the number of `true` over `false`.
-            portfolio_truthy_count = 0;
-            portfolio_total_props = 0;
+            let portfolio_truthy_count = 0;
+            let portfolio_total_props = 0;
+
             for (let portfolio_property in response.data.reports.portfolio) {
               if (portfolio_property) portfolio_truthy_count++;
               portfolio_total_props++;
@@ -351,7 +353,7 @@ export default defineComponent({
               portfolio_truthy_count / portfolio_total_props;
           }
         })
-        .catch((_e) => {
+        .catch((e) => {
           this.$q.notify({
             color: 'red',
             position: 'top',

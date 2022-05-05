@@ -79,6 +79,7 @@ class ApplicantEditableProperties(BaseModel):
     avatar: UploadFile | str | None
     description: str | None
     personal_skills: str | None
+    preferred_role: str | None
 
 
 class DashboardApplicant(BaseModel):
@@ -121,7 +122,6 @@ class Portfolio(ApplicantEditableProperties, BaseModel):
     address: AddressUUID
     email: EmailStr | None
     program: str
-    prefer_role: str
     association: AddressUUID
     logs: list[PortfolioLoadedContext] | None
     extra: list[PortfolioLoadedContext] | None
