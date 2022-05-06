@@ -48,7 +48,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('pages/InsertContextView.vue'),
       },
       {
-        path: '/portfolio/:addressable?',
+        path: '/portfolio/:address?',
         component: () => import('pages/PortfolioView.vue'),
       },
     ],

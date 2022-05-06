@@ -458,9 +458,7 @@ export default defineComponent({
   methods: {
     submitLoginRequest() {
       this.isProcessing = true;
-      setTimeout(() => {
-        console.log(1);
-      }, 15000);
+
       axios
         .post(`http://${resolvedNodeAPIURL}/entity/login`, {
           username: this.login_username,
@@ -503,6 +501,7 @@ export default defineComponent({
               // * Then set the current token and the address.
               this.$q.localStorage.set('token', response.data.jwt_token);
               this.$q.localStorage.set('address', response.data.user_address);
+              this.$q.localStorage.set('role', response.data.user_role)
 
               // * Some some toast.
               this.$q.notify({

@@ -188,7 +188,7 @@
     </q-card>
   </q-dialog>
 
-  <q-page-sticky position="bottom-right" :offset="[24, 24]">
+  <q-page-sticky v-if="isApplicant" position="bottom-right" :offset="[24, 24]">
     <q-btn
       fab
       v-ripple
@@ -232,7 +232,12 @@
 
       <q-separator />
 
-      <q-tab-panels v-model="selected_settings" animated class="panels">
+      <q-tab-panels
+        v-model="selected_settings"
+        v-if="isApplicant"
+        animated
+        class="panels"
+      >
         <q-tab-panel name="share_settings">
           <q-card-section>
             <div class="text-h6 text-weight-bold">Share Settings</div>
@@ -497,6 +502,7 @@ export default defineComponent({
 
   setup() {
     const $q = useQuasar();
+    const $route = useRoute();
     const $router = useRouter();
 
     return {
@@ -518,10 +524,16 @@ export default defineComponent({
       editable_info_description: ref(''),
       editable_info_preferred_role: ref(''),
       editable_info_personal_skills: ref(''),
+
+      isApplicant: ref(false),
+      isOrg: ref(false),
+      isAnonymous: ref(false),
     };
   },
   mounted() {
-    if (this.$q.localStorage.getItem('token') !== null) {
+    this.getPortfolio();
+
+    if (this.isApplicant) {
       this.loadPortfolioSettings();
       this.loadEditableInfo();
     }
@@ -536,7 +548,6 @@ export default defineComponent({
           },
         })
         .then((response) => {
-          console.log(response.data);
           this.portfolio_sharing_state = response.data.enable_sharing;
           this.portfolio_show_email_state = response.data.expose_email_info;
           this.portfolio_allow_file_state = response.data.show_files;
@@ -686,7 +697,106 @@ export default defineComponent({
         });
       this.isProcessing = false;
     },
-    getPortfolio() {},
+    getPortfolio() {
+      // ! Reset states.
+      // this.isApplicant = false;
+      // this.isOrg = false;
+      // this.isAnonymous = false;
+
+      // - Resolve origin of the address.
+      let portfolioURL = `http://${resolvedNodeAPIURL}/dashboard/portfolio`;
+
+      // * Check if 'address' was existing from the localStorage along with the 'token'.
+      // * If both does not exist, then check if 'address' is specified via URL path parameter. This was for the case of being accessed by an anonymous user.
+      // - Resolve user data.
+      // - Resolve list of logs data.
+      // - Resolve list of extra data.
+      console.log(
+        this.$route.query.address,
+        this.$q.localStorage.getItem('token'),
+        this.$q.localStorage.getItem('role')
+      );
+      // - Condition for allowing students to access their own portfolio.
+      if (
+        this.$route.query.address === undefined &&
+        this.$q.localStorage.getItem('token') !== null &&
+        this.$q.localStorage.getItem('role') === 'Applicant Dashboard User'
+      ) {
+        this.isApplicant = true;
+      }
+      // - Condition for allowing organizations to access a particular portfolio
+      else if (
+        this.$route.query.address !== undefined &&
+        this.$q.localStorage.getItem('token') !== null &&
+        this.$q.localStorage.getItem('role') == 'Organization Dashboard User'
+      ) {
+        this.isOrg = true;
+        portfolioURL += `?address=${this.$route.query.address}`;
+      }
+
+      // - Condition for allowing anonymous users from accessing a particular portfolio.
+      else if (
+        this.$route.query.address !== undefined &&
+        this.$q.localStorage.getItem('token') === null
+      ) {
+        this.isAnonymous = true;
+        portfolioURL += `?address=${this.$route.query.address}`;
+      } else {
+        void this.$router.push({
+          path:
+            this.$q.localStorage.getItem('role') ===
+            'Organization Dashboard User '
+              ? '/dashboard'
+              : '/',
+        });
+
+        this.$q.notify({
+          color: 'negative',
+          position: 'top',
+          message:
+            'You are not allowed to access this view. If you are an anonymous, please ensure that the address you copied is exactly 35 characters or the address were not found.',
+          timeout: 10000,
+          progress: true,
+          icon: 'report_problem',
+        });
+
+        return;
+      }
+      console.log(portfolioURL);
+      // ! Prepare the payload.
+      let headerForAuth = {
+        headers: {
+          'X-Token': this.$q.localStorage.getItem('token'),
+        },
+      };
+      axios
+        .get(portfolioURL, this.isOrg || this.isApplicant ? headerForAuth : {})
+        .then((response) => {
+          this.$q.notify({
+            color: 'blue',
+            position: 'top',
+            message: this.isAnonymous
+              ? 'You are accessing this portfolio as an anonymous.'
+              : this.isOrg
+              ? "You are accessing this student's portfolio as a preview. Note that you cannot modify these entries anymore."
+              : "You are accessing this as a student, please check your settings to adjust your portfolio's output.",
+            timeout: 10000,
+            progress: true,
+            icon: 'info',
+          });
+        })
+        .catch((e) => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `There was an error when fetching portfolio. Reason: ${e.response.data.detail}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+          this.$router.go(-1);
+        });
+    },
     // Clicked: function (list) {
     //   // eslint-disable-next-line
     //   this.nameinfo = list.name;

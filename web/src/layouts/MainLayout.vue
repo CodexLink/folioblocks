@@ -282,12 +282,7 @@ export default defineComponent({
       });
     },
     checkPathAndAuth() {
-      console.log(
-        this.role,
-        this.$route.params.addressable === '',
-        this.$route.params.addressable,
-        this.$route.path.includes('/portfolio')
-      );
+      console.log(this.role, this.$route);
       if (
         // - Conditions for prohibiting non-applicant users from accessing respective pages, except for portfolio.
         (this.$route.path.includes('/dashboard') && this.containsNoAuth) ||
@@ -298,15 +293,15 @@ export default defineComponent({
           this.role !== 'Organization Dashboard User') ||
         // ! Condition for prohibiting organization members attempting to access portfolio endpoint with no path parameter.
         (this.$route.path.includes('/portfolio') &&
-          this.$route.params.addressable === '' &&
+          this.$route.query.address === '' &&
           this.role === 'Organization Dashboard User') ||
         // ! Condition for prohibiting applicant users from accessing portfolio endpoint with path parameter, which may have the intention of checking other portfolio.
         (this.$route.path.includes('/portfolio') &&
-          this.$route.params.addressable.length > 0 &&
+          this.$route.query.address !== undefined &&
           this.role === 'Applicant Dashboard User') ||
-        // ! Condition for prohibiting anonymous users from accessing the portfolio when its `addressable` params were invalid.
+        // ! Condition for prohibiting anonymous users from accessing the portfolio when its `address` query were invalid.
         (this.$route.path.includes('/portfolio') &&
-          this.$route.params.addressable.length !== 35 &&
+          this.$route.query.address === undefined &&
           this.role === 'Unidentified')
       ) {
         void this.$router.push({
