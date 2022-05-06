@@ -138,7 +138,7 @@ let dashboardOptions = {
           'Note that this is the last state since the page has been loaded. Refresh to update this information.',
       },
       right_top: {
-        title: 'Total Associated Credentials',
+        title: 'Total Credentials Received',
         icon: 'mdi-file-star',
       },
       right_bottom: {
@@ -163,7 +163,7 @@ let dashboardOptions = {
         icon: 'mdi-account-group',
       },
       right_bottom: {
-        title: 'Total Transactions Invoked',
+        title: 'Total Student Credentials Inserted',
         icon: 'mdi-file-multiple',
       },
     },
@@ -249,7 +249,7 @@ export default defineComponent({
               dashboardOptions.organization.context.right_top.icon;
             this.context_right_top =
               dashboardOptions.organization.context.right_top.title;
-            this.context_right_top_primary = `Currently, there was ${response.data.reports.total_associated} out of ${response.data.reports.total_users} associated users from the system.`;
+            this.context_right_top_primary = `Currently, there was ${response.data.reports.total_associated} out of ${response.data.reports.total_users} associated users from your organization.`;
             this.context_right_progress_top =
               response.data.reports.total_associated /
               response.data.reports.total_users;
@@ -278,7 +278,7 @@ export default defineComponent({
               response.data.reports.total_associated_extra
             } out of ${
               response.data.reports.total_overall_info_outside
-            } transactions.`;
+            } student credentials.`;
             this.context_right_progress_bottom =
               (response.data.reports.total_associated_logs +
                 response.data.reports.total_associated_extra) /
@@ -302,7 +302,7 @@ export default defineComponent({
               response.data.reports.extra_associated_count
             } out of ${
               response.data.reports.total_txs_overall
-            } given credential/s by your association.`;
+            } given credential/s by your organization.`;
             this.context_right_progress_top =
               (response.data.reports.logs_associated_count +
                 response.data.reports.extra_associated_count) /
@@ -337,7 +337,7 @@ export default defineComponent({
                 : 'hidden'
             }, and files were '${
               response.data.reports.portfolio.show_files ? 'viewable' : 'hidden'
-            }'`;
+            }'.`;
             this.context_right_bottom_icon =
               dashboardOptions.student.context.right_bottom.icon;
 

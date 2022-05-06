@@ -10,11 +10,16 @@
       @click="
         new_user = true;
         existing_user = false;
+        targetted_address = null;
+        targetted_number = 0;
       "
     />
 
     <q-card class="users">
       <q-linear-progress v-if="isFetchingStudent" query color="red" />
+      <h5 class="text-body1" style="margin-left: 4%">
+        <strong>Students Available</strong>
+      </h5>
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item
           v-for="student in students"
@@ -111,8 +116,8 @@
                   hint="The name of this log or the general context of it, please keep it concise and easy to understand."
                   :rules="[
                     (val) =>
-                      (val && val.length >= 8) ||
-                      'This is required. Must have 8 characters and above.',
+                      val.length >= 2 ||
+                      'This is required. Must have 2 characters above.',
                   ]"
                   lazy-rules
                 />
@@ -128,7 +133,7 @@
                   hint="The context of this log. Please provide enough information as possible, but keep it clean."
                   :rules="[
                     (val) =>
-                      (val && val.length >= 8) ||
+                      val.length >= 8 ||
                       'This is required. Must have 8 characters and above.',
                   ]"
                   lazy-rules
@@ -145,7 +150,7 @@
                   hint="The student's role from this log, generally more of a role from the job, keep it concise as possible."
                   :rules="[
                     (val) =>
-                      (val && val.length >= 4) ||
+                      val.length >= 4 ||
                       'This is required. Must have 4 characters and above.',
                   ]"
                   lazy-rules
@@ -155,11 +160,11 @@
                   class="input"
                   v-model="new_log_file"
                   label="Document Proof (PDF Files Only)"
-                  hint="This is optional but is recommended as this can be used as a supporting context. Also, must contain no sensitive information."
+                  hint="This is optionally recommended as this can be used as a supporting context. Should contain no sensitive information and 5MB max."
                   filled
                   multiple
                   clearable
-                  counter
+                  cor
                   :disable="isProcessing"
                   accept=".pdf"
                   max-file-size="5242880"
@@ -305,10 +310,9 @@
                   label="Remark Title"
                   counter
                   hint="The general context of this remark. Make it concise but minimal as possible."
-                  clearable
                   :rules="[
                     (val) =>
-                      (val && val.length >= 4) ||
+                      val.length >= 4 ||
                       'This is required. Must have 4 characters and above.',
                   ]"
                   lazy-rules
@@ -324,10 +328,9 @@
                   counter
                   v-model="new_remark_description"
                   label="Remark Description"
-                  clearable
                   :rules="[
                     (val) =>
-                      (val && val.length >= 8) ||
+                      val.length >= 8 ||
                       'This is required. Must have 8 characters and above.',
                   ]"
                   lazy-rules
@@ -396,7 +399,6 @@
                 counter
                 v-model="new_student_first_name"
                 label="First Name"
-                clearable
                 :rules="[
                   (val) =>
                     (val.length >= 2 && val.length <= 32) ||
@@ -414,7 +416,6 @@
                 counter
                 v-model="new_student_last_name"
                 label="Last Name"
-                clearable
                 :rules="[
                   (val) =>
                     (val.length >= 2 && val.length <= 32) ||
@@ -433,7 +434,6 @@
               v-model="new_student_description"
               label="Description"
               counter
-              clearable
               hint="Make the description formalized as the first entry will be imprinted in blockchain, student can change this information when logged on."
               :rules="[
                 (val) =>
@@ -456,7 +456,6 @@
                 label="E-mail"
                 counter
                 lazy-rules
-                clearable
                 hint="Ask the student regarding what email to use as this will be exposed for contacting purposes."
                 :disable="isProcessing"
                 :rules="[(val) => val.includes('@') || 'Invalid email format.']"
@@ -472,7 +471,6 @@
                 hint="This will be wary of this as it will be used to login."
                 :disable="isProcessing"
                 counter
-                clearable
                 :rules="[
                   (val) =>
                     (val.length >= 8 && val.length <= 24) ||
@@ -487,14 +485,13 @@
               outlined
               dense
               color="secondary"
-              v-model="new_user_personal_skills"
+              v-model="new_student_personal_skills"
               label="Personal Skills"
               counter
-              clearable
               hint="Similar to description but is specified to student's capability. Seperate the contents in comma. Be wary of the initial input as it will be imprinted in blockchain. Student can change this later on."
               :rules="[
                 (val) =>
-                  (val && val.length >= 8) ||
+                  val.length >= 8 ||
                   'This is required. Must have 8 characters and above.',
               ]"
               lazy-rules
@@ -510,12 +507,11 @@
                 label="Program"
                 hint="Do not use acronym, and do not prefix it with BS or Bachelor."
                 :disable="isProcessing"
-                clearable
                 counter
                 :rules="[
                   (val) =>
-                    (val.length >= 8 && val.length <= 64) ||
-                    'This should contain not less than 8 characters or more than 24 characters.',
+                    (val.length >= 4 && val.length <= 64) ||
+                    'This should contain not less than 4 characters or more than 24 characters.',
                 ]"
                 lazy-rules
               />
@@ -529,7 +525,6 @@
                 label="Year Level"
                 type="number"
                 :disable="isProcessing"
-                clearable
                 hint="Reference hint whether this student graduated in 4th year or 5th year."
                 counter
                 :rules="[
@@ -549,13 +544,12 @@
               v-model="new_student_prefer_role"
               label="Preferred Employment Role"
               :disable="isProcessing"
-              clearable
               hint="The preferred role the student infers. This is interchangeable but please provide an initial input. Therefore, ask your student regarding one."
               counter
               :rules="[
                 (val) =>
-                  (val.length >= 4 && val.length <= 32) ||
-                  'This should contain not less than 4 characters or more than 32 characters.',
+                  (val.length >= 2 && val.length <= 32) ||
+                  'This should contain not less than 2 characters or more than 32 characters.',
               ]"
               lazy-rules
             />
@@ -569,7 +563,6 @@
               type="password"
               label="Password"
               :disable="isProcessing"
-              clearable
               hint="The password that the student uses. The developers recommends random generation of password to avoid bias."
               counter
               :rules="[
@@ -603,6 +596,25 @@
         </q-card>
       </div>
     </div>
+    <q-page-sticky position="bottom-right" :offset="[24, 24]">
+      <q-btn
+        fab
+        v-ripple
+        icon="mdi-text-box-check"
+        color="amber"
+        v-if="targetted_number > 0 && targetted_address"
+        @click="directToPortfolio"
+      >
+        <q-tooltip
+          class="bg-indigo"
+          :offset="[10, 10]"
+          anchor="center left"
+          self="center right"
+        >
+          View Portfolio of {{ targetted_address }}
+        </q-tooltip>
+      </q-btn>
+    </q-page-sticky>
   </div>
 </template>
 
@@ -629,33 +641,34 @@ export default {
   data() {
     return {
       students: ref([]),
+      focused_portfolio_address: ref(''),
 
-      new_student_first_name: ref(null),
-      new_student_last_name: ref(null),
-      new_student_username: ref(null),
-      new_student_email: ref(null),
-      new_student_password: ref(null),
-      new_student_description: ref(null),
-      new_user_personal_skills: ref(null),
-      new_student_recent_program: ref(null),
-      new_student_recorded_year_level: ref(null),
-      new_student_prefer_role: ref(null),
+      new_student_first_name: ref(''),
+      new_student_last_name: ref(''),
+      new_student_username: ref(''),
+      new_student_email: ref(''),
+      new_student_password: ref(''),
+      new_student_description: ref(''),
+      new_student_personal_skills: ref(''),
+      new_student_recent_program: ref(''),
+      new_student_recorded_year_level: ref(''),
+      new_student_prefer_role: ref(''),
 
       existing_user: ref(false),
       new_user: ref(false),
       isProcessing: ref(false),
       isFetchingStudent: ref(true),
 
-      new_log_name: ref(null),
-      new_log_description: ref(null),
-      new_log_role: ref(null),
+      new_log_name: ref(''),
+      new_log_description: ref(''),
+      new_log_role: ref(''),
       new_log_file: ref(null),
 
       new_log_date_start: ref(null),
       new_log_date_end: ref(null),
 
-      new_remark_title: ref(null),
-      new_remark_description: ref(null),
+      new_remark_title: ref(''),
+      new_remark_description: ref(''),
     };
   },
   mounted() {
@@ -667,6 +680,21 @@ export default {
       this.new_user = false;
     }
     this.getStudents();
+
+    if (
+      this.targetted_number === null &&
+      this.existing_user === false &&
+      this.new_user === false
+    )
+      this.$q.notify({
+        color: 'blue',
+        position: 'top',
+        message:
+          'Please select a student from the left side. Otherwise, create a new student.',
+        timeout: 5000,
+        progress: true,
+        icon: 'info',
+      });
   },
   methods: {
     submitNewStudent() {
@@ -732,16 +760,17 @@ export default {
       });
     },
     clearRegistrationForm(showMessage = true) {
-      this.new_student_first_name = null;
-      this.new_student_last_name = null;
-      this.new_student_username = null;
-      this.new_student_email = null;
-      this.new_student_password = null;
-      this.new_student_description = null;
-      this.new_user_personal_skills = null;
-      this.new_student_recent_program = null;
-      this.new_student_recorded_year_level = null;
-      this.new_student_prefer_role = null;
+      // ! Clear Context
+      this.new_student_first_name = '';
+      this.new_student_last_name = '';
+      this.new_student_username = '';
+      this.new_student_email = '';
+      this.new_student_password = '';
+      this.new_student_description = '';
+      this.new_student_personal_skills = '';
+      this.new_student_recent_program = '';
+      this.new_student_recorded_year_level = 1;
+      this.new_student_prefer_role = '';
 
       if (showMessage)
         this.$q.notify({
@@ -773,12 +802,12 @@ export default {
           let validateDateEnd = new Date(this.new_log_date_end);
 
           if (validateDateEnd.toTimeString() !== 'Invalid Date') {
-            if (validateDateEnd > validateDateStart) {
+            if (validateDateEnd < validateDateStart) {
               this.$q.notify({
                 color: 'negative',
                 position: 'top',
                 message:
-                  'Duration start and end is impossible. Please ensure that the duration end doesnt start earlier than the duration start.',
+                  'Duration end seems to be earlier than the duration start. Please fix that.',
                 timeout: 10000,
                 progress: true,
                 icon: 'report_problem',
@@ -861,6 +890,7 @@ export default {
       });
     },
     clearLogForm(showMessage = true) {
+      // ! Clear Context
       this.new_log_name = null;
       this.new_log_description = null;
       this.new_log_role = null;
@@ -942,6 +972,7 @@ export default {
       });
     },
     clearRemarkForm(showMessage = true) {
+      // ! Clear Context
       this.new_remark_title = null;
       this.new_remark_description = null;
 
@@ -1004,6 +1035,13 @@ export default {
         });
 
       this.isFetchingStudent = false;
+    },
+    directToPortfolio() {
+      console.log(this.targetted_address);
+      void this.$router.push({
+        path: '/portfolio',
+        query: { address: this.targetted_address },
+      });
     },
   },
 };

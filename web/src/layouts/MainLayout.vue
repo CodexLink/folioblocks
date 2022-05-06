@@ -165,10 +165,7 @@
       >
         <div class="absolute-bottom bg-transparent">
           <q-avatar size="56px" class="q-mb-sm">
-            <img
-              src="https://thispersondoesnotexist.com/image"
-              alt="This person does not exists."
-            />
+            <img :src="html_user_avatar" />
           </q-avatar>
           <div class="text-weight-bold">{{ user }}</div>
           <div>{{ role }}</div>
@@ -196,6 +193,7 @@ export default defineComponent({
   data() {
     return {
       user: ref('0x000000000000000'),
+      html_user_avatar: ref(''),
       role: ref('Unidentified'),
       onExplorer: ref(false),
     };
@@ -229,6 +227,7 @@ export default defineComponent({
         })
         .then((response) => {
           this.user = `${response.data.first_name} ${response.data.last_name}`;
+          this.html_user_avatar = `https://ui-avatars.com/api/?name=${response.data.first_name}+${response.data.last_name}`;
           this.role = response.data.role;
 
           this.checkPathAndAuth();

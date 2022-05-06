@@ -31,6 +31,7 @@ export const TransactionContentMappingType = Object.freeze(
 		STUDENT_BASE: 1,
 		STUDENT_LOG: 2,
 		STUDENT_ADDITIONAL: 3,
+		ORGANIZATION_BASE: 4
 	}
 )
 
@@ -41,8 +42,6 @@ export const NodeTransactionInternalActions = Object.freeze(
 		SYNC: 3,
 	}
 )
-
-
 
 export function resolveTransactionActions(action) {
 
@@ -92,6 +91,9 @@ export function resolveContextType(typeField) {
 			case TransactionContentMappingType.STUDENT_ADDITIONAL:
 				resolvedTypeValue = 'Student Additional Info / Remarks'
 				break
+			case TransactionContentMappingType.ORGANIZATION_BASE:
+				resolvedTypeValue = 'Organization Base Registration'
+				break
 			default:
 				resolvedTypeValue = 'Unidentified'
 				break
@@ -99,7 +101,7 @@ export function resolveContextType(typeField) {
 	} else {
 		console.log('cxz')
 		switch (typeField.action) {
-			case NodeTransactionInternalActions.CONSENSUS: ;
+			case NodeTransactionInternalActions.CONSENSUS:
 				resolvedTypeValue = 'Internal: Consensus Context'
 				break
 			case NodeTransactionInternalActions.INIT:

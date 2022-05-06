@@ -113,7 +113,6 @@
         </q-table>
 
         <q-table
-          style="max-width: 90%"
           :rows="block_rows"
           :columns="block_cols"
           row-key="name"
@@ -385,10 +384,11 @@ h4 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  margin: 6%;
   margin-bottom: 0%;
   padding-bottom: 3%;
   margin-top: 2%;
+  margin-left: 2%;
+  margin-right: 2%;
 }
 
 h5 {

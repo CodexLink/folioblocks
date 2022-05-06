@@ -128,6 +128,7 @@ async def get_dashboard_data(
         associate_extra_count: int = 0
 
         for each_associate in associates:
+            # - For the logs transaction.
             get_associated_logs_query: Select = select([func.count()]).where(
                 (tx_content_mappings.c.address_ref == each_associate.unique_address)
                 & (
@@ -143,6 +144,7 @@ async def get_dashboard_data(
             if associate_log_count is not None and isinstance(associate_log_count, int):
                 associate_log_count += associate_logs_count
 
+            # - For the extra transaction.
             get_associated_extra_query: Select = select([func.count()]).where(
                 (tx_content_mappings.c.address_ref == each_associate.unique_address)
                 & (
