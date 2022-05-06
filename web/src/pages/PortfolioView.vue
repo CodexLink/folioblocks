@@ -1,55 +1,58 @@
 <template>
   <div class="header text-h6">
-    <div class="avatar">
-      <q-avatar class="usericon" icon="account_circle" />
-    </div>
-
     <p class="q-pt-md">
       <span class="text-weight-bold q-ma-sm q-mb-sm q-pt-md q-ml-lg">
-        Name:</span
+        Address:
+      </span>
+      <router-link
+        :to="'/explorer/address/' + portfolio_user_address"
+        style="text-decoration: none"
       >
-      {{ role }}
-
-      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-xl"> Identity:</span>
-      {{ role }}
-    </p>
-    <p>
-      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg"> Email:</span
-      >{{ role }}
-    </p>
-
-    <p>
-      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg">
-        Institution:</span
-      >
-      {{ role }}
-    </p>
-    <p>
-      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg"> Course:</span>
-      {{ role }}
-
-      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-xl"> Year Level:</span>
-      {{ role }}
+        {{ portfolio_user_address }}
+      </router-link>
 
       <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-xl">
-        Prefer Role:</span
-      >
-      {{ role }}
+        Institution Reference:
+      </span>
+      {{ portfolio_user_association }}
     </p>
     <p>
       <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg">
-        Personal Skills:</span
-      >
-      {{ role }}
+        Email Contact:</span
+      >{{ portfolio_user_email_contact }}
     </p>
     <p>
-      <span class="text-weight-bold q-ma-sm q-ml-lg"> Description:</span>
-      {{ description }}
+      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg"> Program:</span>
+      {{ portfolio_user_program }}
+      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg">
+        Role Preference in Field:</span
+      >
+      {{ portfolio_user_preferred_role }}
+    </p>
+    <p></p>
+    <p>
+      <span class="text-weight-bold q-ma-sm q-ml-lg">
+        General Description:</span
+      >
+      {{ portfolio_user_description }}
+    </p>
+    <p>
+      <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-lg"> Skillset: </span>
+      {{ portfolio_user_personal_skills }}
     </p>
   </div>
 
   <div class="row">
     <div class="logs">
+      <q-linear-progress v-if="true" query color="red" class="q-mt-sm" />
+      <q-card-section style="margin-bottom: 0.5%">
+        <div class="text-h6">Logs</div>
+        <div class="text-subtitle1">
+          A set of contentful information that can be known as
+          <strong>logs</strong>, which should contains supporting context with
+          documents (if given). The following are associated logs to you.
+        </div>
+      </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item
           v-for="list in lists"
@@ -103,6 +106,15 @@
     </div>
 
     <div class="logs">
+      <q-linear-progress v-if="true" query color="red" class="q-mt-sm" />
+
+      <q-card-section style="margin-bottom: 0.5%">
+        <div class="text-h6">Extras</div>
+        <div class="text-subtitle1">
+          A set of information that can be known as <strong>remarks</strong>. It
+          may contain judgements that reflects the state of this student.
+        </div>
+      </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item v-for="list in lists" :key="list.id" clickable class="logdata">
           <q-item-section class="text-h6">
@@ -188,20 +200,30 @@
     </q-card>
   </q-dialog>
 
-  <q-page-sticky v-if="isApplicant" position="bottom-right" :offset="[24, 24]">
+  <q-page-sticky position="bottom-right" :offset="[24, 24]">
     <q-btn
       fab
       v-ripple
       icon="mdi-file-cog"
       color="red"
+      v-if="isApplicant"
       @click="portfolio_modal = true"
-    />
+    >
+      <q-tooltip
+        class="bg-indigo"
+        :offset="[10, 10]"
+        anchor="center left"
+        self="center right"
+      >
+        Portfolio Settings
+      </q-tooltip>
+    </q-btn>
   </q-page-sticky>
 
   <q-dialog v-model="portfolio_modal" class="modal">
     <q-card style="width: 100%">
       <q-linear-progress
-        v-if="isProgressing"
+        v-if="isProcessing"
         rounded
         query
         indeterminate
@@ -311,7 +333,7 @@
               <q-btn
                 flat
                 style="color: #ff0080"
-                :disable="isProcessing"
+                :disable="portfolio_setting_btn_click_state"
                 label="Apply Settings"
                 @click="submitPortfolioSettings"
               />
@@ -397,6 +419,7 @@
                 type="submit"
                 style="color: #ff0080"
                 label="Apply New Info"
+                :disable="editable_info_btn_click_state"
               />
             </q-card-actions>
           </q-form>
@@ -417,6 +440,41 @@ import { useRoute, useRouter } from 'vue-router';
 export default defineComponent({
   data() {
     return {
+      // * Card on Top.
+      portfolio_user_address: ref('—'),
+      portfolio_user_association: ref('—'),
+
+      portfolio_user_program: ref('—'),
+
+      portfolio_user_description: ref('—'),
+      portfolio_user_personal_skills: ref('—'),
+      portfolio_user_preferred_role: ref('—'),
+
+      // * State and Field Variables
+      portfolio_modal: ref(false),
+      selected_settings: ref('share_settings'),
+      isProcessing: ref(false),
+
+      portfolio_sharing_state: ref(false),
+      portfolio_show_email_state: ref(false),
+      portfolio_allow_file_state: ref(false),
+
+      portfolio_setting_btn_click_state: ref(false),
+      editable_info_btn_click_state: ref(false),
+
+      editable_info_description: ref(''),
+      editable_info_preferred_role: ref(''),
+      editable_info_personal_skills: ref(''),
+
+      // * Switch Variables
+      isApplicant: ref(false),
+      isOrg: ref(false),
+      isAnonymous: ref(false),
+
+      // * Log Information Variables
+
+      // * Extra Information Variables
+
       role: 'Role',
       nameinfo: '',
       addressinfo: '',
@@ -512,22 +570,6 @@ export default defineComponent({
       exposeemail: ref(true),
       timelimit: ref(true),
       allowfile: ref(true),
-
-      portfolio_modal: ref(false),
-      selected_settings: ref('share_settings'),
-      isProcessing: ref(false),
-
-      portfolio_sharing_state: ref(false),
-      portfolio_show_email_state: ref(false),
-      portfolio_allow_file_state: ref(false),
-
-      editable_info_description: ref(''),
-      editable_info_preferred_role: ref(''),
-      editable_info_personal_skills: ref(''),
-
-      isApplicant: ref(false),
-      isOrg: ref(false),
-      isAnonymous: ref(false),
     };
   },
   mounted() {
@@ -541,6 +583,7 @@ export default defineComponent({
   methods: {
     loadPortfolioSettings() {
       this.isProcessing = true;
+      this.portfolio_setting_btn_click_state = false;
       axios
         .get(`http://${resolvedNodeAPIURL}/dashboard/portfolio_settings`, {
           headers: {
@@ -592,6 +635,7 @@ export default defineComponent({
         });
     },
     submitEditableInfo() {
+      this.editable_info_btn_click_state = true;
       this.isProcessing = true;
 
       // ! Set up the FormData(), this was intended for avatar reuse purposes.
@@ -623,7 +667,7 @@ export default defineComponent({
             color: 'green',
             position: 'top',
             message:
-              'Editable information has been saved! Refreshing in 3 seconds.',
+              'Editable information has been saved! Refreshing in 3 seconds ...',
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
@@ -657,6 +701,8 @@ export default defineComponent({
     },
     submitPortfolioSettings() {
       this.isProcessing = true;
+      this.portfolio_setting_btn_click_state = true;
+
       axios
         .post(
           `http://${resolvedNodeAPIURL}/dashboard/apply_portfolio_settings`,
@@ -676,7 +722,7 @@ export default defineComponent({
             color: 'green',
             position: 'top',
             message:
-              'Portfolio settings has been saved! Refreshing in 3 seconds.',
+              'Portfolio settings has been saved! Refreshing in 3 seconds ...',
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
@@ -711,11 +757,7 @@ export default defineComponent({
       // - Resolve user data.
       // - Resolve list of logs data.
       // - Resolve list of extra data.
-      console.log(
-        this.$route.query.address,
-        this.$q.localStorage.getItem('token'),
-        this.$q.localStorage.getItem('role')
-      );
+
       // - Condition for allowing students to access their own portfolio.
       if (
         this.$route.query.address === undefined &&
@@ -762,13 +804,14 @@ export default defineComponent({
 
         return;
       }
-      console.log(portfolioURL);
+
       // ! Prepare the payload.
       let headerForAuth = {
         headers: {
           'X-Token': this.$q.localStorage.getItem('token'),
         },
       };
+
       axios
         .get(portfolioURL, this.isOrg || this.isApplicant ? headerForAuth : {})
         .then((response) => {
@@ -779,11 +822,24 @@ export default defineComponent({
               ? 'You are accessing this portfolio as an anonymous.'
               : this.isOrg
               ? "You are accessing this student's portfolio as a preview. Note that you cannot modify these entries anymore."
-              : "You are accessing this as a student, please check your settings to adjust your portfolio's output.",
+              : "You are accessing this as a student, please check your portfolio settings on the bottom-right to adjust your portfolio's output.",
             timeout: 10000,
             progress: true,
             icon: 'info',
           });
+
+          // - Assign User's Information
+          this.portfolio_user_address = response.data.address;
+          this.portfolio_user_association = response.data.association;
+          this.portfolio_user_program = response.data.program;
+          this.portfolio_user_description = response.data.description;
+          this.portfolio_user_personal_skills;
+          response.data.personal_skills;
+          this.portfolio_user_preferred_role = response.data.preferred_role;
+          this.portfolio_user_email_contact =
+            response.data.email === null
+              ? 'Not Available.'
+              : response.data.email;
         })
         .catch((e) => {
           this.$q.notify({
@@ -825,7 +881,6 @@ export default defineComponent({
 }
 .header {
   background-color: #a7eaff;
-  height: 80%;
   margin: 2%;
   margin-top: 1%;
   margin-bottom: 1%;
@@ -849,9 +904,9 @@ export default defineComponent({
 }
 
 .logs {
-  height: 530px;
+  height: 1000px;
   width: 47%;
-  border-radius: 10px;
+  border-radius: 2%;
   margin-left: 2%;
 }
 

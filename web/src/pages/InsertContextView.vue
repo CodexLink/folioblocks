@@ -21,6 +21,8 @@
           :key="student.id"
           clickable
           v-ripple
+          :active="targetted_number === student.id"
+          active-class="selected_student"
           :disable="isProcessing"
           @click="
             existing_user = true;
@@ -174,6 +176,7 @@
                   mask="date"
                   :rules="['new_log_date_start']"
                   label="Log Date Start"
+                  readonly
                   :disable="isProcessing"
                   hint="The date from where this log has started."
                 >
@@ -213,6 +216,7 @@
                   :disable="isProcessing"
                   :rules="['new_log_date_end']"
                   label="Log Date End"
+                  readonly
                   hint="The date from where this log has ended. This is optional. However, when it contains a date, it should not start as early as the `Log Date Start`!"
                 >
                   <template v-slot:append>
@@ -606,6 +610,7 @@ export default {
     return {
       selected_section: ref('insert_docs'),
       targetted_address: ref(null),
+      targetted_number: ref(null),
     };
   },
 
@@ -752,21 +757,25 @@ export default {
       } else {
         // ! Validate the date of the duration if 'new_log_date_end' is not None.
         if (this.new_log_date_end !== null) {
-          let validateDateEnd = new Date(this.new_log_date_start);
-          let validateDateStart = new Date(this.new_log_date_end);
+          let validateDateStart = new Date(this.new_log_date_start);
+          let validateDateEnd = new Date(this.new_log_date_end);
 
-          if (validateDateEnd > validateDateStart) {
-            this.$q.notify({
-              color: 'negative',
-              position: 'top',
-              message:
-                'Duration start and end is impossible. Please ensure that the duration end doesnt start earlier than the duration start.',
-              timeout: 10000,
-              progress: true,
-              icon: 'report_problem',
-            });
-            this.isProcessing = false;
-            return;
+          if (validateDateEnd.toTimeString() !== 'Invalid Date') {
+            if (validateDateEnd > validateDateStart) {
+              this.$q.notify({
+                color: 'negative',
+                position: 'top',
+                message:
+                  'Duration start and end is impossible. Please ensure that the duration end doesnt start earlier than the duration start.',
+                timeout: 10000,
+                progress: true,
+                icon: 'report_problem',
+              });
+              this.isProcessing = false;
+              return;
+            }
+          } else {
+            this.new_log_date_end = null;
           }
         }
         // * Handle the request.
@@ -938,7 +947,7 @@ export default {
       let datePlusOne = new Date();
 
       // * Modify the new instance, 'date' + 1.
-      datePlusOne.setDate(datePlusOne.getDate() + 1);
+      datePlusOne.setDate(datePlusOne.getDate());
 
       return (
         new Date(null).toISOString().slice(0, 10).replaceAll('-', '/') >=
@@ -947,7 +956,10 @@ export default {
       );
     },
     setActiveFieldForForm(id) {
+      this.targetted_number = id;
       this.targetted_address = this.students[id - 1].address;
+      this.clearRemarkForm(false);
+      this.clearLogForm(false);
     },
     getStudents() {
       this.isFetchingStudent = true;
@@ -989,6 +1001,11 @@ export default {
 .my-card-new_user {
   width: 600px;
   padding-bottom: 2%;
+}
+
+.selected_student {
+  color: rgba(0, 0, 0, 0.7);
+  background: #f2c037;
 }
 
 .title {

@@ -633,8 +633,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                     ),
                                     context=HashUUID(payload_context),
                                 ),
-                                # timestamp=each_transaction["timestamp"],
-                                timestamp=None,
+                                timestamp=each_transaction["timestamp"],
                             ),
                         )
 
@@ -834,8 +833,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             action=each_accounted_tx["action"],
                             from_address=each_accounted_tx["from_address"],
                             to_address=each_accounted_tx["to_address"],
-                            # timestamp=each_accounted_tx["timestamp"],
-                            timestamp=None,
+                            timestamp=each_accounted_tx["timestamp"],
                         )
                     )
 
@@ -843,6 +841,9 @@ class BlockchainMechanism(ConsensusMechanism):
 
                     if not remaining_transactions:
                         break
+
+                if not block_index:
+                    break
 
                 block_index -= 1
 
@@ -1638,7 +1639,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     calculated_user_tx += 1
 
             logger.warning(
-                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({calculated_user_tx}/{                BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK} user transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
+                f"Sleeping for {self.block_timer_seconds} seconds while gathering transaction/s. ({calculated_user_tx}/{BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK} user transaction/s required) | Elapsed since last block generation: {str(time() - self.__time_elapsed_from_tx_collection)[:-BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK]} seconds/s."
             )
 
             # - Sleep first due to block timer.

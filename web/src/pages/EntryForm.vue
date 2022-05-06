@@ -370,11 +370,12 @@
               />
 
               <q-separator />
-              <div>
+
+              <q-card-section>
                 <h4><strong>Notice</strong></h4>
                 Please ensure your inputs are correct before proceeding, there's
                 no going back or be able to change them once submitted.
-              </div>
+              </q-card-section>
               <div class="registerbtn">
                 <q-btn
                   class="backbtn"
@@ -501,7 +502,7 @@ export default defineComponent({
               // * Then set the current token and the address.
               this.$q.localStorage.set('token', response.data.jwt_token);
               this.$q.localStorage.set('address', response.data.user_address);
-              this.$q.localStorage.set('role', response.data.user_role)
+              this.$q.localStorage.set('role', response.data.user_role);
 
               // * Some some toast.
               this.$q.notify({
