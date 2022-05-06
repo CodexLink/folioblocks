@@ -206,7 +206,7 @@
       v-ripple
       icon="mdi-file-cog"
       color="red"
-      v-if="isApplicant"
+      v-if="isStudent"
       @click="portfolio_modal = true"
     >
       <q-tooltip
@@ -256,7 +256,7 @@
 
       <q-tab-panels
         v-model="selected_settings"
-        v-if="isApplicant"
+        v-if="isStudent"
         animated
         class="panels"
       >
@@ -467,7 +467,7 @@ export default defineComponent({
       editable_info_personal_skills: ref(''),
 
       // * Switch Variables
-      isApplicant: ref(false),
+      isStudent: ref(false),
       isOrg: ref(false),
       isAnonymous: ref(false),
 
@@ -488,7 +488,7 @@ export default defineComponent({
       lists: [
         {
           id: 1,
-          name: 'Applicant 1',
+          name: 'Student 1',
           address: '0x7zd7a8ds6dsa',
           role: 'Role',
           description:
@@ -505,7 +505,7 @@ export default defineComponent({
         },
         {
           id: 2,
-          name: 'Applicant 2',
+          name: 'Student 2',
           address: '0x7zd7a8ds6dsa',
           role: 'Role',
           description:
@@ -522,7 +522,7 @@ export default defineComponent({
         },
         {
           id: 3,
-          name: 'Applicant 3',
+          name: 'Student 3',
           address: '0x7zd7a8ds6dsa',
           role: 'Role',
           description:
@@ -539,7 +539,7 @@ export default defineComponent({
         },
         {
           id: 4,
-          name: 'Applicant 4',
+          name: 'Student 4',
           address: '0x7zd7a8ds6dsa',
           role: 'Role',
           description:
@@ -575,7 +575,7 @@ export default defineComponent({
   mounted() {
     this.getPortfolio();
 
-    if (this.isApplicant) {
+    if (this.isStudent) {
       this.loadPortfolioSettings();
       this.loadEditableInfo();
     }
@@ -745,7 +745,7 @@ export default defineComponent({
     },
     getPortfolio() {
       // ! Reset states.
-      // this.isApplicant = false;
+      // this.isStudent = false;
       // this.isOrg = false;
       // this.isAnonymous = false;
 
@@ -762,9 +762,9 @@ export default defineComponent({
       if (
         this.$route.query.address === undefined &&
         this.$q.localStorage.getItem('token') !== null &&
-        this.$q.localStorage.getItem('role') === 'Applicant Dashboard User'
+        this.$q.localStorage.getItem('role') === 'Student Dashboard User'
       ) {
-        this.isApplicant = true;
+        this.isStudent = true;
       }
       // - Condition for allowing organizations to access a particular portfolio
       else if (
@@ -813,7 +813,7 @@ export default defineComponent({
       };
 
       axios
-        .get(portfolioURL, this.isOrg || this.isApplicant ? headerForAuth : {})
+        .get(portfolioURL, this.isOrg || this.isStudent ? headerForAuth : {})
         .then((response) => {
           this.$q.notify({
             color: 'blue',

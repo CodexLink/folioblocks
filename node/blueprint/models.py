@@ -211,8 +211,8 @@ tokens.user_ref = relationship(users, foreign_keys="from_user")  # type: ignore
 - `tx_ref` - The actual transaction where the content will be resolved.
 
 ! Note
-* For multiple transactions, previous `tx_ref` referring to the same `address_ref` with respect to the `content_type` will be only be displayed as reference, not the actual content. This situation only applies to fields for `log` and `extra` under Applicant and Organization scope.
-* Replacement of the existing data (Base structure) for the Applicant and Organization scope will be prohibited when there's an existing entry of the following (under Enum `TransactionContextMappingType`): APPLICANT_INFO, and SCHOOL_INFO.
+* For multiple transactions, previous `tx_ref` referring to the same `address_ref` with respect to the `content_type` will be only be displayed as reference, not the actual content. This situation only applies to fields for `log` and `extra` under Student and Organization scope.
+* Replacement of the existing data (Base structure) for the Student and Organization scope will be prohibited when there's an existing entry of the following (under Enum `TransactionContextMappingType`): STUDENT_INFO, and SCHOOL_INFO.
 * Updating any entries unspecified from the statement #2, does not resort to updating existing data, but should rather log the actual state instead.
 """
 

@@ -30,7 +30,7 @@ from aiosmtplib import SMTPException
 from blueprint.models import tokens
 from blueprint.schemas import (
     AgnosticCredentialValidator,
-    ApplicantUserTransaction,
+    StudentUserTransaction,
     OrganizationIdentityValidator,
 )
 from core.constants import (
@@ -822,7 +822,7 @@ def mask(data: bytes | int | str) -> str:
 # # Output Filters — END
 
 # # API DRY Handler — START
-async def validate_applicant_user_address(
+async def validate_student_user_address(
     *, supplied_address: AddressUUID, expected_type: UserEntity
 ) -> None:
 
@@ -854,22 +854,22 @@ async def validate_applicant_user_address(
 
 
 async def validate_organization_existence(
-    *, org_identity: OrganizationIdentityValidator, scoped_to_applicants: bool
+    *, org_identity: OrganizationIdentityValidator, scoped_to_students: bool
 ) -> Mapping | None:
 
     # - Specific instances of whether the organization is classified as non-educational or otherwise, each cases of it requires a different parameter or query to validate the existence of the association/organization.
     # @o For the instance of `OrganizationUserTransaction` it checks the `association_address` if given (in the scenario that the association/organiaztion does exists), or it was checked by `association_name` and `association_group_type.` (in the scenario where the association/organization does not exists and requires a new one)
     # ! Therefore, the way its variables are declared is when the organization does not exists or not.
 
-    # @d The switch `scope_to_applicants` forces to resolve the given parameter in 'org_identity', which is an address from the user, NOT a reference address from the association, by setting `scope_to_applicants` to `True`, it queries that address if the association exists based from the address of source.
-    # @d It does not forces to query along both types along with the address, when the instance is `ApplicantUserTransacion`.
+    # @d The switch `scope_to_students` forces to resolve the given parameter in 'org_identity', which is an address from the user, NOT a reference address from the association, by setting `scope_to_students` to `True`, it queries that address if the association exists based from the address of source.
+    # @d It does not forces to query along both types along with the address, when the instance is `StudentUserTransacion`.
 
     database_instance: Database = get_database_instance()
     resolved_association_ref_from_user: Mapping | str | None = (
         org_identity.association_address
     )
 
-    if scoped_to_applicants:
+    if scoped_to_students:
         get_association_query: Select = select([users.c.association]).where(
             users.c.unique_address == org_identity.association_address
         )
@@ -883,7 +883,7 @@ async def validate_organization_existence(
     ).where(
         (
             (associations.c.address == resolved_association_ref_from_user)
-            if scoped_to_applicants
+            if scoped_to_students
             else (
                 (associations.c.address == resolved_association_ref_from_user)
                 | (
@@ -1051,7 +1051,7 @@ async def validate_source_and_origin_associates(
         (tx_content_mappings.c.address_ref == resolved_target_address_as_association)
         & (
             tx_content_mappings.c.content_type
-            == TransactionContextMappingType.APPLICANT_BASE
+            == TransactionContextMappingType.STUDENT_BASE
         )
     )
 
@@ -1081,17 +1081,17 @@ async def validate_transaction_mapping_exists(
 ) -> bool:
 
     if content_type in [
-        TransactionContextMappingType.APPLICANT_BASE,
+        TransactionContextMappingType.STUDENT_BASE,
         TransactionContextMappingType.ORGANIZATION_BASE,
     ]:
 
         resolved_reference_group: UserEntity = (
-            UserEntity.APPLICANT_DASHBOARD_USER
-            if content_type is TransactionContextMappingType.APPLICANT_BASE
+            UserEntity.STUDENT_DASHBOARD_USER
+            if content_type is TransactionContextMappingType.STUDENT_BASE
             else UserEntity.ORGANIZATION_DASHBOARD_USER
         )
 
-        await validate_applicant_user_address(
+        await validate_student_user_address(
             supplied_address=AddressUUID(user_address),
             expected_type=resolved_reference_group,
         )

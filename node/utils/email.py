@@ -149,12 +149,8 @@ class EmailService:
     ) -> None:
         # @o There should be an extra argument, but I will keep it this way, for now.
         for _ in range(0, self.max_retries):
-            if not self._email_service.is_connected:
-                logger.warning(
-                    "Connection to the email service is not available or the connetion is dead, re-connecting ..."
-                )
 
-                await self.connect()
+            await self.connect()
 
             message_instance = MIMEMultipart("alternative")
 
@@ -190,6 +186,9 @@ class EmailService:
                     f"Cannot send email due to disruption of service. Re-attempting... | Info: {e}"
                 )
                 continue
+
+            finally:
+                self.close()
 
     def close(self) -> None:
         return self._email_service.close()

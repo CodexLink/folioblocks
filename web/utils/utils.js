@@ -17,9 +17,9 @@ export const TransactionActions = Object.freeze(
 
 		// # Note that anything below from this context requires assistance from `models.block_context_mappings`.
 		// - For Institutions / Organization.
-		INSTITUTION_ORG_GENERATE_APPLICANT: 7,
+		INSTITUTION_ORG_GENERATE_STUDENT: 7,
 		INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO: 8,
-		INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO: 9,
+		INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO: 9,
 
 		// - For Organization, in general.
 		ORGANIZATION_USER_REGISTER: 10,
@@ -28,9 +28,9 @@ export const TransactionActions = Object.freeze(
 )
 export const TransactionContentMappingType = Object.freeze(
 	{
-		APPLICANT_BASE: 1,
-		APPLICANT_LOG: 2,
-		APPLICANT_ADDITIONAL: 3,
+		STUDENT_BASE: 1,
+		STUDENT_LOG: 2,
+		STUDENT_ADDITIONAL: 3,
 	}
 )
 
@@ -59,12 +59,12 @@ export function resolveTransactionActions(action) {
 			return 'Node Consensus Negotiation Confirmed Start'
 		case TransactionActions.NODE_GENERAL_CONSENSUS_CONCLUDE_NEGOTIATION_PROCESSING:
 			return 'Node Consensus Negotiation Conclusion of Processing'
-		case TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT:
-			return 'Institution Applicant Generation'
+		case TransactionActions.INSTITUTION_ORG_GENERATE_STUDENT:
+			return 'Institution Student Generation'
 		case TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO:
-			return 'Institution New Document / Important Info to Applicant Reference'
-		case TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO:
-			return 'Institution Refer Extra Info to Applicant'
+			return 'Institution New Document / Important Info to Student Reference'
+		case TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO:
+			return 'Institution Refer Extra Info to Student'
 		case TransactionActions.ORGANIZATION_USER_REGISTER:
 			return 'Organization Registration'
 		case TransactionActions.ORGANIZATION_REFER_EXTRA_INFO:
@@ -83,14 +83,14 @@ export function resolveContextType(typeField) {
 	// ! Resolve this content type from the `User Transaction Content Mapping`.
 	if (typeField.hasOwnProperty('content_type')) {
 		switch (typeField.content_type) {
-			case TransactionContentMappingType.APPLICANT_BASE:
-				resolvedTypeValue = 'Applicant Base Portfolio'
+			case TransactionContentMappingType.STUDENT_BASE:
+				resolvedTypeValue = 'Student Base Portfolio'
 				break
-			case TransactionContentMappingType.APPLICANT_LOG:
-				resolvedTypeValue = 'Applicant Log from Orgs'
+			case TransactionContentMappingType.STUDENT_LOG:
+				resolvedTypeValue = 'Student Log from Orgs'
 				break
-			case TransactionContentMappingType.APPLICANT_ADDITIONAL:
-				resolvedTypeValue = 'Applicant Additional Info / Remarks'
+			case TransactionContentMappingType.STUDENT_ADDITIONAL:
+				resolvedTypeValue = 'Student Additional Info / Remarks'
 				break
 			default:
 				resolvedTypeValue = 'Unidentified'

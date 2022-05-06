@@ -75,10 +75,10 @@ async def generate_auth_token_for_other_nodes(
             status_code=HTTPStatus.FORBIDDEN,
         )
 
-    elif payload.role is UserEntity.APPLICANT_DASHBOARD_USER:
+    elif payload.role is UserEntity.STUDENT_DASHBOARD_USER:
         raise HTTPException(
             detail=(
-                f"Requesting an auth code through this role ({UserEntity.APPLICANT_DASHBOARD_USER.value}) is not allowed.",
+                f"Requesting an auth code through this role ({UserEntity.STUDENT_DASHBOARD_USER.value}) is not allowed.",
             ),
             status_code=HTTPStatus.FORBIDDEN,
         )
@@ -98,8 +98,8 @@ async def generate_auth_token_for_other_nodes(
                 await db_instance.execute(insert_generated_token_query)
 
                 await email_instance.send(
-                    content=f"<html><body><h1>Auth Code for the Folioblock's Archival Miner Node!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><br><br><h4>Auth Code: {generated_token}<b></b></h4><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                    subject=f"Auth Code for Registration as {payload.role.value} @ Folioblocks",
+                    content=f"<html><body><h1>Auth Code for the Folioblock's {payload.role.value}!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><h4>Auth Code: {generated_token}<b></b></h4><br><p>Didn't know who sent this? Please consult your representives of your organization / institution regarding this matter.</p><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject=f"Auth Code for Registration as a {payload.role.value} at Folioblocks",
                     to=payload.email,
                 )
 

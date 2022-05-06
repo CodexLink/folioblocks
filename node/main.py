@@ -150,6 +150,7 @@ async def pre_initialize() -> None:
         and parsed_args.node_role is NodeType.MASTER_NODE
     ):
         await get_email_instance().connect()
+        get_email_instance().close()
 
     await get_http_client_instance().initialize()  # * Initialize the HTTP client for such requests.
 

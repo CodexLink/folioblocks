@@ -75,7 +75,7 @@
     // - EMPLOYMENT | PAYLOAD SCHEMA.
     {
       // We don't know how to search for them. We can basically bind their address in the MASTER's database.
-      "applicant": {
+      "student": {
         "identity": "", // As address. Should be assert by to on tx_hash section.
         "institution_ref": "", // We can basically refer to the ID of association from the table database. Should be resolved when inserted the company.
         "course": "", // IF APPLICABLE.

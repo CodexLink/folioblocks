@@ -20,7 +20,7 @@ from typing import Any, Mapping
 from aiofiles import open as aopen
 from blueprint.models import portfolio_settings, tx_content_mappings, users
 from blueprint.schemas import (
-    ApplicantEditableProperties,
+    StudentEditableProperties,
     DashboardContext,
     Portfolio,
     PortfolioSettings,
@@ -57,7 +57,7 @@ from core.constants import (
 )
 from core.constants import FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
 from blueprint.schemas import PortfolioLoadedContext
-from blueprint.schemas import DashboardApplicant, DashboardOrganization
+from blueprint.schemas import DashboardStudent, DashboardOrganization
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -81,7 +81,7 @@ async def get_dashboard_data(
         EnsureAuthorized(
             _as=[
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
-                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.STUDENT_DASHBOARD_USER,
             ],
             return_address_from_token=True,
         )
@@ -113,7 +113,7 @@ async def get_dashboard_data(
             status_code=HTTPStatus.NOT_FOUND,
         )
 
-    resolved_reports: DashboardApplicant | DashboardOrganization | None = None
+    resolved_reports: DashboardStudent | DashboardOrganization | None = None
 
     if user_basic_context.type is UserEntity.ORGANIZATION_DASHBOARD_USER:
         # - Get reports from the `users` for the the number of associated people from the association.
@@ -132,7 +132,7 @@ async def get_dashboard_data(
                 (tx_content_mappings.c.address_ref == each_associate.unique_address)
                 & (
                     tx_content_mappings.c.content_type
-                    == TransactionContextMappingType.APPLICANT_LOG
+                    == TransactionContextMappingType.STUDENT_LOG
                 )
             )
 
@@ -147,7 +147,7 @@ async def get_dashboard_data(
                 (tx_content_mappings.c.address_ref == each_associate.unique_address)
                 & (
                     tx_content_mappings.c.content_type
-                    == TransactionContextMappingType.APPLICANT_ADDITIONAL
+                    == TransactionContextMappingType.STUDENT_ADDITIONAL
                 )
             )
 
@@ -180,24 +180,24 @@ async def get_dashboard_data(
             total_overall_info_outside=overall_tx_count,
         )
 
-    elif user_basic_context.type is UserEntity.APPLICANT_DASHBOARD_USER:
-        # - Get count of associated logs from this applicant.
+    elif user_basic_context.type is UserEntity.STUDENT_DASHBOARD_USER:
+        # - Get count of associated logs from this student.
         get_logs_associated_count_query: Select = select([func.count()]).where(
             (tx_content_mappings.c.address_ref == entity_address_ref)
             & (
                 tx_content_mappings.c.content_type
-                == TransactionContextMappingType.APPLICANT_LOG
+                == TransactionContextMappingType.STUDENT_LOG
             )
         )
 
         logs_count = await database_instance.fetch_val(get_logs_associated_count_query)
 
-        # - Get count of associated extra from this applicant.
+        # - Get count of associated extra from this student.
         get_extra_associated_count_query: Select = select([func.count()]).where(
             (tx_content_mappings.c.address_ref == entity_address_ref)
             & (
                 tx_content_mappings.c.content_type
-                == TransactionContextMappingType.APPLICANT_ADDITIONAL
+                == TransactionContextMappingType.STUDENT_ADDITIONAL
             )
         )
 
@@ -221,7 +221,7 @@ async def get_dashboard_data(
             get_portfolio_context_query
         )
 
-        resolved_reports = DashboardApplicant(
+        resolved_reports = DashboardStudent(
             extra_associated_count=extra_count,
             logs_associated_count=logs_count,
             total_txs_overall=overall_tx_count,
@@ -285,7 +285,7 @@ async def get_associated_students(
 
     # - [2] Get students who are associated with it.
 
-    get_students_as_applicants_query: Select = select(
+    get_students_as_students_query: Select = select(
         [
             users.c.first_name,
             users.c.last_name,
@@ -295,11 +295,11 @@ async def get_associated_students(
         ]
     ).where(
         (users.c.association == association_address_ref)
-        & (users.c.type == UserEntity.APPLICANT_DASHBOARD_USER)
+        & (users.c.type == UserEntity.STUDENT_DASHBOARD_USER)
     )
 
     list_of_qualified_students = await database_instance.fetch_all(
-        get_students_as_applicants_query
+        get_students_as_students_query
     )
 
     for each_student in list_of_qualified_students:
@@ -318,28 +318,28 @@ async def get_associated_students(
 
 @dashboard_router.get(
     "/user_profile",
-    tags=[DashboardAPI.APPLICANT_API.value],
-    response_model=ApplicantEditableProperties,
-    summary="Returns the editable information from the applicant.",
-    description="An API endpoint that returns information that are editable from the applicant to display from their portfolio.",
+    tags=[DashboardAPI.STUDENT_API.value],
+    response_model=StudentEditableProperties,
+    summary="Returns the editable information from the student.",
+    description="An API endpoint that returns information that are editable from the student to display from their portfolio.",
 )
 async def get_user_profile(
-    applicant_address_ref: AddressUUID
+    student_address_ref: AddressUUID
     | None = Depends(
         EnsureAuthorized(
-            _as=UserEntity.APPLICANT_DASHBOARD_USER, return_address_from_token=True
+            _as=UserEntity.STUDENT_DASHBOARD_USER, return_address_from_token=True
         )
     ),
     database_instance: Database = Depends(get_database_instance),
-) -> ApplicantEditableProperties:
+) -> StudentEditableProperties:
     # - Get the information of this user.
     get_editable_info_query: Select = select(
         [users.c.avatar, users.c.description, users.c.skills, users.c.preferred_role]
-    ).where(users.c.unique_address == applicant_address_ref)
+    ).where(users.c.unique_address == student_address_ref)
 
     editable_infos = await database_instance.fetch_one(get_editable_info_query)
 
-    return ApplicantEditableProperties(
+    return StudentEditableProperties(
         avatar=editable_infos.avatar,
         description=editable_infos.description,
         personal_skills=editable_infos.skills,
@@ -349,17 +349,17 @@ async def get_user_profile(
 
 @dashboard_router.post(
     "/apply_profile_changes",
-    tags=[DashboardAPI.APPLICANT_API.value],
-    response_model=ApplicantEditableProperties,
-    summary="Applies changes of the editable information of the applicant.",
-    description="An API endpoint that applies changes to the editable information of the applicant.",
+    tags=[DashboardAPI.STUDENT_API.value],
+    response_model=StudentEditableProperties,
+    summary="Applies changes of the editable information of the student.",
+    description="An API endpoint that applies changes to the editable information of the student.",
     status_code=HTTPStatus.ACCEPTED,
 )
 async def save_user_profile(
-    applicant_address_ref: AddressUUID
+    student_address_ref: AddressUUID
     | None = Depends(
         EnsureAuthorized(
-            _as=UserEntity.APPLICANT_DASHBOARD_USER, return_address_from_token=True
+            _as=UserEntity.STUDENT_DASHBOARD_USER, return_address_from_token=True
         )
     ),
     database_instance: Database = Depends(get_database_instance),
@@ -377,7 +377,7 @@ async def save_user_profile(
     # * State variables.
     resolved_avatar_dir: str = ""
 
-    if applicant_address_ref is None:
+    if student_address_ref is None:
         raise HTTPException(
             detail="Cannot update the user profile because it doesn't exists or you are not authorized.",
             status_code=HTTPStatus.NOT_FOUND,
@@ -413,7 +413,7 @@ async def save_user_profile(
         # - Frontend should return the given data back.
         update_user_editable_info: Update = (
             users.update()
-            .where(users.c.unique_address == applicant_address_ref)
+            .where(users.c.unique_address == student_address_ref)
             .values(
                 avatar=resolved_avatar_dir,
                 description=description,
@@ -434,10 +434,10 @@ async def save_user_profile(
 
 @dashboard_router.get(
     "/portfolio",
-    tags=[DashboardAPI.INSTITUTION_API.value, DashboardAPI.APPLICANT_API.value],
+    tags=[DashboardAPI.INSTITUTION_API.value, DashboardAPI.STUDENT_API.value],
     response_model=Portfolio,
-    summary="Renders the portfolio of this applicant.",
-    description="An API-exclusive to applicants where they can view their portfolio.",
+    summary="Renders the portfolio of this student.",
+    description="An API-exclusive to students where they can view their portfolio.",
 )
 async def get_portfolio(
     blockchain_instance: BlockchainMechanism | None = Depends(get_blockchain_instance),
@@ -447,7 +447,7 @@ async def get_portfolio(
         EnsureAuthorized(
             _as=[
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
-                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.STUDENT_DASHBOARD_USER,
             ],
             return_address_from_token=True,
             allow_anonymous=True,
@@ -456,7 +456,7 @@ async def get_portfolio(
     address: AddressUUID
     | None = Query(
         None,
-        title="The address of the applicant, which should render their portfolio, if allowed.",
+        title="The address of the student, which should render their portfolio, if allowed.",
     ),
 ) -> Portfolio:
     if not isinstance(blockchain_instance, BlockchainMechanism):
@@ -468,12 +468,12 @@ async def get_portfolio(
     # * State variables.
     authorized_anonymous_user: bool = False
     authorized_org_user: bool = False
-    confirmed_applicant_address: Any  # ! I don't know how to type-hint this.
+    confirmed_student_address: Any  # ! I don't know how to type-hint this.
 
-    # ! Regardless of who accessed this endpoint, the portfolio is applied for both `AnonymousUsers` and `AuthenticatedApplicantUsers`.
+    # ! Regardless of who accessed this endpoint, the portfolio is applied for both `AnonymousUsers` and `AuthenticatedStudentUsers`.
     # # Condition
     # @o For [1] 'anonymous users', they need to fill the `address` query parameter. Otherwise return `HTTPException`.
-    # @o For [2] authenticated users such as applicant, there's no need to fill the `address` query parameter, though if there is, it will get prohitibited for explicitly doing it.
+    # @o For [2] authenticated users such as student, there's no need to fill the `address` query parameter, though if there is, it will get prohitibited for explicitly doing it.
     # @o For [3] authenticated users such as organization, there's a need to fill the `address` query parameter, and ensure that address is associated from the organization's association address, otherwise, it will return an `HTTPException`.
 
     # - [0] Resolution the condition upon various roles.
@@ -491,9 +491,9 @@ async def get_portfolio(
         authorized_anonymous_user = True
 
     # - Condition where we check that the `portfolio address is specified` but there is an authentication wherein the authorizer returns an address.
-    # @o This is where we handle whether this accessor is an organization member or just an applicant.
+    # @o This is where we handle whether this accessor is an organization member or just an student.
 
-    else:  # * Resolutes to checking the `returned_address_ref` while dynamically checking the `address` based on the scope of `APPLICANT_DASHBOARD_USER` and `ORGANIZATION_DASHBOARD_USER`.
+    else:  # * Resolutes to checking the `returned_address_ref` while dynamically checking the `address` based on the scope of `STUDENT_DASHBOARD_USER` and `ORGANIZATION_DASHBOARD_USER`.
         # elif address is not None and returned_address_ref is not None:
 
         # - Check the address first by getting its type.
@@ -540,45 +540,45 @@ async def get_portfolio(
                 else returned_address_ref
             )
 
-            applicant_address_association = await database_instance.fetch_val(
+            student_address_association = await database_instance.fetch_val(
                 get_address_association_query
             )
 
-            if applicant_address_association is None:
+            if student_address_association is None:
                 raise HTTPException(
                     detail="Portfolio's association address does not exists. This is not possible, please report this to the developers to get it fixed.",
                     status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
                 )
 
-            if applicant_address_association != org_assocation_address:
+            if student_address_association != org_assocation_address:
                 raise HTTPException(
                     detail="The referred portfolio address does not associate from this organization's association address. Not allowed.",
                     status_code=HTTPStatus.FORBIDDEN,
                 )
 
             logger.info(
-                "Dashboard API, Portfolio Parser | Association address for both organization and applicant is correct."
+                "Dashboard API, Portfolio Parser | Association address for both organization and student is correct."
             )
 
         elif (
-            fetched_user_type is UserEntity.APPLICANT_DASHBOARD_USER
+            fetched_user_type is UserEntity.STUDENT_DASHBOARD_USER
             and returned_address_ref is not None
             and address is None
         ):
 
-            # - By this point, the applicant was mostly validated due to `return_address_ref` and `fetched_user_type` queries.
+            # - By this point, the student was mostly validated due to `return_address_ref` and `fetched_user_type` queries.
 
             logger.info(
-                "Dashboard API, Portfolio Parser | Applicant case already validates `unique_address` and `type`. Proceeding by doing nothing on this case ..."
+                "Dashboard API, Portfolio Parser | Student case already validates `unique_address` and `type`. Proceeding by doing nothing on this case ..."
             )
 
         else:
             raise HTTPException(
-                detail="Failed to proceed due to conditions being unmet. Either an explicit address is invoked when applicant is authenticated, or does organization tried to access with context missing. Please contact the developers if you think this is a mistake.",
+                detail="Failed to proceed due to conditions being unmet. Either an explicit address is invoked when student is authenticated, or does organization tried to access with context missing. Please contact the developers if you think this is a mistake.",
                 status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
 
-    # - [1] Check if applicant has a `APPLICANT_BASE` tx_mapping with a variety of conditions handled.
+    # - [1] Check if student has a `STUDENT_BASE` tx_mapping with a variety of conditions handled.
 
     # @o Condition for the organization accessing the portfolio.
     if authorized_anonymous_user or authorized_org_user:
@@ -592,7 +592,7 @@ async def get_portfolio(
             )
             & (
                 tx_content_mappings.c.content_type
-                == TransactionContextMappingType.APPLICANT_BASE
+                == TransactionContextMappingType.STUDENT_BASE
             )
         )
 
@@ -609,16 +609,16 @@ async def get_portfolio(
         # @o The reason why is that, this user may have been looking from the inserter context of the organization view.
 
         if authorized_org_user and not authorized_anonymous_user:
-            # - Get the association address of the applicant first.
-            get_applicant_association_addresss_ref_query: Select = select(
+            # - Get the association address of the student first.
+            get_student_association_addresss_ref_query: Select = select(
                 [users.c.association]
             ).where(users.c.unique_address == result_portfolio_context)
 
-            applicant_association_ref: str | None = await database_instance.fetch_val(
-                get_applicant_association_addresss_ref_query
+            student_association_ref: str | None = await database_instance.fetch_val(
+                get_student_association_addresss_ref_query
             )
 
-            if applicant_association_ref is None:
+            if student_association_ref is None:
                 raise HTTPException(
                     detail="Association address reference does not exist. Please report this to the developers as this shouldn't be possible.",
                     status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -640,23 +640,23 @@ async def get_portfolio(
                     status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
                 )
 
-            # # Compare the organization's association reference against the applicant's association reference.
-            if org_association_ref != applicant_association_ref:
+            # # Compare the organization's association reference against the student's association reference.
+            if org_association_ref != student_association_ref:
                 raise HTTPException(
-                    detail="The organization's association reference does not match from this applicant, access denied.",
+                    detail="The organization's association reference does not match from this student, access denied.",
                     status_code=HTTPStatus.CONFLICT,
                 )
 
-        confirmed_applicant_address = result_portfolio_context
+        confirmed_student_address = result_portfolio_context
 
         logger.info(
-            f"Applicant Portfolio Access: via {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} context."
+            f"Student Portfolio Access: via {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} context."
         )
 
     else:  # * Resolves to `authorized_anonymous_user` and `authorized_org_user` being None.
 
-        # - Check if this applicant has its own transaction mapping.
-        get_tx_ref_applicant_query: Select = select(
+        # - Check if this student has its own transaction mapping.
+        get_tx_ref_student_query: Select = select(
             [tx_content_mappings.c.address_ref]
         ).where(
             (
@@ -665,31 +665,31 @@ async def get_portfolio(
             )
             & (
                 tx_content_mappings.c.content_type
-                == TransactionContextMappingType.APPLICANT_BASE
+                == TransactionContextMappingType.STUDENT_BASE
             )
         )
 
-        tx_ref_applicant = await database_instance.fetch_val(get_tx_ref_applicant_query)
+        tx_ref_student = await database_instance.fetch_val(get_tx_ref_student_query)
 
-        if tx_ref_applicant is None:
+        if tx_ref_student is None:
             raise HTTPException(
-                detail=f"Applicant transaction mapping not found. This may be you are an organization and not an authorized `{UserEntity.APPLICANT_DASHBOARD_USER.name}`.",
+                detail=f"Student transaction mapping not found. This may be you are an organization and not an authorized `{UserEntity.STUDENT_DASHBOARD_USER.name}`.",
                 status_code=HTTPStatus.NOT_FOUND,
             )
 
-        confirmed_applicant_address = tx_ref_applicant
+        confirmed_student_address = tx_ref_student
 
     # - [2] Load the portfolio properties.
     # ! This will not be used for rendering the share button state.
     # ! This was fetched to better render the portfolio from its current state.
-    print(confirmed_applicant_address)
+    print(confirmed_student_address)
     get_portfolio_properties_query: Select = select(
         [
             portfolio_settings.c.sharing_state,
             portfolio_settings.c.expose_email_state,
             portfolio_settings.c.show_files,
         ]
-    ).where(portfolio_settings.c.from_user == confirmed_applicant_address)
+    ).where(portfolio_settings.c.from_user == confirmed_student_address)
 
     portfolio_properties = await database_instance.fetch_one(
         get_portfolio_properties_query
@@ -697,7 +697,7 @@ async def get_portfolio(
 
     if portfolio_properties is None:
         raise HTTPException(
-            detail="Portfolio settings for this applicant does not exists. Schema may be outdated.",
+            detail="Portfolio settings for this student does not exists. Schema may be outdated.",
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
         )
 
@@ -709,27 +709,27 @@ async def get_portfolio(
                 status_code=HTTPStatus.FORBIDDEN,
             )
 
-    # - [3] Fetch references of the `APPLICANT_LOG` and `APPLICANT_EXTRA` on the `tx_content_mappings` table.
+    # - [3] Fetch references of the `STUDENT_LOG` and `STUDENT_EXTRA` on the `tx_content_mappings` table.
     # * Seperated the query because we need to display both of them distinctively.
-    tx_log_applicant_refs_query: Select = tx_content_mappings.select().where(
-        (tx_content_mappings.c.address_ref == confirmed_applicant_address)
+    tx_log_student_refs_query: Select = tx_content_mappings.select().where(
+        (tx_content_mappings.c.address_ref == confirmed_student_address)
         & (
             tx_content_mappings.c.content_type
-            == TransactionContextMappingType.APPLICANT_LOG
+            == TransactionContextMappingType.STUDENT_LOG
         )
     )
-    tx_extra_applicant_refs_query: Select = tx_content_mappings.select().where(
-        (tx_content_mappings.c.address_ref == confirmed_applicant_address)
+    tx_extra_student_refs_query: Select = tx_content_mappings.select().where(
+        (tx_content_mappings.c.address_ref == confirmed_student_address)
         & (
             tx_content_mappings.c.content_type
-            == TransactionContextMappingType.APPLICANT_ADDITIONAL
+            == TransactionContextMappingType.STUDENT_ADDITIONAL
         )
     )
-    tx_log_applicant_refs: list[Mapping] = await database_instance.fetch_all(
-        tx_log_applicant_refs_query
+    tx_log_student_refs: list[Mapping] = await database_instance.fetch_all(
+        tx_log_student_refs_query
     )
-    tx_extra_applicant_refs: list[Mapping] = await database_instance.fetch_all(
-        tx_extra_applicant_refs_query
+    tx_extra_student_refs: list[Mapping] = await database_instance.fetch_all(
+        tx_extra_student_refs_query
     )
 
     # - [4] Fetch those `logs` and `extras` inside the blockchain system.
@@ -738,9 +738,8 @@ async def get_portfolio(
     resolved_tx_logs_container: list[PortfolioLoadedContext] = []
     resolved_tx_extra_container: list[PortfolioLoadedContext] = []
 
-    if tx_log_applicant_refs is not None:
-        for log_info in tx_log_applicant_refs:
-            print(log_info)
+    if tx_log_student_refs is not None:
+        for log_info in tx_log_student_refs:
             resolved_tx_info: PortfolioLoadedContext | None = (
                 await blockchain_instance.get_content_from_chain(
                     block_index=log_info.block_no_ref,
@@ -753,8 +752,8 @@ async def get_portfolio(
             if resolved_tx_info is not None:
                 resolved_tx_logs_container.append(resolved_tx_info)
 
-    if tx_extra_applicant_refs is not None:
-        for extra_info in tx_extra_applicant_refs:
+    if tx_extra_student_refs is not None:
+        for extra_info in tx_extra_student_refs:
             resolved_tx_extra: PortfolioLoadedContext | None = await blockchain_instance.get_content_from_chain(
                 block_index=extra_info.block_no_ref,
                 tx_target=extra_info.tx_ref,
@@ -778,7 +777,7 @@ async def get_portfolio(
             users.c.program,
             users.c.skills,
         ]
-    ).where(users.c.unique_address == confirmed_applicant_address)
+    ).where(users.c.unique_address == confirmed_student_address)
     resolved_user_basic_info = await database_instance.fetch_one(
         get_user_basic_info_query
     )
@@ -792,7 +791,7 @@ async def get_portfolio(
 
     # - [8] Return the pydantic model.
     return Portfolio(
-        address=confirmed_applicant_address,
+        address=confirmed_student_address,
         email=resolved_user_basic_info.email
         if portfolio_properties.expose_email_state
         else None,
@@ -809,7 +808,7 @@ async def get_portfolio(
 
 @dashboard_router.get(
     "/portfolio/{address_ref}/file/{file_hash}",
-    tags=[DashboardAPI.APPLICANT_API],
+    tags=[DashboardAPI.STUDENT_API],
     summary="Returns the file in raw form.",
     description="An API endpoint that returns file resources with respect to the portfolio's setting regarding file resource accessibility.",
 )
@@ -824,7 +823,7 @@ async def get_portfolio_file(
     ),
 ) -> Response:
     # # This endpoint doesn't care who you are at this point. Since address were specified, portfolio settings are going to be the dependency of the endpoint whether, to return a file or not.
-    # - [1] Get the applicant address.
+    # - [1] Get the student address.
     validate_user_address_query: Select = select([func.count()]).where(
         users.c.unique_address == address_ref
     )
@@ -894,7 +893,7 @@ async def get_portfolio_file(
         )
 
     # - [6] Decrypt the file.
-    # @o Since the file has a cryptic filename, by looking at the method `insert_external_transaction` under the condition of handling the file from the `TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO` with an instance of a pydantic model of `ApplicantLogTransaction`, which has an actual instance of `StarletteFileUpload`, a.k.a `UploadFile` from the `file` field.
+    # @o Since the file has a cryptic filename, by looking at the method `insert_external_transaction` under the condition of handling the file from the `TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO` with an instance of a pydantic model of `StudentLogTransaction`, which has an actual instance of `StarletteFileUpload`, a.k.a `UploadFile` from the `file` field.
     # * We can see that we can decrypt the file.
 
     datetime_from_encryption: str = tx_ref.timestamp.strftime(
@@ -926,27 +925,27 @@ async def get_portfolio_file(
 
 @dashboard_router.get(
     "/portfolio_settings",
-    tags=[DashboardAPI.APPLICANT_API],
+    tags=[DashboardAPI.STUDENT_API],
     response_model=PortfolioSettings,
     summary="Returns the state of the portfolio.",
     description="An API endpoint that returns the state of portfolio, where state changes affects the output of the portfolio.",
 )
 async def get_portfolio_settings(
-    applicant_address_ref: AddressUUID
+    student_address_ref: AddressUUID
     | None = Depends(
         EnsureAuthorized(
-            _as=UserEntity.APPLICANT_DASHBOARD_USER, return_address_from_token=True
+            _as=UserEntity.STUDENT_DASHBOARD_USER, return_address_from_token=True
         )
     ),
     database_instance: Database = Depends(get_database_instance),
 ) -> PortfolioSettings:
 
-    # - Ensure that this user has a transaction mapping `APPLICANT_BASE`.
+    # - Ensure that this user has a transaction mapping `STUDENT_BASE`.
     validate_tx_mapping_from_user_query: Select = select([func.now()]).where(
-        (tx_content_mappings.c.address_ref == applicant_address_ref)
+        (tx_content_mappings.c.address_ref == student_address_ref)
         & (
             tx_content_mappings.c.content_type
-            == TransactionContextMappingType.APPLICANT_BASE
+            == TransactionContextMappingType.STUDENT_BASE
         )
     )
 
@@ -956,7 +955,7 @@ async def get_portfolio_settings(
 
     if not contains_tx_mapping:
         raise HTTPException(
-            detail="Applicant contains no transaction mapping of their content. Report this issue to the developers for possible-workaround.",
+            detail="Student contains no transaction mapping of their content. Report this issue to the developers for possible-workaround.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
@@ -967,7 +966,7 @@ async def get_portfolio_settings(
             portfolio_settings.c.expose_email_state,
             portfolio_settings.c.show_files,
         ]
-    ).where(portfolio_settings.c.from_user == applicant_address_ref)
+    ).where(portfolio_settings.c.from_user == student_address_ref)
 
     portfolio_states = await database_instance.fetch_one(get_portfolio_state_query)
 
@@ -980,17 +979,17 @@ async def get_portfolio_settings(
 
 @dashboard_router.post(
     "/apply_portfolio_settings",
-    tags=[DashboardAPI.APPLICANT_API],
-    summary="Applies portfolio setting from applicant's portfolio.",
+    tags=[DashboardAPI.STUDENT_API],
+    summary="Applies portfolio setting from student's portfolio.",
     description="An API endpoint that applies changes to the portfolio's state.",
     status_code=HTTPStatus.ACCEPTED,
 )
 async def save_portfolio_settings(
     portfolio_state_payload: PortfolioSettings,
-    applicant_address_ref: AddressUUID
+    student_address_ref: AddressUUID
     | None = Depends(
         EnsureAuthorized(
-            _as=UserEntity.APPLICANT_DASHBOARD_USER, return_address_from_token=True
+            _as=UserEntity.STUDENT_DASHBOARD_USER, return_address_from_token=True
         )
     ),
     database_instance: Database = Depends(get_database_instance),
@@ -999,7 +998,7 @@ async def save_portfolio_settings(
     # - Check the state of the `datetime_to_allowed_changes` and see if datetime is way past the current time.
     portfolio_update_expiration_query: Select = select(
         [portfolio_settings.c.datetime_to_allowed_changes]
-    ).where(portfolio_settings.c.from_user == applicant_address_ref)
+    ).where(portfolio_settings.c.from_user == student_address_ref)
 
     portfolio_expiration: datetime | None = await database_instance.fetch_val(
         portfolio_update_expiration_query
@@ -1022,7 +1021,7 @@ async def save_portfolio_settings(
         # - Update the database when `datetime_to_allowed_changes` were way past the current time.
         update_portfolio_state_query: Update = (
             portfolio_settings.update()
-            .where(portfolio_settings.c.from_user == applicant_address_ref)
+            .where(portfolio_settings.c.from_user == student_address_ref)
             .values(
                 sharing_state=portfolio_state_payload.enable_sharing,
                 expose_email_state=portfolio_state_payload.expose_email_info,

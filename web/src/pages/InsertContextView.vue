@@ -305,6 +305,7 @@
                   label="Remark Title"
                   counter
                   hint="The general context of this remark. Make it concise but minimal as possible."
+                  clearable
                   :rules="[
                     (val) =>
                       (val && val.length >= 4) ||
@@ -323,6 +324,7 @@
                   counter
                   v-model="new_remark_description"
                   label="Remark Description"
+                  clearable
                   :rules="[
                     (val) =>
                       (val && val.length >= 8) ||
@@ -394,6 +396,7 @@
                 counter
                 v-model="new_student_first_name"
                 label="First Name"
+                clearable
                 :rules="[
                   (val) =>
                     (val.length >= 2 && val.length <= 32) ||
@@ -411,6 +414,7 @@
                 counter
                 v-model="new_student_last_name"
                 label="Last Name"
+                clearable
                 :rules="[
                   (val) =>
                     (val.length >= 2 && val.length <= 32) ||
@@ -429,6 +433,7 @@
               v-model="new_student_description"
               label="Description"
               counter
+              clearable
               hint="Make the description formalized as the first entry will be imprinted in blockchain, student can change this information when logged on."
               :rules="[
                 (val) =>
@@ -451,6 +456,7 @@
                 label="E-mail"
                 counter
                 lazy-rules
+                clearable
                 hint="Ask the student regarding what email to use as this will be exposed for contacting purposes."
                 :disable="isProcessing"
                 :rules="[(val) => val.includes('@') || 'Invalid email format.']"
@@ -466,6 +472,7 @@
                 hint="This will be wary of this as it will be used to login."
                 :disable="isProcessing"
                 counter
+                clearable
                 :rules="[
                   (val) =>
                     (val.length >= 8 && val.length <= 24) ||
@@ -483,6 +490,7 @@
               v-model="new_user_personal_skills"
               label="Personal Skills"
               counter
+              clearable
               hint="Similar to description but is specified to student's capability. Seperate the contents in comma. Be wary of the initial input as it will be imprinted in blockchain. Student can change this later on."
               :rules="[
                 (val) =>
@@ -502,6 +510,7 @@
                 label="Program"
                 hint="Do not use acronym, and do not prefix it with BS or Bachelor."
                 :disable="isProcessing"
+                clearable
                 counter
                 :rules="[
                   (val) =>
@@ -520,6 +529,7 @@
                 label="Year Level"
                 type="number"
                 :disable="isProcessing"
+                clearable
                 hint="Reference hint whether this student graduated in 4th year or 5th year."
                 counter
                 :rules="[
@@ -539,6 +549,7 @@
               v-model="new_student_prefer_role"
               label="Preferred Employment Role"
               :disable="isProcessing"
+              clearable
               hint="The preferred role the student infers. This is interchangeable but please provide an initial input. Therefore, ask your student regarding one."
               counter
               :rules="[
@@ -558,6 +569,7 @@
               type="password"
               label="Password"
               :disable="isProcessing"
+              clearable
               hint="The password that the student uses. The developers recommends random generation of password to avoid bias."
               counter
               :rules="[
@@ -618,32 +630,32 @@ export default {
     return {
       students: ref([]),
 
-      new_student_first_name: ref(''),
-      new_student_last_name: ref(''),
-      new_student_username: ref(''),
-      new_student_email: ref(''),
-      new_student_password: ref(''),
-      new_student_description: ref(''),
-      new_user_personal_skills: ref(''),
-      new_student_recent_program: ref(''),
-      new_student_recorded_year_level: ref(''),
-      new_student_prefer_role: ref(''),
+      new_student_first_name: ref(null),
+      new_student_last_name: ref(null),
+      new_student_username: ref(null),
+      new_student_email: ref(null),
+      new_student_password: ref(null),
+      new_student_description: ref(null),
+      new_user_personal_skills: ref(null),
+      new_student_recent_program: ref(null),
+      new_student_recorded_year_level: ref(null),
+      new_student_prefer_role: ref(null),
 
       existing_user: ref(false),
       new_user: ref(false),
       isProcessing: ref(false),
       isFetchingStudent: ref(true),
 
-      new_log_name: ref(''),
-      new_log_description: ref(''),
-      new_log_role: ref(''),
+      new_log_name: ref(null),
+      new_log_description: ref(null),
+      new_log_role: ref(null),
       new_log_file: ref(null),
 
       new_log_date_start: ref(null),
       new_log_date_end: ref(null),
 
-      new_remark_title: ref(''),
-      new_remark_description: ref(''),
+      new_remark_title: ref(null),
+      new_remark_description: ref(null),
     };
   },
   mounted() {
@@ -720,16 +732,16 @@ export default {
       });
     },
     clearRegistrationForm(showMessage = true) {
-      this.new_student_first_name = '';
-      this.new_student_last_name = '';
-      this.new_student_username = '';
-      this.new_student_email = '';
-      this.new_student_password = '';
-      this.new_student_description = '';
-      this.new_user_personal_skills = '';
-      this.new_student_recent_program = '';
-      this.new_student_recorded_year_level = '';
-      this.new_student_prefer_role = '';
+      this.new_student_first_name = null;
+      this.new_student_last_name = null;
+      this.new_student_username = null;
+      this.new_student_email = null;
+      this.new_student_password = null;
+      this.new_student_description = null;
+      this.new_user_personal_skills = null;
+      this.new_student_recent_program = null;
+      this.new_student_recorded_year_level = null;
+      this.new_student_prefer_role = null;
 
       if (showMessage)
         this.$q.notify({
@@ -782,7 +794,7 @@ export default {
         let logForm = new FormData();
 
         logForm.append('address_origin', this.targetted_address);
-        logForm.append('content_type', 2); // * See TransactionContextMappingType.APPLICANT_LOG.
+        logForm.append('content_type', 2); // * See TransactionContextMappingType.STUDENT_LOG.
         logForm.append('name', this.new_log_name);
         logForm.append('description', this.new_log_description);
         logForm.append('role', this.new_log_role);
@@ -849,9 +861,9 @@ export default {
       });
     },
     clearLogForm(showMessage = true) {
-      this.new_log_name = '';
-      this.new_log_description = '';
-      this.new_log_role = '';
+      this.new_log_name = null;
+      this.new_log_description = null;
+      this.new_log_role = null;
       this.new_log_file = null;
       this.new_log_date_start = null;
       this.new_log_date_end = null;
@@ -930,8 +942,8 @@ export default {
       });
     },
     clearRemarkForm(showMessage = true) {
-      this.new_remark_title = '';
-      this.new_remark_description = '';
+      this.new_remark_title = null;
+      this.new_remark_description = null;
 
       if (showMessage)
         this.$q.notify({

@@ -29,9 +29,9 @@ from blueprint.models import (
 from blueprint.schemas import (
     AdditionalContextTransaction,
     AgnosticCredentialValidator,
-    ApplicantLogTransaction,
-    ApplicantUserBaseTransaction,
-    ApplicantUserTransaction,
+    StudentLogTransaction,
+    StudentUserBaseTransaction,
+    StudentUserTransaction,
     ArchivalMinerNodeInformation,
     Block,
     BlockOverview,
@@ -114,7 +114,7 @@ from core.constants import (
     TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
     USER_FILES_FOLDER_NAME,
     AddressUUID,
-    ApplicantLogContentType,
+    StudentLogContentType,
     AssociatedNodeStatus,
     BlockchainFileContext,
     BlockchainIOAction,
@@ -508,11 +508,11 @@ class BlockchainMechanism(ConsensusMechanism):
                 ):
                     return PortfolioLoadedContext(
                         tx_hash=tx_target,
-                        context=ApplicantLogTransaction(
+                        context=StudentLogTransaction(
                             address_origin=AddressUUID(
                                 resolved_raw_decrypted_content["address_origin"]
                             ),
-                            type=ApplicantLogContentType(
+                            type=StudentLogContentType(
                                 resolved_raw_decrypted_content["type"]
                             ),
                             name=resolved_raw_decrypted_content["name"],
@@ -547,7 +547,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 elif (
                     identified_tx_action
-                    is TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
+                    is TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO
                 ):
                     return PortfolioLoadedContext(
                         tx_hash=tx_target,
@@ -942,7 +942,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 * action (TransactionActions): An enum that describes the cause of instantiation of this transaction.
                 * from_address (AddressUUID): A unique identifier that instantiated this transaction.
                 * to_address (AddressUUID): A unique identifier that is being referred from the content of this transaction.
-                * data (ApplicantLogTransaction | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
+                * data (StudentLogTransaction | OrganizationTransaction | AdditionalContextTransaction): A pydantic model that is qualified for this method to work. Otherwise it will result in error.
 
         ### Returns:
                 * bool: Returns `True` or `False` depending whether this function success or fails on execution of resolving the transaction for block minin.
@@ -953,8 +953,8 @@ class BlockchainMechanism(ConsensusMechanism):
 
         # @o I don't know how to type this one.
         supported_models: Final[list[Any]] = [
-            ApplicantLogTransaction,
-            ApplicantUserTransaction,
+            StudentLogTransaction,
+            StudentUserTransaction,
             OrganizationUserBaseTransaction,
             AdditionalContextTransaction,
         ]
@@ -978,14 +978,14 @@ class BlockchainMechanism(ConsensusMechanism):
             # - [2] Verify if action (TransactionAction) to TransactionContextMappingType is viable.
             # # [4]
 
-            # - For transactions that require generation of `user` under Organization or as an Applicant.
+            # - For transactions that require generation of `user` under Organization or as an Student.
             if action in [
-                TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT,
+                TransactionActions.INSTITUTION_ORG_GENERATE_STUDENT,
                 TransactionActions.ORGANIZATION_USER_REGISTER,
             ] and (
                 isinstance(
                     data.context,
-                    ApplicantUserTransaction | OrganizationUserTransaction,
+                    StudentUserTransaction | OrganizationUserTransaction,
                 )
             ):
                 # @d While we do understand that exposing the context as a whole, specifically with the credentials involved, it is going to be a huge loophole.
@@ -1000,7 +1000,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # #  ADD CONDITION FOR TRANSACTION MAPPING.
 
                 # - Validate conditions before user generation.
-                # - Validate if there's an existing association/organzization for the new applicant to refer.
+                # - Validate if there's an existing association/organzization for the new student to refer.
 
                 # @d Type-hints.
                 association_referred: bool = False
@@ -1012,7 +1012,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # ! I cannot deduce this and combine its functionality from the method `validate_source_and_origin_associates.` since that method focuses on validating the address and the token given by the sender.
 
                 if to_address is not None:
-                    exception_message = f"Target address should not exist for creating new applicants as well as creating a new organization user."
+                    exception_message = f"Target address should not exist for creating new students as well as creating a new organization user."
                     exception_status = HTTPStatus.NOT_ACCEPTABLE
 
                 else:
@@ -1039,7 +1039,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         # @o Observe there's a multiple `isinstance`.
                         # @o For the `OrganizationUserTransacion`, we need both of the arguments.
-                        # @o However, in the case of ApplicantUserTransaction`, we only need the institution reference.
+                        # @o However, in the case of StudentUserTransaction`, we only need the institution reference.
 
                         # # Note regarding repetitive declaration of `association_address` and `institution`.
                         # @context `assocation_address` exists due to its nature of other variables required upon registration with a new organization. Incorporating `institution` and along with other variables `associate_` indicates descrepancy between what's existing and what's not.
@@ -1056,8 +1056,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 if isinstance(data.context, OrganizationUserTransaction)
                                 else None,
                             ),
-                            scoped_to_applicants=isinstance(
-                                data.context, ApplicantUserTransaction
+                            scoped_to_students=isinstance(
+                                data.context, StudentUserTransaction
                             ),
                         )
 
@@ -1128,7 +1128,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             user_type: UserEntity = (
                                 UserEntity.ORGANIZATION_DASHBOARD_USER
                                 if isinstance(data.context, OrganizationUserTransaction)
-                                else UserEntity.APPLICANT_DASHBOARD_USER
+                                else UserEntity.STUDENT_DASHBOARD_USER
                             )
                             new_uuid: AddressUUID = AddressUUID(generate_uuid_user())
 
@@ -1137,13 +1137,13 @@ class BlockchainMechanism(ConsensusMechanism):
                                 avatar=None,
                                 description=data.context.description,
                                 skills=data.context.skills
-                                if isinstance(data.context, ApplicantUserTransaction)
+                                if isinstance(data.context, StudentUserTransaction)
                                 else None,
-                                preferred_role=data.context.preferred_role if isinstance(data.context, ApplicantUserTransaction) else None,  # type: ignore
+                                preferred_role=data.context.preferred_role if isinstance(data.context, StudentUserTransaction) else None,  # type: ignore
                                 first_name=data.context.first_name,  # type: ignore
                                 last_name=data.context.last_name,  # type: ignore
                                 association=data.context.institution,  # type: ignore
-                                program=data.context.program if isinstance(data.context, ApplicantUserTransaction) else None,  # type: ignore
+                                program=data.context.program if isinstance(data.context, StudentUserTransaction) else None,  # type: ignore
                                 username=data.context.username,  # type: ignore
                                 password=hash_context(pwd=RawData(data.context.password)),  # type: ignore
                                 email=data.context.email,  # type: ignore
@@ -1154,8 +1154,8 @@ class BlockchainMechanism(ConsensusMechanism):
                             # ! Since this query contains None for `to_address` we need to fill it because the method `resolve_transaction_context` needs it.
                             await self.__database_instance.execute(insert_user_query)
 
-                            # - When the user is classified as `Applicant`, then create a portfolio settings.
-                            if user_type is UserEntity.APPLICANT_DASHBOARD_USER:
+                            # - When the user is classified as `Student`, then create a portfolio settings.
+                            if user_type is UserEntity.STUDENT_DASHBOARD_USER:
                                 new_portfolio_settings_query: Insert = (
                                     portfolio_settings.insert().values(
                                         from_user=new_uuid,
@@ -1169,26 +1169,32 @@ class BlockchainMechanism(ConsensusMechanism):
                                     new_portfolio_settings_query
                                 )
 
-                            # * Resolve fields with missing data.
+                            # * Resolve fields with missing data.``
                             to_address = new_uuid
                             data.context.identity = new_uuid  # type: ignore
 
-                            inserter_context: str | None = None
-                            # * Get context of the inserter for the new users to refer.
-                            if data.context.inserter is not None:
-                                get_inserter_context_query: Select = select(
-                                    [
-                                        users.c.first_name,
-                                        users.c.last_name,
-                                        users.c.type,
-                                    ]
-                                ).where(users.c.data)
+                            # - Handle additional context to display from the email.
+                            # @o By this point, we are only dealing with roles for ORGANIZATION / INSTITUTION and STUDENTS.
+                            # @o For ORGANIZATION / INSTITUTION, it was already handled from the form, so there's no problem to that.
+                            # ! For STUDENTS, we have to add the context the association they are into, as well as the inserter.
+                            # ! Note that, we have to expose their names and the origin to not confuse the receiver.
 
-                                # inserter_context = f"</b>Inserter: <b>{data.context.inserter}</b> <{}>"
+                            inserter_context: str | None = None
+
+                            if isinstance(data.context, StudentUserTransaction):
+                                get_inserter_name_query: Select = select(
+                                    [users.c.first_name, users.c.last_name]
+                                ).where(users.c.unique_address == from_address)
+
+                                inserter = await self.__database_instance.fetch_one(
+                                    get_inserter_name_query
+                                )
+
+                                inserter_context = f"<li>Inserter Address: <b>{from_address} ({inserter.first_name} {inserter.last_name})</b></li> "  # * Yes, the space is intentional.
 
                             create_task(
                                 self.__email_service.send(
-                                    content=f"<html><body><h1>Hello from Folioblocks::Users!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.APPLICANT_DASHBOARD_USER.value}`</b>!<br><br>Your Address: <b>{new_uuid}</b><br>Association Address (Your Organization Reference): <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution}<br><br><br>To re-iterate, <b>here are your credentials.</b><br>Username: <b>{data.context.username}</b><br>Password: <b>{data.context.password}</b><br><br>Please note that, we sent off to you your credentials as there's no forget password system currently in-place. Keep this email safe! If you are a `<b><i>{UserEntity.APPLICANT_DASHBOARD_USER.value}</b></i>`, please be responsible on taking applications from all over the companies associated from the system. Take once and evaluate before proceeding to the next one. For `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified as they are stored from blockchain. <br><br>Should any questions should be delivered from this email. Thank you and enjoy our service!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
+                                    content=f"<html><body><h1>Hello from Folioblocks::Dashboard Users!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.STUDENT_DASHBOARD_USER.value}`</b>!<br><br>The following are your information regarding credentials and your origin reference:<br><li>Your Address: <b>{new_uuid}</b></li>{inserter_context if inserter_context is not None else ''}<li>Association Address: <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution}</li><li>Username: <b>{data.context.username}</b></li><li>Password: <b>{data.context.password}</b></li><p>Where,</p><li><strong>Association Address</strong> — refers to your organization.</li><li><strong>Inserter Address</strong> — refers to the inserter from your organization. Their name is exposed to ensure you may know that person as your representative from your organization.</li><p>Please note that, we sent off to you your credentials as there's no forget password system currently in-place. Keep this email safe!</p><li>If you are a `<b><i>{UserEntity.STUDENT_DASHBOARD_USER.value}</b></i>`, please be responsible on your portfolio as it may expose some important information when your portfolio setting is misconfigured. Our system is used for origin verification without third-party.</li><li>For `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified and will be reflected from the student you selected from the dashboard. You may be liable when you inserted a wrong context as everything is recorded in the blockchain.</li><br><br>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                     subject="Hello from Folioblocks::Users!",
                                     to=data.context.email,  # type: ignore
                                 ),
@@ -1204,8 +1210,8 @@ class BlockchainMechanism(ConsensusMechanism):
                         # - We need to resolve these models due to its contents containing more information regarding the user. We do not need those in the blockchain so we have deduce it by resolving it.
                         # ! There is a note regarding replace an existing model with a new one, causing multiple type: ignore, please check the note for more information.
 
-                        if isinstance(data.context, ApplicantUserTransaction):
-                            data.context = ApplicantUserBaseTransaction(
+                        if isinstance(data.context, StudentUserTransaction):
+                            data.context = StudentUserBaseTransaction(
                                 **data.context.dict()  # type: ignore
                             )
 
@@ -1219,19 +1225,19 @@ class BlockchainMechanism(ConsensusMechanism):
                                     **data.context.dict()
                                 )
 
-            # - For the invocation of log for the Applicant under enum `ApplicantLogTransaction`.
+            # - For the invocation of log for the Student under enum `StudentLogTransaction`.
             # @o This needs special handling due to the fact that it may contain an actual file.
-            # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `ApplicantLogTransaction`.
+            # ! There's a need of special handling from the API endpoint receiver due to its nature of using content-type: `multipart/form-data`. Therefore, this method expects to have an `StudentLogTransaction`.
             elif (
                 action
                 is TransactionActions.INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO
-                and isinstance(data.context, ApplicantLogTransaction)
+                and isinstance(data.context, StudentLogTransaction)
                 and isinstance(to_address, str)
             ):
                 if (
                     await validate_transaction_mapping_exists(
                         user_address=AddressUUID(to_address),
-                        content_type=TransactionContextMappingType.APPLICANT_BASE,
+                        content_type=TransactionContextMappingType.STUDENT_BASE,
                     )
                     is True
                 ):
@@ -1315,19 +1321,19 @@ class BlockchainMechanism(ConsensusMechanism):
                             )
 
                 else:
-                    exception_message = f"Cannot find transaction map for the address {to_address} with the content type {TransactionContextMappingType.APPLICANT_BASE}."
+                    exception_message = f"Cannot find transaction map for the address {to_address} with the content type {TransactionContextMappingType.STUDENT_BASE}."
 
-            # - For the `extra` fields of both `ApplicantTransaction` and `OrganizationTransaction`.
+            # - For the `extra` fields of both `StudentTransaction` and `OrganizationTransaction`.
             # # [2]
             elif action in [
                 TransactionActions.ORGANIZATION_REFER_EXTRA_INFO,
-                TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO,
+                TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO,
             ] and isinstance(data.context, AdditionalContextTransaction):
 
                 # - Why?
                 # @o We only need to verify the addresses contents, which was done from the API endpoint, there's nothing much going on in the case of `TransactionActions`.
                 logger.debug(
-                    f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO.name} or {TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO.name} by doing nothing due to there's nothing to process."
+                    f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO.name} or {TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO.name} by doing nothing due to there's nothing to process."
                 )
 
             else:
@@ -1656,7 +1662,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
             elif len(self.__unsent_block_container):
                 logger.info(
-                    f"Block {self.__unsent_block_container[0]} has been left-out from hashing due to previous miner unable to respond in time."
+                    f"Block {self.__unsent_block_container[0]} has been left-out from hashing due to previous miner unable to respond in time or there was no available miner."
                 )
 
                 generated_block = self.__unsent_block_container.pop(0)
@@ -1671,7 +1677,8 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
             # @o When there's no miner active, sleep for a while and requeue again.
-            if available_node_info is None:
+            if available_node_info is None and generated_block:
+                self.__unsent_block_container.append(generated_block)
                 continue
 
             # - Create a Consensus Negotiation ID out of `urlsafe_b64encode`.
@@ -2387,7 +2394,7 @@ class BlockchainMechanism(ConsensusMechanism):
         )
         if not isinstance(payload, GroupTransaction | NodeTransaction):
 
-            error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the  developer to resolve as possible."  # type: ignore # I can be stupid sometimes.
+            error_message = f"The payload is not a valid pydantic object (got '{payload.__class__.__name__}'). Please refer to function signature for more information. This should not happen, report this issue to the developer to resolve as possible."  # type: ignore # I can be stupid sometimes.
 
             logger.error(error_message)
             return HTTPException(

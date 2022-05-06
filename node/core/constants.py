@@ -190,7 +190,7 @@ class AdminAPI(Enum):
 
 class DashboardAPI(Enum):
     DASHBOARD_GENERAL_API = f"{BaseAPI.DASHBOARD.value}: General"
-    APPLICANT_API = f"{BaseAPI.DASHBOARD.value}: Applicant"
+    STUDENT_API = f"{BaseAPI.DASHBOARD.value}: Student"
     INSTITUTION_API = f"{BaseAPI.DASHBOARD.value}: Institution"
 
 
@@ -287,9 +287,9 @@ class TransactionContextMappingType(IntEnum):
         IntEnum: Uses integer `auto()` to classify choices per declaration.
     """
 
-    APPLICANT_BASE = auto()
-    APPLICANT_LOG = auto()
-    APPLICANT_ADDITIONAL = auto()
+    STUDENT_BASE = auto()
+    STUDENT_LOG = auto()
+    STUDENT_ADDITIONAL = auto()
     ORGANIZATION_BASE = auto()  # ! Potentially deprecated.
     ORGANIZATION_ASSOCIATIONS = auto()  # ! Potentially deprecated.
     ORGANIZATION_ADDITIONAL = auto()  # ! Potentially deprecated.
@@ -303,7 +303,7 @@ class UserActivityState(IntEnum):
 class UserEntity(Enum):
     MASTER_NODE_USER = "Master Node User"
     ARCHIVAL_MINER_NODE_USER = "Archival Miner Node User"
-    APPLICANT_DASHBOARD_USER = "Applicant Dashboard User"
+    STUDENT_DASHBOARD_USER = "Student Dashboard User"
     ORGANIZATION_DASHBOARD_USER = "Organization Dashboard User"
 
 
@@ -346,7 +346,7 @@ class NodeTransactionInternalActions(IntEnum):
 # # SORT THIS.
 
 
-class ApplicantLogContentType(IntEnum):
+class StudentLogContentType(IntEnum):
     WORK_EXPERIENCE = auto()
     EDUCATION = auto()
     MISCELLANEOUS = auto()
@@ -376,9 +376,9 @@ class TransactionActions(IntEnum):
 
     # # Note that anything below from this context requires assistance from `models.block_context_mappings`.
     # - For Institutions / Organization.
-    INSTITUTION_ORG_GENERATE_APPLICANT = auto()
+    INSTITUTION_ORG_GENERATE_STUDENT = auto()
     INSTITUTION_ORG_REFER_NEW_DOCUMENT_OR_IMPORTANT_INFO = auto()
-    INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO = auto()
+    INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO = auto()
 
     # - For Organization, in general.
     ORGANIZATION_USER_REGISTER = auto()
@@ -386,15 +386,15 @@ class TransactionActions(IntEnum):
 
     # # Deprecated Enum Members.
     # * The following enum members are deprecated because their feature is too much than what this system is intended to be.
-    # * For the system to have a USP, the initial thought was to have an additional feature such as the applicant processing and approval for hiring purposes.
+    # * For the system to have a USP, the initial thought was to have an additional feature such as the student processing and approval for hiring purposes.
     # ! However its too far from the scope and should be deduced since this is a thesis with a limited time frame.
 
-    # - The enums with prefixes 'APPLICANT_' is intended to implement the hiring system.
+    # - The enums with prefixes 'STUDENT_' is intended to implement the hiring system.
     # - The enum with prefix 'COMPANY_' is intended to implement the invitation to access the credentials of the user (the non-sensitive information).
-    # APPLICANT_APPLY = auto()
-    # APPLICANT_APPLY_CONFIRMED = auto()
-    # APPLICANT_APPLY_REJECTED = auto()
-    # COMPANY_INVITE_APPLICANTS = auto()
+    # STUDENT_APPLY = auto()
+    # STUDENT_APPLY_CONFIRMED = auto()
+    # STUDENT_APPLY_REJECTED = auto()
+    # COMPANY_INVITE_STUDENTS = auto()
 
 
 # # Program Metadata

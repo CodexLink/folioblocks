@@ -24,8 +24,8 @@ from blueprint.models import (
 )
 from blueprint.schemas import (
     AdditionalContextTransaction,
-    ApplicantLogTransaction,
-    ApplicantUserTransaction,
+    StudentLogTransaction,
+    StudentUserTransaction,
     ConsensusFromMasterPayload,
     ConsensusSuccessPayload,
     ConsensusToMasterPayload,
@@ -43,7 +43,7 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
     AddressUUID,
-    ApplicantLogContentType,
+    StudentLogContentType,
     AssociatedNodeStatus,
     AuthAcceptanceCode,
     BaseAPI,
@@ -413,11 +413,11 @@ async def receive_raw_block(
     status_code=HTTPStatus.ACCEPTED,
 )
 async def receive_action_from_dashboard(
-    payload: ApplicantUserTransaction | AdditionalContextTransaction,
+    payload: StudentUserTransaction | AdditionalContextTransaction,
     auth_instance=Depends(
         EnsureAuthorized(
             _as=[
-                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.STUDENT_DASHBOARD_USER,
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
             ],
             return_token=True,
@@ -438,11 +438,11 @@ async def receive_action_from_dashboard(
     # - Compare via instance and assign necessary components.
     # - As well compare the token payload from the
 
-    #! Note that, `ApplicantLogTransaction` has been handled from `receive_file_from_dashboard` method.
+    #! Note that, `StudentLogTransaction` has been handled from `receive_file_from_dashboard` method.
 
-    if isinstance(payload, ApplicantUserTransaction):
-        resolved_action = TransactionActions.INSTITUTION_ORG_GENERATE_APPLICANT
-        resolved_content_type = TransactionContextMappingType.APPLICANT_BASE
+    if isinstance(payload, StudentUserTransaction):
+        resolved_action = TransactionActions.INSTITUTION_ORG_GENERATE_STUDENT
+        resolved_content_type = TransactionContextMappingType.STUDENT_BASE
 
         resolved_to_address = (
             None  # - This will get resolved later since it was generative model.
@@ -465,11 +465,11 @@ async def receive_action_from_dashboard(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 
-        if identify_user_type is UserEntity.APPLICANT_DASHBOARD_USER:  # type: ignore
+        if identify_user_type is UserEntity.STUDENT_DASHBOARD_USER:  # type: ignore
             resolved_action = (
-                TransactionActions.INSTITUTION_ORG_APPLICANT_REFER_EXTRA_INFO
+                TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO
             )
-            resolved_content_type = TransactionContextMappingType.APPLICANT_ADDITIONAL
+            resolved_content_type = TransactionContextMappingType.STUDENT_ADDITIONAL
 
         elif identify_user_type is UserEntity.ORGANIZATION_DASHBOARD_USER:  # type: ignore
             resolved_action = TransactionActions.ORGANIZATION_REFER_EXTRA_INFO
@@ -497,7 +497,7 @@ async def receive_action_from_dashboard(
         database_instance_ref=database_instance,
         source_session_token=auth_instance,
         target_address=resolved_to_address,
-        skip_validation_on_target=isinstance(payload, ApplicantUserTransaction),
+        skip_validation_on_target=isinstance(payload, StudentUserTransaction),
         return_resolved_source_address=True,  # type: ignore # * `resolved_from_address` is already resolved on the top, where it validates the payload's instance.
     )
 
@@ -537,12 +537,12 @@ async def receive_action_from_dashboard(
 @node_router.post(
     "/receive_context_log",
     tags=[NodeAPI.NODE_TO_NODE_API.value, NodeAPI.MASTER_NODE_API.value],
-    summary="Receives a multiform content type specific to `ApplicationLogContentType` to insert a credential from a applicant/student.",
-    description=f"A special API endpoint that is exclusive to a pyadantic model `ApplicantLogTransaction`, which accepts payload from the dashboard along with the file. Even without file, `ApplicantLogTransaction` is destined from this endpoint.",
+    summary="Receives a multiform content type specific to `ApplicationLogContentType` to insert a credential from a student/student.",
+    description=f"A special API endpoint that is exclusive to a pyadantic model `StudentLogTransaction`, which accepts payload from the dashboard along with the file. Even without file, `StudentLogTransaction` is destined from this endpoint.",
 )
 async def receive_file_from_dashboard(
     address_origin: AddressUUID = Form(...),
-    content_type: ApplicantLogContentType = Form(...),
+    content_type: StudentLogContentType = Form(...),
     name: str = Form(...),
     description: str = Form(...),
     role: str = Form(...),
@@ -552,7 +552,7 @@ async def receive_file_from_dashboard(
     auth_instance: JWTToken = Depends(
         EnsureAuthorized(
             _as=[
-                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.STUDENT_DASHBOARD_USER,
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
             ],
             return_token=True,
@@ -581,7 +581,7 @@ async def receive_file_from_dashboard(
         )
 
         # - After receiving, wrap the payload.
-        wrapped_to_model: ApplicantLogTransaction = ApplicantLogTransaction(
+        wrapped_to_model: StudentLogTransaction = StudentLogTransaction(
             **{
                 "address_origin": address_origin,
                 "type": content_type,
@@ -598,7 +598,7 @@ async def receive_file_from_dashboard(
 
         # - Then create a GroupTransaction.
         transaction: GroupTransaction = GroupTransaction(
-            content_type=TransactionContextMappingType.APPLICANT_LOG,
+            content_type=TransactionContextMappingType.STUDENT_LOG,
             context=wrapped_to_model,
         )
 
@@ -614,14 +614,14 @@ async def receive_file_from_dashboard(
 
         return JSONResponse(
             content={
-                "detail": f"An applicant log content given by <address hidden> to {address_origin} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
+                "detail": f"An student log content given by <address hidden> to {address_origin} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
             },
             status_code=HTTPStatus.OK,
         )
 
     except PydanticValueError as e:
         raise HTTPException(
-            detail=f"Cannot wrapped the payload to a respective model ({ApplicantLogTransaction}). | Info: {e}",
+            detail=f"Cannot wrapped the payload to a respective model ({StudentLogTransaction}). | Info: {e}",
             status_code=HTTPStatus.BAD_REQUEST,
         )
 

@@ -293,7 +293,7 @@ async def get_address(
         # - Fill the information of the field `description` if this user was a type `UserEntity.ORGANIZATION_DASHBOARD_USER`.
         if (
             user_props.type is UserEntity.ORGANIZATION_DASHBOARD_USER
-            or user_props.type is UserEntity.APPLICANT_DASHBOARD_USER
+            or user_props.type is UserEntity.STUDENT_DASHBOARD_USER
         ):
             user_description = user_props.description
 
@@ -308,8 +308,8 @@ async def get_address(
             if association_context is not None:
                 association_name = f"{association_context.name}, {association_context.group.name.title()} Group Type"
 
-        # - Fill the information of the field `tx_bindings_count` if this user was a type `UserEntity.APPLICANT_DASHBOARD_USER`.
-        elif user_props.type is UserEntity.APPLICANT_DASHBOARD_USER:
+        # - Fill the information of the field `tx_bindings_count` if this user was a type `UserEntity.STUDENT_DASHBOARD_USER`.
+        elif user_props.type is UserEntity.STUDENT_DASHBOARD_USER:
             user_tx_count_query: Select = select([func.count()]).where(
                 tx_content_mappings.c.address_ref == uuid
             )

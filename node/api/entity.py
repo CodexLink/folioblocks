@@ -123,7 +123,6 @@ async def register_entity(
             detail="Provided `auth_token` is not found.",
             status_code=HTTPStatus.NOT_FOUND,
         )
-    print(credentials)
     if (
         new_user_auth_register.account_type is UserEntity.ORGANIZATION_DASHBOARD_USER
         and (
@@ -195,9 +194,9 @@ async def register_entity(
             status_code=HTTPStatus.ACCEPTED,
         )
 
-    elif new_user_auth_register.account_type is UserEntity.APPLICANT_DASHBOARD_USER:
+    elif new_user_auth_register.account_type is UserEntity.STUDENT_DASHBOARD_USER:
         raise HTTPException(
-            detail="You are registering as an applicant, which is not allowed by external. Please go to any organization to have your account setup and verified.",
+            detail="You are registering as an student, which is not allowed by external. Please go to any organization to have your account setup and verified.",
             status_code=HTTPStatus.FORBIDDEN,
         )
     elif (
@@ -262,8 +261,8 @@ async def register_entity(
 
             create_task(
                 get_email_instance().send(
-                    content=f"<html><body><h1>Hello from Folioblocks::Node!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type.value}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
-                    subject="Hello from Folioblocks::Node!",
+                    content=f"<html><body><h1>Hello from Folioblocks::Node Users!</h1><p>Thank you for registering as a <b><i>`{new_user_auth_register.account_type.value}`</b></i>! Remember, please be responsible of your assigned role. Any suspicious actions will be sanctioned. Please talk to any administrators to guide you on how to use our system. Once again, thank you!</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
+                    subject="Hello from Folioblocks::Node Users!",
                     to=credentials.email,
                 ),
                 name=f"{get_email_instance.__name__}_send_register_welcome_node",
@@ -367,7 +366,7 @@ async def login_entity(
             # - If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
             if fetched_credential_data.type in [
-                UserEntity.APPLICANT_DASHBOARD_USER,
+                UserEntity.STUDENT_DASHBOARD_USER,
                 UserEntity.ORGANIZATION_DASHBOARD_USER,
             ]:
                 jwt_expire_at = datetime.now() + timedelta(days=JWT_DAY_EXPIRATION)

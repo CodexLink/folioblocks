@@ -136,9 +136,9 @@
             </q-item>
           </div>
 
-          <div v-if="role === 'Applicant Dashboard User'">
+          <div v-if="role === 'Student Dashboard User'">
             <q-separator spaced />
-            <q-item-label header>Applicant Options</q-item-label>
+            <q-item-label header>Student Options</q-item-label>
 
             <q-item
               clickable
@@ -284,21 +284,21 @@ export default defineComponent({
     checkPathAndAuth() {
       console.log(this.role, this.$route);
       if (
-        // - Conditions for prohibiting non-applicant users from accessing respective pages, except for portfolio.
+        // - Conditions for prohibiting non-student users from accessing respective pages, except for portfolio.
         (this.$route.path.includes('/dashboard') && this.containsNoAuth) ||
         (this.$route.path.includes('/user_info') &&
-          this.role !== 'Applicant Dashboard User') ||
-        // ! Condition for prohibiting applicants accessing `/org` endpoints.
+          this.role !== 'Student Dashboard User') ||
+        // ! Condition for prohibiting students accessing `/org` endpoints.
         (this.$route.path.includes('/org') &&
           this.role !== 'Organization Dashboard User') ||
         // ! Condition for prohibiting organization members attempting to access portfolio endpoint with no path parameter.
         (this.$route.path.includes('/portfolio') &&
           this.$route.query.address === '' &&
           this.role === 'Organization Dashboard User') ||
-        // ! Condition for prohibiting applicant users from accessing portfolio endpoint with path parameter, which may have the intention of checking other portfolio.
+        // ! Condition for prohibiting student users from accessing portfolio endpoint with path parameter, which may have the intention of checking other portfolio.
         (this.$route.path.includes('/portfolio') &&
           this.$route.query.address !== undefined &&
-          this.role === 'Applicant Dashboard User') ||
+          this.role === 'Student Dashboard User') ||
         // ! Condition for prohibiting anonymous users from accessing the portfolio when its `address` query were invalid.
         (this.$route.path.includes('/portfolio') &&
           this.$route.query.address === undefined &&

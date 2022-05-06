@@ -87,11 +87,14 @@
           <div class="text-subtitle1">
             For validity, the following fields shows the hash integrity of the
             context, both in its <code style="color: red">encrypted</code> and
-            <code style="color: red">raw</code> form. Note that you cannot
-            assert this easily, it requires extensive setup such as rebuilding
-            the model to match the hash indicated here.
+            <code style="color: red">raw</code> form. Note that, for the case of
+            <code style="color: red">Internal Transaction</code>, you can verify
+            the encrypted hash by encrypting the context provided. For the case
+            of <code style="color: red">External Transaction</code>, you can
+            verify the raw hash by decrypting its context.
           </div>
         </q-card-section>
+
         <q-card-section class="details">
           <p>
             Raw: <code>{{ tx_context_signature_raw }}</code>

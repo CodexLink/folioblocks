@@ -250,6 +250,8 @@
                 prefix="Organization Founded"
                 :rules="['org_date']"
                 lazy-rules
+                readonly
+                hint="The date from where your institution or your organization was founded."
                 :disable="isProcessing"
               >
                 <template v-slot:append>
@@ -263,6 +265,7 @@
                       <q-date
                         v-model="org_date"
                         color="secondary"
+                        today-btn
                         :options="optionsFn"
                         :disable="isProcessing"
                       >

@@ -34,7 +34,7 @@
                 color="white"
                 :label="button_right"
                 :to="button_right_link"
-                :disable="user_role === 'Applicant Dashboard User'"
+                :disable="user_role === 'Student Dashboard User'"
               />
             </div>
           </q-card-section>
@@ -126,7 +126,7 @@ import { resolvedNodeAPIURL } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 let dashboardOptions = {
-  applicant: {
+  student: {
     buttons: ['View Portfolio', '—'],
     links: ['/portfolio', '#'],
     context: {
@@ -285,18 +285,18 @@ export default defineComponent({
               response.data.reports.total_overall_info_outside;
           } else {
             console.log(response);
-            // * Adjust the context for the applicant.
+            // * Adjust the context for the student.
             // - Replace the button context.
-            this.button_left = dashboardOptions.applicant.buttons[0];
-            this.button_left_link = dashboardOptions.applicant.links[0];
-            this.button_right = dashboardOptions.applicant.buttons[1];
-            this.button_right_link = dashboardOptions.applicant.links[1];
+            this.button_left = dashboardOptions.student.buttons[0];
+            this.button_left_link = dashboardOptions.student.links[0];
+            this.button_right = dashboardOptions.student.buttons[1];
+            this.button_right_link = dashboardOptions.student.links[1];
 
             // - Replace the cards context.
 
             // - Update Card #1.
             this.context_right_top =
-              dashboardOptions.applicant.context.right_top.title;
+              dashboardOptions.student.context.right_top.title;
             this.context_right_top_primary = `You currently have ${
               response.data.reports.logs_associated_count +
               response.data.reports.extra_associated_count
@@ -308,14 +308,14 @@ export default defineComponent({
                 response.data.reports.extra_associated_count) /
               response.data.reports.total_txs_overall;
             this.context_right_top_icon =
-              dashboardOptions.applicant.context.right_top.icon;
+              dashboardOptions.student.context.right_top.icon;
 
             // - Update Card #2.
-            this.context_left = dashboardOptions.applicant.context.left.title;
+            this.context_left = dashboardOptions.student.context.left.title;
             this.context_left_primary =
-              dashboardOptions.applicant.context.left.subtitle;
+              dashboardOptions.student.context.left.subtitle;
             this.context_left_secondary =
-              dashboardOptions.applicant.context.left.another;
+              dashboardOptions.student.context.left.another;
 
             this.context_left_progress_top =
               response.data.reports.logs_associated_count /
@@ -326,7 +326,7 @@ export default defineComponent({
 
             // - Update Card #3.
             this.context_right_bottom =
-              dashboardOptions.applicant.context.right_bottom.title;
+              dashboardOptions.student.context.right_bottom.title;
             this.context_right_bottom_primary = `Currently '${
               response.data.reports.portfolio.enable_sharing
                 ? 'public'
@@ -339,7 +339,7 @@ export default defineComponent({
               response.data.reports.portfolio.show_files ? 'viewable' : 'hidden'
             }'`;
             this.context_right_bottom_icon =
-              dashboardOptions.applicant.context.right_bottom.icon;
+              dashboardOptions.student.context.right_bottom.icon;
 
             // * Count the number of `true` over `false`.
             let portfolio_truthy_count = 0;

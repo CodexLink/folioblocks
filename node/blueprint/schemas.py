@@ -15,7 +15,7 @@ from core.constants import (
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
     AddressUUID,
-    ApplicantLogContentType,
+    StudentLogContentType,
     CredentialContext,
     HashUUID,
     HTTPQueueMethods,
@@ -46,9 +46,9 @@ class AdditionalContextTransaction(BaseModel):
     timestamp: datetime | None
 
 
-class ApplicantLogTransaction(BaseModel):
+class StudentLogTransaction(BaseModel):
     address_origin: AddressUUID
-    type: ApplicantLogContentType
+    type: StudentLogContentType
     name: str
     description: str
     role: str
@@ -61,7 +61,7 @@ class ApplicantLogTransaction(BaseModel):
 
 class PortfolioLoadedContext(BaseModel):
     tx_hash: HashUUID
-    context: AdditionalContextTransaction | ApplicantLogTransaction | None
+    context: AdditionalContextTransaction | StudentLogTransaction | None
 
 
 # # Agnostic Models — END
@@ -75,14 +75,14 @@ class PortfolioSettings(BaseModel):
     show_files: bool
 
 
-class ApplicantEditableProperties(BaseModel):
+class StudentEditableProperties(BaseModel):
     avatar: UploadFile | str | None
     description: str | None
     personal_skills: str | None
     preferred_role: str | None
 
 
-class DashboardApplicant(BaseModel):
+class DashboardStudent(BaseModel):
     total_txs_overall: int  # * (logs_associated + extras_associated) / total from chain
 
     # - For Total Credentials Associated.
@@ -108,7 +108,7 @@ class DashboardContext(BaseModel):
     last_name: str | None
     username: str
     role: UserEntity
-    reports: DashboardApplicant | DashboardOrganization
+    reports: DashboardStudent | DashboardOrganization
 
 
 class PortfolioLogMinimal(BaseModel):
@@ -118,7 +118,7 @@ class PortfolioLogMinimal(BaseModel):
     tx_hash: HashUUID
 
 
-class Portfolio(ApplicantEditableProperties, BaseModel):
+class Portfolio(StudentEditableProperties, BaseModel):
     address: AddressUUID
     email: EmailStr | None
     program: str
@@ -157,7 +157,7 @@ class GenerateAuthInput(BaseModel):
 @o There are some fields were declared as `None` as they are defined during or after a certain processes.
 """
 
-# @o This is used for both fields under `extra` of Applicant and Organization.
+# @o This is used for both fields under `extra` of Student and Organization.
 
 # # Generalized Validator — START
 
@@ -189,7 +189,7 @@ class AgnosticViewExtenderFields(BaseModel):
     extra: AdditionalContextTransaction | None
 
 
-class ApplicantUserBaseTransaction(BaseModel):
+class StudentUserBaseTransaction(BaseModel):
     avatar: UploadFile | None  # - Changeable but will be recorded as a proof.
     identity: AddressUUID | None  # * This is going to be resolved during process.
     inserter: AddressUUID | None  # * Reference to user from the organization.
@@ -200,16 +200,16 @@ class ApplicantUserBaseTransaction(BaseModel):
     preferred_role: str
 
 
-class ApplicantUserTransaction(
-    AgnosticTransactionUserCredentials, ApplicantUserBaseTransaction
+class StudentUserTransaction(
+    AgnosticTransactionUserCredentials, StudentUserBaseTransaction
 ):
     pass
 
 
 # - REST API Model.
-class ApplicantUserViewExtender(AgnosticViewExtenderFields, BaseModel):
-    applicants: ApplicantUserBaseTransaction
-    logs: list[ApplicantLogTransaction] | None
+class StudentUserViewExtender(AgnosticViewExtenderFields, BaseModel):
+    students: StudentUserBaseTransaction
+    logs: list[StudentLogTransaction] | None
 
 
 # * This organization (generative) model contains fields that seem to be nullable or optional, which does not. Some fields may be nullable at the case were an association was registered in the first place, or was referred from this organization.
@@ -286,7 +286,7 @@ class NodeMineConsensusSuccessProofTransaction(BaseModel):
 
 class GroupTransaction(BaseModel):
     content_type: TransactionContextMappingType
-    context: ApplicantLogTransaction | ApplicantUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseFields | OrganizationUserBaseTransaction
+    context: StudentLogTransaction | StudentUserBaseTransaction | AdditionalContextTransaction | HashUUID | OrganizationUserBaseFields | OrganizationUserBaseTransaction
 
 
 class NodeTransaction(BaseModel):
