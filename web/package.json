@@ -11,8 +11,8 @@
     "test": "echo \"No test specified\" && exit 0",
     "dev": "quasar dev",
     "build": "quasar build",
-    "build-serve": "quasar build && quasar serve dist/spa",
-    "serve": "quasar serve"
+    "build-serve-locally": "quasar build && quasar serve dist/spa",
+    "serve-locally": "quasar serve dist/spa"
   },
   "dependencies": {
     "@quasar/extras": "^1.0.0",
