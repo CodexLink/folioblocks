@@ -82,8 +82,12 @@
               >{{ log.context.description }}</q-item-label
             >
             <q-item-label style="margin-top: 2%">
-              <span class="text-weight-bold q-ma-md q-mb-sm"> By:</span
-              >{{ log.context.validated_by }}
+              <span class="text-weight-bold q-ma-md q-mb-sm"> By:</span>
+              <router-link
+                :to="'/explorer/address/' + log.context.validated_by"
+                style="text-decoration: none"
+                >{{ log.context.validated_by }}</router-link
+              >
             </q-item-label>
             <q-item-label class="q-ml-md" style="margin-top: 2%">
               <span class="text-weight-bold text-justify q-mb-sm q-mr-md">
@@ -252,12 +256,13 @@
         </q-item>
       </q-card-section>
 
-      <q-card-actions align="right">
+      <q-card-actions align="right" style="padding-bottom: 3%">
         <q-btn
           v-close-popup
-          outline
-          color="secondary"
-          label="Close"
+          flat
+          v-ripple
+          label="Close Modal"
+          style="color: #f44336"
           class="q-mr-md"
         />
       </q-card-actions>
