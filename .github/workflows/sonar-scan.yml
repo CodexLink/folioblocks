@@ -12,6 +12,8 @@ on:
       - "**.lock"
       - "**.gitignore"
       - "**.firebaserc"
+      - "**.yml"
+      - "**.yaml"
 
 jobs:
   sonarcloud-analyze:
