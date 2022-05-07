@@ -6,6 +6,8 @@ on:
     paths:
       - "web/**"
 
+  workflow_dispatch:
+
 jobs:
   folioblocks-web:
     name: Folioblocks Web Builder and Deployer
