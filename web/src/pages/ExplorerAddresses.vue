@@ -176,8 +176,6 @@ export default defineComponent({
             address_context.id = nth_address;
             nth_address += 1;
 
-            console.log(address_context);
-
             resolved_addresses.push(address_context);
           }
 

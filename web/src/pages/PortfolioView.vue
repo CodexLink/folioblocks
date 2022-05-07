@@ -44,148 +44,212 @@
 
   <div class="row">
     <div class="logs">
-      <q-linear-progress v-if="true" query color="red" class="q-mt-sm" />
+      <q-linear-progress
+        v-if="portfolio_log_info_rendering_state"
+        query
+        color="red"
+        class="q-mt-sm"
+      />
       <q-card-section style="margin-bottom: 0.5%">
         <div class="text-h6">Logs</div>
         <div class="text-subtitle1">
           A set of contentful information that can be known as
           <strong>logs</strong>, which should contains supporting context with
-          documents (if given). The following are associated logs to you.
+          documents (if given). The following are associated logs to you. Click
+          them to get more infomration regarding this log.
         </div>
       </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item
-          v-for="list in lists"
-          :key="list.id"
-          clickable
+          v-for="log in portfolio_log_container"
+          :key="log.id"
           class="logdata"
-          @click="
-            Clicked(list);
-            log = true;
-          "
         >
           <q-item-section class="text-h6">
             <q-item-label
-              ><span class="text-weight-bold q-ma-md q-mb-sm"> Name:</span
-              >{{ list.name }}</q-item-label
-            >
-            <q-item-label>
-              <span class="text-weight-bold q-ma-md q-mb-sm"> Role:</span
-              >{{ list.role }}</q-item-label
-            >
-            <q-item-label class="q-ml-md">
+              ><span class="text-weight-bold q-mb-sm">{{
+                log.context.name
+              }}</span>
+              |
+
+              <span class="text-weight-bold q-ma-md q-mb-sm"> Role: </span
+              >{{ log.context.role }}
+            </q-item-label>
+
+            <q-item-label class="q-ml-md" style="margin-top: 2%">
               <span class="text-weight-bold text-justify q-mb-sm q-mr-md">
-                Description:</span
-              >{{ list.description }}</q-item-label
+                Description: </span
+              >{{ log.context.description }}</q-item-label
             >
-            <q-item-label>
-              <span class="text-weight-bold q-ma-md q-mb-sm">
-                Validated By:</span
-              >{{ list.validatedby }}</q-item-label
-            >
-            <q-item-section side>
-              <q-btn
-                outline
-                color="black"
-                label="View More"
-                class="q-mt-md view"
-                @click="
-                  Clicked(list);
-                  log = true;
-                "
-              />
-            </q-item-section>
-          </q-item-section>
-          <q-item-section top side>
-            <div class="text-grey-8">
-              <q-badge outline color="black" label="Type" />
-            </div>
+            <q-item-label style="margin-top: 2%">
+              <span class="text-weight-bold q-ma-md q-mb-sm"> By:</span
+              >{{ log.context.validated_by }}
+            </q-item-label>
+            <q-item-label class="q-ml-md" style="margin-top: 2%">
+              <span class="text-weight-bold text-justify q-mb-sm q-mr-md">
+                Duration Start:</span
+              >{{ log.context.duration_start }}
+              <span v-if="log.context.duration_end">|</span>
+              <span
+                class="text-weight-bold text-justify q-mb-sm q-mr-md"
+                v-if="log.context.duration_end"
+              >
+                Duration End:</span
+              >{{ log.context.duration_end }}
+              <q-card-actions align="right">
+                <q-btn
+                  outline
+                  right
+                  color="black"
+                  label="View More"
+                  class="q-mt-md"
+                  @click="getLogInfo(log.id)"
+                />
+              </q-card-actions>
+            </q-item-label>
           </q-item-section>
         </q-item>
       </q-scroll-area>
     </div>
 
     <div class="logs">
-      <q-linear-progress v-if="true" query color="red" class="q-mt-sm" />
+      <q-linear-progress
+        v-if="portfolio_extra_info_rendering_state"
+        query
+        color="red"
+        class="q-mt-sm"
+      />
 
       <q-card-section style="margin-bottom: 0.5%">
         <div class="text-h6">Extras</div>
         <div class="text-subtitle1">
           A set of information that can be known as <strong>remarks</strong>. It
-          may contain judgements that reflects the state of this student.
+          may contain judgements that reflects the state of this student. Click
+          them to get to the transaction proof.
         </div>
       </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">
-        <q-item v-for="list in lists" :key="list.id" clickable class="logdata">
+        <q-item
+          v-for="extra in portfolio_extra_container"
+          :key="extra.tx_hash"
+          :to="'/explorer/transaction/' + extra.tx_hash"
+          style="text-decoration: none"
+          clickable
+          class="logdata"
+        >
           <q-item-section class="text-h6">
-            <q-item-label class="text-bold q-mb-sm">
-              <span class="text-weight-bold q-ma-sm q-mb-sm"> Title:</span
-              >{{ list.title }}</q-item-label
+            <q-item-label class="q-mb-sm">
+              <span class="text-bold"> {{ extra.context.title }}</span> |
+              <span class="text-bold q-ma-sm q-mb-sm q-ml-sm"> Timestamp:</span
+              >{{ extra.context.timestamp }}</q-item-label
             >
-            <q-item-label class="q-ml-sm text-justify q-mb-sm q-ml-lg">
+            <q-item-label
+              class="q-ml-sm text-justify q-mb-sm q-ml-lg"
+              style="margin-top: 2%"
+            >
               <span class="text-weight-bold q-mb-sm q-mr-sm"> Description:</span
-              >{{ list.descriptioninfo }}</q-item-label
+              >{{ extra.context.description }}
+            </q-item-label>
+            <q-item-label
+              class="q-ml-sm text-justify q-mb-sm q-ml-lg"
+              style="margin-top: 2%"
             >
-            <q-item-label class="q-ml-md q-mb-sm">
-              <span class="text-weight-bold q-ma-sm q-mb-sm q-ml-sm">
-                Timestamp:</span
-              >{{ list.timestamp
-              }}<span class="text-weight-bold q-ma-sm q-mb-sm q-ml-xl">
-                Inserted By:</span
-              >{{ list.insertedby }}</q-item-label
-            >
+              <span class="text-weight-bold q-mb-sm q-mr-sm"> By:</span>
+              <router-link
+                :to="'/explorer/address/' + extra.context.inserter"
+                style="text-decoration: none"
+                >{{ extra.context.inserter }}</router-link
+              >
+            </q-item-label>
           </q-item-section>
         </q-item>
       </q-scroll-area>
     </div>
   </div>
 
-  <q-dialog v-model="log" class="modal" persistent>
+  <q-dialog v-model="logModalState" class="modal">
     <q-card class="my-card-log">
       <q-card-section>
-        <div class="log">
-          <q-item>
-            <q-item-section class="text-h6">
-              <q-item-label class="q-mb-md"
-                ><span class="text-weight-bold q-ma-sm q-mb-sm"> Name:</span
-                >{{ nameinfo }}</q-item-label
-              >
-              <q-item-label class="q-mb-md">
-                <span class="text-weight-bold q-ma-sm q-mb-sm"> Address:</span
-                >{{ addressinfo }}</q-item-label
-              >
-              <q-item-label class="q-mb-md">
-                <span class="text-weight-bold q-ma-sm q-mb-sm"> Role:</span
-                >{{ roleinfo }}</q-item-label
-              >
-              <q-item-label class="q-ml-sm q-mb-md">
-                <span class="text-weight-bold text-justify q-mb-sm q-mr-sm">
-                  Description:</span
-                >{{ descriptioninfomodal }}</q-item-label
-              >
-              <q-item-label class="q-mb-md">
-                <span class="text-weight-bold q-ma-sm q-mb-sm">
-                  Validated By:</span
-                >{{ validatedbyinfo }}</q-item-label
-              >
-              <q-item-label class="q-mb-md">
-                <span class="text-weight-bold q-ma-sm q-mb-sm"> File:</span
-                >{{ fileinfo }}
-                <q-btn outline color="black" label="View" class="q-mr-md"
-              /></q-item-label>
-              <q-item-label class="q-mb-md">
-                <span class="text-weight-bold q-ma-sm q-mb-sm">
-                  Duration Start:</span
-                >{{ durationstartinfo }}</q-item-label
-              >
-              <q-item-label class="q-mb-md">
-                <span class="text-weight-bold q-ma-sm q-mb-sm">
-                  Duration End:</span
-                >{{ durationendinfo }}</q-item-label
-              >
-            </q-item-section>
-          </q-item>
+        <div class="text-h6">Log Detailed Information</div>
+        <div class="text-subtitle1">
+          Other fields not shown from the list were shown here. Not that some of
+          the properties are not available for access, for instance, the file.
+          Contact the student for the permission.
         </div>
+      </q-card-section>
+      <q-card-section class="wrap-content">
+        <q-item>
+          <q-item-section class="text-h6">
+            <q-item-label class="q-mb-md"
+              ><span class="text-weight-bold q-ma-sm q-mb-sm">Title:</span
+              >{{ selectedLog.context.name }}</q-item-label
+            >
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm">Transaction:</span>
+
+              <router-link
+                :to="'/explorer/transaction/' + selectedLog.tx_hash"
+                style="text-decoration: none"
+                >{{ selectedLog.tx_hash }}</router-link
+              >
+            </q-item-label>
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm">Description:</span
+              >{{ selectedLog.context.description }}</q-item-label
+            >
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm">Role:</span
+              >{{ selectedLog.context.role }}</q-item-label
+            >
+
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm">
+                Inserter / Validated by:</span
+              >
+
+              <router-link
+                :to="'/explorer/address/' + selectedLog.context.validated_by"
+                style="text-decoration: none"
+                >{{ selectedLog.context.validated_by }}</router-link
+              >
+            </q-item-label>
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm"> File:</span>
+              <q-btn
+                outline
+                color="black"
+                label="View / Download"
+                class="q-mr-md"
+                @click="
+                  getFile(
+                    selectedLog.context.address_origin,
+                    selectedLog.context.file
+                  )
+                "
+                :disable="selectedLog.context.file === null"
+              />
+            </q-item-label>
+
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm">
+                Duration Start:</span
+              >{{ selectedLog.context.duration_start }}</q-item-label
+            >
+            <q-item-label
+              class="q-mb-md"
+              v-if="selectedLog.context.duration_end !== null"
+            >
+              <span class="text-weight-bold q-ma-sm q-mb-sm">
+                Duration End:</span
+              >{{ selectedLog.context.duration_end }}</q-item-label
+            >
+            <q-item-label class="q-mb-md">
+              <span class="text-weight-bold q-ma-sm q-mb-sm">
+                Transaction Timestamp:</span
+              >{{ selectedLog.context.timestamp }}</q-item-label
+            >
+          </q-item-section>
+        </q-item>
       </q-card-section>
 
       <q-card-actions align="right">
@@ -266,10 +330,14 @@
           </q-card-section>
 
           <q-card-section class="text-justify">
-            The following switches are states that can greatly affect the output
-            of your portfolio. <strong>Be careful</strong>, by applying changes
-            (in the means of clicking the apply button) will subject you to
-            rate-limitation of <strong>3 minutes.</strong>
+            The following switches are states that can affect the output of your
+            portfolio. Which means everyone who access your portfolio is
+            affected, <strong>including you</strong>.
+          </q-card-section>
+          <q-card-section class="text-justify">
+            <strong>Be careful</strong>, by applying changes (in the means of
+            clicking the apply button) will subject you to rate-limitation of
+            <strong>3 minutes.</strong>
           </q-card-section>
 
           <q-list style="padding-top: 3%">
@@ -332,7 +400,13 @@
             <q-card-actions align="right">
               <q-btn
                 flat
-                style="color: #ff0080"
+                style="color: #3700b3"
+                label="Close Modal"
+                @click="portfolio_modal = false"
+              />
+              <q-btn
+                flat
+                class="red"
                 :disable="portfolio_setting_btn_click_state"
                 label="Apply Settings"
                 @click="submitPortfolioSettings"
@@ -416,6 +490,12 @@
             <q-card-actions align="right">
               <q-btn
                 flat
+                style="color: #3700b3"
+                label="Close Modal"
+                @click="portfolio_modal = false"
+              />
+              <q-btn
+                flat
                 type="submit"
                 style="color: #ff0080"
                 label="Apply New Info"
@@ -450,9 +530,17 @@ export default defineComponent({
       portfolio_user_personal_skills: ref('—'),
       portfolio_user_preferred_role: ref('—'),
 
+      // * Containers.
+      portfolio_extra_container: ref([]),
+      portfolio_log_container: ref([]),
+
+      portfolio_user_email_contact: ref('—'),
+
       // * State and Field Variables
       portfolio_modal: ref(false),
       selected_settings: ref('share_settings'),
+      portfolio_extra_info_rendering_state: ref(true),
+      portfolio_log_info_rendering_state: ref(true),
       isProcessing: ref(false),
 
       portfolio_sharing_state: ref(false),
@@ -470,91 +558,6 @@ export default defineComponent({
       isStudent: ref(false),
       isOrg: ref(false),
       isAnonymous: ref(false),
-
-      // * Log Information Variables
-
-      // * Extra Information Variables
-
-      role: 'Role',
-      nameinfo: '',
-      addressinfo: '',
-      roleinfo: '',
-      descriptioninfomodal: '',
-      validatedbyinfo: '',
-      fileinfo: '',
-      durationstartinfo: '',
-      durationendinfo: '',
-
-      lists: [
-        {
-          id: 1,
-          name: 'Student 1',
-          address: '0x7zd7a8ds6dsa',
-          role: 'Role',
-          description:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          validatedby: 'validated',
-          file: '',
-          durationstart: '24/04/22',
-          durationend: '30/04/22',
-          title: 'Title',
-          descriptioninfo:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          timestamp: '24/04/22',
-          insertedby: 'insertedby',
-        },
-        {
-          id: 2,
-          name: 'Student 2',
-          address: '0x7zd7a8ds6dsa',
-          role: 'Role',
-          description:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          validatedby: 'validated',
-          file: '',
-          durationstart: '24/04/22',
-          durationend: '30/04/22',
-          title: 'Title',
-          descriptioninfo:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          timestamp: '24/04/22',
-          insertedby: 'insertedby',
-        },
-        {
-          id: 3,
-          name: 'Student 3',
-          address: '0x7zd7a8ds6dsa',
-          role: 'Role',
-          description:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          validatedby: 'validated',
-          file: '',
-          durationstart: '24/04/22',
-          durationend: '30/04/22',
-          title: 'Title',
-          descriptioninfo:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          timestamp: '24/04/22',
-          insertedby: 'insertedby',
-        },
-        {
-          id: 4,
-          name: 'Student 4',
-          address: '0x7zd7a8ds6dsa',
-          role: 'Role',
-          description:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          validatedby: 'validated',
-          file: '',
-          durationstart: '24/04/22',
-          durationend: '30/04/22',
-          title: 'Title',
-          descriptioninfo:
-            'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ',
-          timestamp: '24/04/22',
-          insertedby: 'insertedby',
-        },
-      ],
     };
   },
 
@@ -564,12 +567,8 @@ export default defineComponent({
     const $router = useRouter();
 
     return {
-      card: ref(false),
-      log: ref(false),
-      sharing: ref(true),
-      exposeemail: ref(true),
-      timelimit: ref(true),
-      allowfile: ref(true),
+      logModalState: ref(false),
+      selectedLog: ref(null),
     };
   },
   mounted() {
@@ -832,14 +831,48 @@ export default defineComponent({
           this.portfolio_user_address = response.data.address;
           this.portfolio_user_association = response.data.association;
           this.portfolio_user_program = response.data.program;
-          this.portfolio_user_description = response.data.description;
-          this.portfolio_user_personal_skills;
-          response.data.personal_skills;
+          this.portfolio_user_description =
+            response.data.description === null
+              ? 'No information'
+              : response.data.description;
+          this.portfolio_user_personal_skills =
+            response.data.personal_skills === null
+              ? 'No information.'
+              : response.data.personal_skills;
           this.portfolio_user_preferred_role = response.data.preferred_role;
           this.portfolio_user_email_contact =
             response.data.email === null
               ? 'Not Available.'
               : response.data.email;
+
+          // - Add extra information from the container.
+          // ! We don't need to assign an ID since there's no need of modal.
+          this.portfolio_extra_container = response.data.extra;
+          this.portfolio_extra_info_rendering_state = false;
+
+          // - Add log information from the container.
+          let log_info_counter = 1;
+          let log_temp_container = [];
+
+          // Process the transaction.
+          for (let log_info of response.data.logs) {
+            log_info.id = log_info_counter;
+
+            log_info.context.duration_start = new Date(
+              log_info.context.duration_start
+            ).toLocaleDateString();
+
+            if (log_info.context.duration_end !== null) {
+              log_info.context.duration_end = new Date(
+                log_info.context.duration_end
+              ).toLocaleDateString();
+            }
+
+            log_temp_container.push(log_info);
+            log_info_counter++;
+          }
+          this.portfolio_log_container = log_temp_container;
+          this.portfolio_log_info_rendering_state = false;
         })
         .catch((e) => {
           this.$q.notify({
@@ -853,24 +886,21 @@ export default defineComponent({
           this.$router.go(-1);
         });
     },
-    // Clicked: function (list) {
-    //   // eslint-disable-next-line
-    //   this.nameinfo = list.name;
-    //   // eslint-disable-next-line
-    //   this.addressinfo = list.address;
-    //   // eslint-disable-next-line
-    //   this.roleinfo = list.role;
-    //   // eslint-disable-next-line
-    //   this.descriptioninfomodal = list.description;
-    //   // eslint-disable-next-line
-    //   this.validatedbyinfo = list.validatedby;
-    //   // eslint-disable-next-line
-    //   this.fileinfo = list.file;
-    //   // eslint-disable-next-line
-    //   this.durationstartinfo = list.durationstart;
-    //   // eslint-disable-next-line
-    //   this.durationendinfo = list.durationend;
-    // },
+    getLogInfo(id) {
+      this.logModalState = true;
+
+      this.selectedLog = this.portfolio_log_container[id - 1];
+    },
+    getFile(address_origin, file_hash) {
+      let portfolioFileURL = `http://${resolvedNodeAPIURL}/dashboard/portfolio/${address_origin}/file/${file_hash}`;
+
+      axios.get(portfolioFileURL, { responseType: 'blob' }).then((response) => {
+        let blob = new Blob([response.data], { type: 'application/pdf' });
+        let url = window.URL.createObjectURL(blob);
+
+        window.open(url);
+      });
+    },
   },
 });
 </script>
@@ -887,6 +917,11 @@ export default defineComponent({
   padding-bottom: 1%;
   border-style: solid;
   border-radius: 10px;
+}
+
+.wrap-content {
+  inline-size: auto;
+  overflow-wrap: break-word;
 }
 
 .avatar {
@@ -924,7 +959,6 @@ export default defineComponent({
 }
 .my-card-log {
   width: 100%;
-  height: 60%;
 }
 
 .logdata {

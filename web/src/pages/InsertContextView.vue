@@ -823,7 +823,6 @@ export default {
         let logForm = new FormData();
 
         logForm.append('address_origin', this.targetted_address);
-        logForm.append('content_type', 2); // * See TransactionContextMappingType.STUDENT_LOG.
         logForm.append('name', this.new_log_name);
         logForm.append('description', this.new_log_description);
         logForm.append('role', this.new_log_role);
@@ -1037,7 +1036,6 @@ export default {
       this.isFetchingStudent = false;
     },
     directToPortfolio() {
-      console.log(this.targetted_address);
       void this.$router.push({
         path: '/portfolio',
         query: { address: this.targetted_address },

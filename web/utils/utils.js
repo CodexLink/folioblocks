@@ -99,7 +99,6 @@ export function resolveContextType(typeField) {
 				break
 		}
 	} else {
-		console.log('cxz')
 		switch (typeField.action) {
 			case NodeTransactionInternalActions.CONSENSUS:
 				resolvedTypeValue = 'Internal: Consensus Context'
@@ -115,9 +114,5 @@ export function resolveContextType(typeField) {
 				break
 		}
 	}
-
-	console.log(identifiedType, resolveContextType)
-
 	return { identifiedType, resolvedTypeValue }
-
 }

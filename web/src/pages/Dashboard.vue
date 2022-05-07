@@ -284,7 +284,6 @@ export default defineComponent({
                 response.data.reports.total_associated_extra) /
               response.data.reports.total_overall_info_outside;
           } else {
-            console.log(response);
             // * Adjust the context for the student.
             // - Replace the button context.
             this.button_left = dashboardOptions.student.buttons[0];

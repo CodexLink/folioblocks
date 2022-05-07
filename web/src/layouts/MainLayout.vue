@@ -281,7 +281,6 @@ export default defineComponent({
       });
     },
     checkPathAndAuth() {
-      console.log(this.role, this.$route);
       if (
         // - Conditions for prohibiting non-student users from accessing respective pages, except for portfolio.
         (this.$route.path.includes('/dashboard') && this.containsNoAuth) ||
@@ -337,7 +336,7 @@ export default defineComponent({
 
 .active-state {
   color: white;
-  background: #ff4700a3;
+  background: #f44336;
 }
 
 .q-layout {
