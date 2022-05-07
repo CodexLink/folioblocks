@@ -15,7 +15,6 @@ from core.constants import (
     AUTH_CODE_MIN_CONTEXT,
     UUID_KEY_LENGTH,
     AddressUUID,
-    StudentLogContentType,
     CredentialContext,
     HashUUID,
     HTTPQueueMethods,
@@ -48,7 +47,6 @@ class AdditionalContextTransaction(BaseModel):
 
 class StudentLogTransaction(BaseModel):
     address_origin: AddressUUID
-    type: StudentLogContentType
     name: str
     description: str
     role: str

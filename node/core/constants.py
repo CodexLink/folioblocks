@@ -160,7 +160,7 @@ BLOCKCHAIN_NAME: Final[str] = "folioblocks-chain.json"
 BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 
 # # Constraints, Portfolio
-PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE: Final[int] = 3
+PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE: Final[int] = 1
 
 # # Constants, Template Models with Pydantic
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
@@ -341,15 +341,6 @@ class NodeTransactionInternalActions(IntEnum):
     CONSENSUS = auto()
     INIT = auto()
     SYNC = auto()
-
-
-# # SORT THIS.
-
-
-class StudentLogContentType(IntEnum):
-    WORK_EXPERIENCE = auto()
-    EDUCATION = auto()
-    MISCELLANEOUS = auto()
 
 
 class TransactionActions(IntEnum):

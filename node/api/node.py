@@ -43,7 +43,6 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
     AddressUUID,
-    StudentLogContentType,
     AssociatedNodeStatus,
     AuthAcceptanceCode,
     BaseAPI,
@@ -542,7 +541,6 @@ async def receive_action_from_dashboard(
 )
 async def receive_file_from_dashboard(
     address_origin: AddressUUID = Form(...),
-    content_type: StudentLogContentType = Form(...),
     name: str = Form(...),
     description: str = Form(...),
     role: str = Form(...),
