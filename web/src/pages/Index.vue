@@ -113,7 +113,7 @@
     </div>
 
     <div class="info">
-      <img class="img" src="\img.jpg" />
+      <img class="img" src="~assets/img.jpg" />
       <div>
         <h5>
           Design of an Immutable Credential Verification System using Blockchain
@@ -131,7 +131,7 @@
           <li>Suitable for people looking for trustworthy employees.</li>
         </ul>
       </div>
-      <img class="img" src="\img2.jpg" />
+      <img class="img" src="~assets/img2.jpg" />
 
       <div>
         <h5>Distributed Ledger Technology</h5>
