@@ -1339,16 +1339,14 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.debug(
                     f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO.name} or {TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO.name} by doing nothing due to there's nothing to process."
                 )
-                    create_task(
-                        self.__email_service.send(
-                            content=f"<html><body><h1>Someone from your organization added a new extra information / remarks referring to you.</h1><p>This was to notify you that an address <code>{data.context.inserter}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.title}</li><li><b>Description</b>: {data.context.description}</li><p>Please note that this information is considered as <strong>extra or remarks</strong> as the provided information from this email is as-is from what will be shown in the portfolio.</p><p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
-                            subject="New Remarks Information-Association Notice",
-                            to=data.context.email,  # type: ignore
-                        ),
-                        name=f"{get_email_instance.__name__}_send_new_extra_notification",
-                    )
-
-
+                create_task(
+                    self.__email_service.send(
+                        content=f"<html><body><h1>Someone from your organization added a new extra information / remarks referring to you.</h1><p>This was to notify you that an address <code>{data.context.inserter}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.title}</li><li><b>Description</b>: {data.context.description}</li><p>Please note that this information is considered as <strong>extra or remarks</strong> as the provided information from this email is as-is from what will be shown in the portfolio.</p><p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
+                        subject="New Remarks Information-Association Notice",
+                        to=data.context.email,  # type: ignore
+                    ),
+                    name=f"{get_email_instance.__name__}_send_new_extra_notification",
+                )
 
             else:
                 exception_message = "All of the condition specified did not hit. Are you sure your combination of data is right? Please check the declaration and try again."
