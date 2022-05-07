@@ -31,21 +31,18 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      - name: Step 3 | Change Directory to Folioblocks Web
-        run: cd web
-
       # # From https://stackoverflow.com/questions/58482655/what-is-the-closest-to-npm-ci-in-yarn
-      - name: Step 4 | Remove Modules & Install Packages from Yarn
+      - name: Step 3 | Remove Modules & Install Packages from Yarn
         run: |
-          rm -rf node_modules && yarn install --frozen-lockfile
+          cd web && rm -rf node_modules && yarn install --frozen-lockfile
 
-      - name: Step 5 | Install Packages
+      - name: Step 4 | Install Packages
         run: yarn build
 
-      - name: Step 6 | Deploy from `gh-pages`
+      - name: Step 5 | Deploy from `gh-pages`
         uses: JamesIves/github-pages-deploy-action@v4.3.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BASE_BRANCH: latest
           BRANCH: gh-pages
-          FOLDER: dist/spa
+          FOLDER: web/dist/spa
