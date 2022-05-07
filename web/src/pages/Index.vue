@@ -85,10 +85,13 @@
     <div class="main">
       <div class="intro">
         <div class="container text-white">
-          <p class="mb-3">Get a trully skilled workers with Folioblocks!</p>
+          <p class="mb-3">
+            Get a trully verified talent with a verified credentials with
+            Folioblocks!
+          </p>
           <p class="mb-4">
-            Tired of the tedious process of validating the credentials of
-            workers? Blockchain can help you with that and with us!
+            Tired of the getting rejected by suspicions of your credentials?
+            Blockchain can help you gain that trust, and with us!
           </p>
           <div class="btn">
             <q-btn
