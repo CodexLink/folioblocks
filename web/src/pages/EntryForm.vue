@@ -411,7 +411,7 @@ import RegisterContainer from 'src/components/RegisterContainer.vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useQuasar } from 'quasar';
-import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 export default defineComponent({
   name: 'EntryForm',
   components: { RegisterContainer },
@@ -464,7 +464,7 @@ export default defineComponent({
       this.isProcessing = true;
 
       axios
-        .post(`http://${resolvedNodeAPIURL}/entity/login`, {
+        .post(`http://${MASTER_NODE_BACKEND_URL}/entity/login`, {
           username: this.login_username,
           password: this.login_password,
         })
@@ -487,7 +487,7 @@ export default defineComponent({
 
               // * Logout the token gracefully, without handling the error since we didn't do anything regarding storing something from the localStorage..
               axios.post(
-                `http://${resolvedNodeAPIURL}/entity/logout`,
+                `http://${MASTER_NODE_BACKEND_URL}/entity/logout`,
                 {
                   /* ... data*/
                 },
@@ -615,10 +615,11 @@ export default defineComponent({
       if (payloadModified)
         // * Once the payload has been resolved (it's fields, ofc), do API call.
         axios
-          .post(`http://${resolvedNodeAPIURL}/entity/register`, {
+          .post(`http://${MASTER_NODE_BACKEND_URL}/entity/register`, {
             ...defaultPayload,
           })
           .then((_response) => {
+            console.log(_response);
             this.$q.notify({
               color: 'green',
               position: 'top',
@@ -634,9 +635,7 @@ export default defineComponent({
             this.$q.notify({
               color: 'negative',
               position: 'top',
-              message: `There was an error when submitting your credentials. Reason: ${
-                e.message || e.response.data.detail
-              }`,
+              message: `There was an error when submitting your credentials. Reason: ${e.response.data.detail}`,
               timeout: 15000,
               progress: true,
               icon: 'report_problem',

@@ -97,7 +97,7 @@ import { useQuasar } from 'quasar';
 import axios from 'axios';
 import {
   resolveContextType,
-  resolvedNodeAPIURL,
+  MASTER_NODE_BACKEND_URL,
   resolveTransactionActions,
 } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
@@ -173,7 +173,7 @@ export default defineComponent({
       this.associated_tx_loading_state = true;
       axios
         .get(
-          `http://${resolvedNodeAPIURL}/explorer/address/${this.$route.params.uuid}`
+          `http://${MASTER_NODE_BACKEND_URL}/explorer/address/${this.$route.params.uuid}`
         )
         .then((response) => {
           // * Assign context from the variables.

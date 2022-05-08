@@ -519,7 +519,7 @@ import { defineComponent, ref } from 'vue';
 
 import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({
@@ -589,7 +589,7 @@ export default defineComponent({
       this.isProcessing = true;
       this.portfolio_setting_btn_click_state = false;
       axios
-        .get(`http://${resolvedNodeAPIURL}/dashboard/portfolio_settings`, {
+        .get(`http://${MASTER_NODE_BACKEND_URL}/dashboard/portfolio_settings`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },
@@ -615,7 +615,7 @@ export default defineComponent({
     loadEditableInfo() {
       this.isProcessing = true;
       axios
-        .get(`http://${resolvedNodeAPIURL}/dashboard/user_profile`, {
+        .get(`http://${MASTER_NODE_BACKEND_URL}/dashboard/user_profile`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },
@@ -657,7 +657,7 @@ export default defineComponent({
       );
       axios
         .post(
-          `http://${resolvedNodeAPIURL}/dashboard/apply_profile_changes`,
+          `http://${MASTER_NODE_BACKEND_URL}/dashboard/apply_profile_changes`,
           editableInfoForm,
           {
             headers: {
@@ -709,7 +709,7 @@ export default defineComponent({
 
       axios
         .post(
-          `http://${resolvedNodeAPIURL}/dashboard/apply_portfolio_settings`,
+          `http://${MASTER_NODE_BACKEND_URL}/dashboard/apply_portfolio_settings`,
           {
             enable_sharing: this.portfolio_sharing_state,
             expose_email_info: this.portfolio_show_email_state,
@@ -754,7 +754,7 @@ export default defineComponent({
       // this.isAnonymous = false;
 
       // - Resolve origin of the address.
-      let portfolioURL = `http://${resolvedNodeAPIURL}/dashboard/portfolio`;
+      let portfolioURL = `http://${MASTER_NODE_BACKEND_URL}/dashboard/portfolio`;
 
       // * Check if 'address' was existing from the localStorage along with the 'token'.
       // * If both does not exist, then check if 'address' is specified via URL path parameter. This was for the case of being accessed by an anonymous user.
@@ -897,7 +897,7 @@ export default defineComponent({
       this.selectedLog = this.portfolio_log_container[id - 1];
     },
     getFile(address_origin, file_hash) {
-      let portfolioFileURL = `http://${resolvedNodeAPIURL}/dashboard/portfolio/${address_origin}/file/${file_hash}`;
+      let portfolioFileURL = `http://${MASTER_NODE_BACKEND_URL}/dashboard/portfolio/${address_origin}/file/${file_hash}`;
 
       axios.get(portfolioFileURL, { responseType: 'blob' }).then((response) => {
         let blob = new Blob([response.data], { type: 'application/pdf' });

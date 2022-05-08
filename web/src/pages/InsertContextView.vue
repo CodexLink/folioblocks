@@ -622,7 +622,7 @@
 import { ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 export default {
@@ -703,7 +703,7 @@ export default {
       // ! Send a request.
       axios
         .post(
-          `http://${resolvedNodeAPIURL}/node/receive_context`,
+          `http://${MASTER_NODE_BACKEND_URL}/node/receive_context`,
           {
             first_name: this.new_student_first_name,
             last_name: this.new_student_last_name,
@@ -844,7 +844,7 @@ export default {
 
         axios
           .post(
-            `http://${resolvedNodeAPIURL}/node/receive_context_log`,
+            `http://${MASTER_NODE_BACKEND_URL}/node/receive_context_log`,
             logForm,
             {
               headers: {
@@ -923,7 +923,7 @@ export default {
       } else {
         axios
           .post(
-            `http://${resolvedNodeAPIURL}/node/receive_context`,
+            `http://${MASTER_NODE_BACKEND_URL}/node/receive_context`,
             {
               address_origin: this.targetted_address,
               title: this.new_remark_title,
@@ -1006,7 +1006,7 @@ export default {
     getStudents() {
       this.isFetchingStudent = true;
       axios
-        .get(`http://${resolvedNodeAPIURL}/dashboard/students`, {
+        .get(`http://${MASTER_NODE_BACKEND_URL}/dashboard/students`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },

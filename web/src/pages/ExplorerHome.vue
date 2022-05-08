@@ -155,9 +155,9 @@
 import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 import { useRouter } from 'vue-router';
-
+import * as https from 'https';
 const block_cols = [
   {
     name: 'Block ID',
@@ -238,13 +238,12 @@ export default defineComponent({
     this.txs_loading_state = true;
     this.blocks_loading_state = true;
 
-    // - Then do it recursively by n-inner + n-outer seconds.
     this.updateDashboard();
   },
   methods: {
     updateDashboard() {
       axios
-        .get(`http://${resolvedNodeAPIURL}/explorer/chain`)
+        .get(`https://${MASTER_NODE_BACKEND_URL}/explorer/chain`)
         .then((response) => {
           this.n_blocks = response.data.node_info.total_blocks;
           this.txs_mapping_count = response.data.node_info.total_tx_mappings;

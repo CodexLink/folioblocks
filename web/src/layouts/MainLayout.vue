@@ -183,7 +183,7 @@
 import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { resolvedNodeAPIURL } from '/utils/utils.js';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({
@@ -220,7 +220,7 @@ export default defineComponent({
 
     if (!this.containsNoAuth) {
       axios
-        .get(`http://${resolvedNodeAPIURL}/dashboard`, {
+        .get(`http://${MASTER_NODE_BACKEND_URL}/dashboard`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },
@@ -257,7 +257,7 @@ export default defineComponent({
       if (this.containsNoAuth) return;
 
       await axios.post(
-        `http://${resolvedNodeAPIURL}/entity/logout`,
+        `http://${MASTER_NODE_BACKEND_URL}/entity/logout`,
         {
           /* ... data */
         },

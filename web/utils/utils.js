@@ -1,6 +1,5 @@
-export const nodeUrl = process.env.TARGET_MASTER_NODE_ADDRESS
-export const nodePort = process.env.TARGET_MASTER_NODE_PORT
-export const resolvedNodeAPIURL = `${nodeUrl}:${nodePort}`
+export const MASTER_NODE_BACKEND_URL = process.env.TARGET_MASTER_NODE_ADDRESS
+
 export const TABLE_DEFAULT_ROW_COUNT = 100
 
 // # # Adapted from the core/utils/constants.py.

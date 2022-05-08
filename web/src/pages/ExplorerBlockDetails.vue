@@ -106,7 +106,7 @@ import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
 import {
-  resolvedNodeAPIURL,
+  MASTER_NODE_BACKEND_URL,
   resolveTransactionActions,
   TABLE_DEFAULT_ROW_COUNT,
 } from '/utils/utils.js';
@@ -184,7 +184,7 @@ export default defineComponent({
       this.associated_tx_loading_state = true;
       axios
         .get(
-          `http://${resolvedNodeAPIURL}/explorer/block/${this.$route.params.id}`
+          `http://${MASTER_NODE_BACKEND_URL}/explorer/block/${this.$route.params.id}`
         )
         .then((response) => {
           // * Assign context from the block information.

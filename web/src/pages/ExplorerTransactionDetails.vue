@@ -114,7 +114,7 @@ import { useQuasar } from 'quasar';
 import axios from 'axios';
 import {
   resolveContextType,
-  resolvedNodeAPIURL,
+  MASTER_NODE_BACKEND_URL,
   resolveTransactionActions,
 } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
@@ -153,7 +153,7 @@ export default defineComponent({
       this.isLoadingContextFinished = false;
       axios
         .get(
-          `http://${resolvedNodeAPIURL}/explorer/transaction/${this.$route.params.tx_hash}`
+          `http://${MASTER_NODE_BACKEND_URL}/explorer/transaction/${this.$route.params.tx_hash}`
         )
         .then((response) => {
           // * Destructure.

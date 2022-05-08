@@ -78,7 +78,7 @@ import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
 import {
-  resolvedNodeAPIURL,
+  MASTER_NODE_BACKEND_URL,
   resolveTransactionActions,
   TABLE_DEFAULT_ROW_COUNT,
 } from '/utils/utils.js';
@@ -155,7 +155,7 @@ export default defineComponent({
     getTransactions() {
       this.txs_loading_state = true;
       axios
-        .get(`http://${resolvedNodeAPIURL}/explorer/transactions`)
+        .get(`http://${MASTER_NODE_BACKEND_URL}/explorer/transactions`)
         .then((response) => {
           // * Assign from the tmeporary variable to modify transaction actions.
           let resolved_txs = [];
