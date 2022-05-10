@@ -72,6 +72,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from core.constants import BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK
 from core.constants import BLOCKCHAIN_FILENAME_RANDOM_CHAR_LENGTH
 from blueprint.schemas import PortfolioLoadedContext
+from utils.processors import save_database_state_to_volume_storage
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -96,7 +97,6 @@ from core.constants import (
     BLOCKCHAIN_NAME,
     BLOCKCHAIN_NEGOTIATION_ID_LENGTH,
     BLOCKCHAIN_NODE_JSON_TEMPLATE,
-    BLOCKCHAIN_RAW_PATH,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
     FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
@@ -1083,8 +1083,11 @@ class BlockchainMechanism(ConsensusMechanism):
                                         group=data.context.association_group_type,
                                     )
                                 )
-                                await self.__database_instance.execute(
-                                    new_association_query
+                                await gather(
+                                    self.__database_instance.execute(
+                                        new_association_query
+                                    ),
+                                    save_database_state_to_volume_storage(),
                                 )
 
                                 data.context.association_address = generated_org_address  # type: ignore
@@ -1163,6 +1166,8 @@ class BlockchainMechanism(ConsensusMechanism):
                                 await self.__database_instance.execute(
                                     new_portfolio_settings_query
                                 )
+
+                            await save_database_state_to_volume_storage()
 
                             # * Resolve fields with missing data.``
                             to_address = new_uuid
@@ -1272,7 +1277,11 @@ class BlockchainMechanism(ConsensusMechanism):
                             urlsafe_b64encode(encrypter_key)
                         )
 
-                        user_file_storage_ref: Path = Path(USER_FILES_FOLDER_NAME)
+                        from core import constants
+
+                        user_file_storage_ref: Path = Path(
+                            constants.USER_FILES_FOLDER_NAME
+                        )
                         temp_filename: str = f"{user_file_storage_ref}/{datetime_generation.isoformat()}{data.context.file.filename}{to_address}".replace(
                             ":", "_"
                         )
@@ -1380,8 +1389,11 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
                     )
 
-                    await self.__database_instance.execute(
-                        insert_transaction_content_map_query
+                    await gather(
+                        self.__database_instance.execute(
+                            insert_transaction_content_map_query
+                        ),
+                        save_database_state_to_volume_storage(),
                     )
 
                     return None
@@ -1765,6 +1777,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         self.__database_instance.execute(
                             set_miner_state_as_hashing_query
                         ),
+                        save_database_state_to_volume_storage(),
                     )
 
                     # - Store this for a while for the verification upon receiving a hashed/mined block.
@@ -2101,6 +2114,7 @@ class BlockchainMechanism(ConsensusMechanism):
         context_from_update: BlockchainPayload | tuple = tuple(),
         bypass_from_update: bool = False,
     ) -> frozendict:  # type: ignore # ! Both final conditions return `frozendict` already.
+        from core.constants import BLOCKCHAIN_RAW_PATH
 
         if operation not in BlockchainIOAction:
             unconventional_terminate(

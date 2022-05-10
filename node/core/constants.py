@@ -148,15 +148,20 @@ DEFAULT_SMTP_URL: Final[str] = "smtp.gmail.com"
 DEFAULT_SMTP_PORT: Final[int] = 465
 DEFAULT_SMTP_ATTEMPT_MAX_RETRIES: Final[int] = 10
 DEFAULT_SMTP_TIMEOUT_CONNECTION: Final[int] = 10
-USER_FILES_FOLDER_NAME: Final[str] = "userfiles/"
-USER_AVATAR_FOLDER_NAME: Final[str] = "avatars/"
+
 
 # # Constants, Resources
-DATABASE_NAME: Final[str] = "folioblocks-node.db"
+AZURE_SHARED_FILE_FOLDER_NAME: Final[str] = "node-resources"
+DATABASE_NAME: str = "folioblocks-node.db"
+BLOCKCHAIN_NAME: str = "folioblocks-chain.json"
+
+# # Variable Constants.
+USER_FILES_FOLDER_NAME: str = "files"
+USER_AVATAR_FOLDER_NAME: str = "avatars"
+NODE_LOGS_FOLDER_NAME: str = "logs"
+
 DATABASE_RAW_PATH: str = f"{Path(__file__).cwd()}/{DATABASE_NAME}"
 DATABASE_URL_PATH: str = f"sqlite:///{DATABASE_RAW_PATH}"
-
-BLOCKCHAIN_NAME: Final[str] = "folioblocks-chain.json"
 BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 
 # # Constraints, Portfolio
@@ -256,8 +261,6 @@ class NodeType(IntEnum):
 
 
 # # Enums, Database
-
-
 class AssociatedNodeStatus(IntEnum):
     CURRENTLY_AVAILABLE = auto()
     CURRENTLY_HASHING = auto()
@@ -399,8 +402,11 @@ FOLIOBLOCKS_EPILOG: Final[ProgramMetadata] = ProgramMetadata(
     "The use of arguments are intended for debugging purposes and development only. Please be careful and be vigilant about the requirements to make certain arguments functioning."
 )
 FOLIOBLOCKS_HELP: Final[dict[ArgumentParameter, ArgumentDescription]] = {
+    ArgumentParameter("DEPLOYED_DOCKER_MODE"): ArgumentDescription(
+        "A switch that tells the backend to use the path of the files under the Azure file share system. This was implemented due to the nature of azure container instance being stateless, hence losing every changes when the container has been closed, crashed, or restarted."
+    ),
     ArgumentParameter("KEY_FILE"): ArgumentDescription(
-        "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is a file name and is not required, unless the file has a different name."
+        "A file that contains a set of keys for encrypting and decrypting information for all transaction-related actions. This argument is a file name and is not required, unless the file has a different name. Ensure that this file was located from the root folder of the node files."
     ),
     ArgumentParameter("LOG_LEVEL"): ArgumentDescription(
         "Specifies the level to log both console and to the file (if enabled). Refer to the Logging Levels of logging or uvicorn logs documentation for more information."

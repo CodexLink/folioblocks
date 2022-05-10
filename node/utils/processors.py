@@ -12,6 +12,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 import sys
+from argparse import Namespace
 from asyncio import gather, get_event_loop
 from getpass import getpass
 from hashlib import sha256
@@ -26,14 +27,14 @@ from pathlib import Path
 from secrets import token_hex
 
 from aiohttp import ClientResponse
-from aiosmtplib import SMTPException
 from blueprint.models import tokens
 from blueprint.schemas import (
     AgnosticCredentialValidator,
-    StudentUserTransaction,
+    Block,
     OrganizationIdentityValidator,
 )
 from core.constants import (
+    AZURE_SHARED_FILE_FOLDER_NAME,
     REF_MASTER_BLOCKCHAIN_ADDRESS,
     REF_MASTER_BLOCKCHAIN_PORT,
     AddressUUID,
@@ -45,19 +46,23 @@ from core.constants import (
     URLAddress,
     UserEntity,
 )
-from core.dependencies import set_master_node_properties
+from core.dependencies import (
+    get_args_values,
+    set_master_node_properties,
+    store_args_value,
+)
 from fastapi import HTTPException
+from core.constants import DATABASE_RAW_PATH
 from sqlalchemy.sql.expression import Select
-
-from blueprint.schemas import Block
-from core.constants import ConsensusNegotiationStatus
 
 if sys.platform == "win32":
     from signal import CTRL_C_EVENT as CALL_TERMINATE_EVENT
 else:
     from signal import SIGTERM as CALL_TERMINATE_EVENT
 
-from sqlite3 import Connection, DatabaseError, OperationalError, connect
+from shutil import copyfile as shutil_copyfile
+from shutil import move as shutil_move
+from sqlite3 import Connection, OperationalError, connect
 from typing import Any, Final, Mapping
 
 from aioconsole import ainput
@@ -72,13 +77,9 @@ from blueprint.models import (
 )
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    AUTH_ENV_FILE_NAME,
     BLOCKCHAIN_NAME,
     BLOCKCHAIN_NODE_JSON_TEMPLATE,
-    BLOCKCHAIN_RAW_PATH,
     DATABASE_NAME,
-    DATABASE_RAW_PATH,
-    DATABASE_URL_PATH,
     FERNET_KEY_LENGTH,
     SECRET_KEY_LENGTH,
     CredentialContext,
@@ -98,11 +99,33 @@ from passlib.context import CryptContext
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select
 
-from utils.exceptions import NoKeySupplied, UnsatisfiedClassType
 from utils.http import get_http_client_instance
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
+
 pwd_handler: CryptContext = CryptContext(schemes=["bcrypt"])
+
+# # Input Stoppers — START
+def supress_exceptions_and_warnings() -> None:
+    sys.tracebacklimit = 0
+
+
+def unconventional_terminate(*, message: str, early: bool = False) -> None:
+    """
+    A method that terminates the runtime process unconventionally via calling signal or `exit()`.
+
+    Args:
+        message (str): The message to display under `logging.critical(<context>).`
+        early (bool): Indicates that this method were running BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
+    """
+
+    logger.critical(message)
+    if early:
+        supress_exceptions_and_warnings()
+        exit(-1)
+
+    kill_process(getpid(), CALL_TERMINATE_EVENT)
+
 
 # # File Handlers, Cryptography — START
 async def crypt_file(
@@ -120,7 +143,10 @@ async def crypt_file(
     """
 
     if not isinstance(process, CryptFileAction):
-        raise UnsatisfiedClassType(process, CryptFileAction)
+        unconventional_terminate(
+            message=f"The type assertion is unsatisfied. This is a startup error, please report this to the administrator.",
+            early=True,
+        )
 
     processed_content: bytes = b""
     crypt_context: Fernet | None = None
@@ -137,9 +163,9 @@ async def crypt_file(
         )
         if process == CryptFileAction.TO_DECRYPT:
             if key is None:
-                raise NoKeySupplied(
-                    crypt_file,
-                    "Decryption operation cannot continue due to not having a key.",
+                pass
+                unconventional_terminate(
+                    message="Decryption operation cannot continue due to not having a key."
                 )
 
             crypt_context = Fernet(key.encode("utf-8") if isinstance(key, str) else key)
@@ -229,14 +255,244 @@ async def process_crpyt_file(
     return file_content
 
 
+def resolve_node_folder_path(
+    *, node_port: int | None = None, node_role: NodeType
+) -> Path:
+    """
+    A method that resolves the path of the node, from which the path they will access from the volume mounted storage.
+
+    Args:
+        role (NodeType): The role of this node.
+
+    Returns:
+        Path: Returns the path as-is, but encapsulated in pathlib.Path.
+    """
+    resolved_nth_node: str | None = None
+
+    # * If this was not a master node, parse its nth node of this instance by port value.
+
+    if node_role is NodeType.ARCHIVAL_MINER_NODE:
+
+        """
+        # Read it from the inner to outer.
+        - [1] Parse the integer to string and cover values from hundreths.
+        - [2] Convert back to integer to remove trailing zero from left to right.
+        ! I did this to better classify nth nodes volume folder.
+        """
+
+        resolved_nth_node = str(int(str(node_port)[1:]))
+
+    return Path(
+        f"../{AZURE_SHARED_FILE_FOLDER_NAME}/{node_role.name.lower()}-{resolved_nth_node}_resources"
+        if resolved_nth_node is not None
+        else f"../{AZURE_SHARED_FILE_FOLDER_NAME}/{node_role.name.lower()}_resources"
+    )
+
+
 # # File Handlers, Cryptography — END
 
 # # File Resource Initializers and Validators, Blockchain and Database — START
-async def initialize_resources_and_return_db_context(
+def resolve_resources(*, evaluated_args: Namespace) -> None:
+    from core import constants
+
+    logger.warning(
+        "Checking parsed argument for potential injection of base path to paths for mounting storages."
+    )
+
+    if evaluated_args.deploy_mode:
+        logger.warning(
+            "Azure mode detected, assuming that this instance has been instantiated from the azure container registry."
+        )
+
+        # - Resolve the potential folder name since its name varys from the type of the instance (which are node type and number).
+
+        node_resource_path: Path = resolve_node_folder_path(
+            node_port=evaluated_args.node_port, node_role=evaluated_args.node_role
+        )
+
+        # - Check if the folder exists, note that we DO NOT create them by ourselves. Azure already does that as it attempts to create the docker instances on start.
+
+        # ! Ensure to close out as early as possible to avoid interferring with the files.
+        if not node_resource_path.is_dir():
+            node_resource_path.mkdir(parents=True, exist_ok=False)
+            logger.warning(
+                f"Folder {node_resource_path} for the volume mounted storage has been created."
+            )
+
+        # @o Inject the path for other resources and initialize it here.
+        constants.USER_FILES_FOLDER_NAME = (
+            f"{node_resource_path}/{constants.USER_FILES_FOLDER_NAME}"
+        )
+        constants.USER_AVATAR_FOLDER_NAME = (
+            f"{node_resource_path}/{constants.USER_AVATAR_FOLDER_NAME}"
+        )
+        constants.NODE_LOGS_FOLDER_NAME = (
+            f"{node_resource_path}/{constants.NODE_LOGS_FOLDER_NAME}"
+        )
+
+        # - First priority upon storing old reference of the following variable.
+        ENV_OLD_REF: str = evaluated_args.key_file
+
+        # ! Ensure that this reference variable copies the value for the environment file, which is the location + filename.
+        evaluated_args.key_file = f"{node_resource_path}/{evaluated_args.key_file}"
+
+        # - Store old reference to check if they are existing, specially for new volume mount.
+        DATABASE_RAW_PATH_OLD_REF: str = constants.DATABASE_RAW_PATH
+        BLOCKCHAIN_RAW_PATH_OLD_REF: str = constants.BLOCKCHAIN_RAW_PATH
+
+        constants.BLOCKCHAIN_RAW_PATH = (
+            f"{node_resource_path}/{constants.BLOCKCHAIN_NAME}"
+        )
+
+        # ! We do not override the constant value of the database location!
+        # ? The reason for that is, regardless of the operations we did from other resource files, we have to load the database file from the instance sde, not from the inside of the volume-mounted storage.
+        # ! Doing so will give us the `database is locked` error.
+
+        volume_database_path: Path = Path(
+            f"{node_resource_path}/{constants.DATABASE_NAME}"
+        )
+
+        blockchain_file_path: Path = Path(constants.BLOCKCHAIN_RAW_PATH)
+
+        if not blockchain_file_path.exists():
+            old_blockchain_file_ref: Path = Path(BLOCKCHAIN_RAW_PATH_OLD_REF)
+
+            if not old_blockchain_file_ref.exists():
+                unconventional_terminate(
+                    message="Failed to process the blockchain file to the volume mounted storage for the azure instance. Please check resources and try again. Rebuild if possible.",
+                    early=True,
+                )
+
+            # - Intentionally move but shouldn't replace if it already exists.
+            shutil_copyfile(
+                old_blockchain_file_ref, blockchain_file_path, follow_symlinks=False
+            )
+
+            # ! Remove then right after moving itself (copy) to the volume-mounted storage.
+            old_blockchain_file_ref.unlink()
+
+        # - If the volume database path does not exists, then we assume its the node's first instance.
+        # @o Therefore, copy the original instance database file and paste it from the volume mounted storage as an initial checkpoint.
+        # ! Note that it will get overriden later, it was done to ensure that the path to the volume mount exists.
+
+        old_database_file_ref: Path = Path(DATABASE_RAW_PATH_OLD_REF)
+        if not volume_database_path.exists():
+
+            if not old_database_file_ref.exists():
+                unconventional_terminate(
+                    message="Failed to copy the instance database file to the volume mounted storage for the azure instance. Please check resources and try again. Rebuild if possible.",
+                    early=True,
+                )
+
+            # - Copy the instance file to the volume moutned.
+            shutil_copyfile(
+                old_database_file_ref, volume_database_path, follow_symlinks=False
+            )
+
+        # - If it exists, then we copy the file from the volume mounted to the instance folder.
+        else:
+            if not volume_database_path.exists():
+                unconventional_terminate(
+                    message="Failed to copy from the volume mounted storage to the instance, are you sure that the storage account is enabled or not deleted? Please notify developers for this issue if persisting after attempts on retry.",
+                    early=True,
+                )
+
+            else:
+                shutil_copyfile(
+                    volume_database_path, old_database_file_ref, follow_symlinks=False
+                )
+
+        if not Path(evaluated_args.key_file).exists():
+            old_env_file_ref: Path = Path(ENV_OLD_REF)
+
+            if not old_env_file_ref.exists():
+                unconventional_terminate(
+                    message="Failed to process the environment file to the volume mounted storage for the azure instance. Please check resources and try again. Rebuild if possible.",
+                    early=True,
+                )
+            else:
+
+                # - Intentionally move but shouldn't replace if it already exists.
+                shutil_copyfile(
+                    old_env_file_ref, evaluated_args.key_file, follow_symlinks=False
+                )
+
+                # ! Remove then right after moving itself (copy) to the volume-mounted storage.
+                old_env_file_ref.unlink()
+
+    user_avatar_folder: Path = Path(constants.USER_AVATAR_FOLDER_NAME)
+    user_files_folder: Path = Path(constants.USER_FILES_FOLDER_NAME)
+    node_logs_folder: Path = Path(constants.NODE_LOGS_FOLDER_NAME)
+
+    # - Check if we need to create folders.
+
+    if not user_avatar_folder.exists():
+        user_avatar_folder.mkdir(parents=True, exist_ok=False)
+
+    if not user_files_folder.exists():
+        user_files_folder.mkdir(parents=True, exist_ok=False)
+
+    if not node_logs_folder.exists():
+        node_logs_folder.mkdir(parents=True, exist_ok=False)
+
+    store_args_value(evaluated_args)
+    return None
+
+
+async def save_database_state_to_volume_storage() -> None:
+    """
+    # A method that saves the state of the database in binary form to the volume-mounted storage.
+    ! This was part of the workaround wherein we load the resource files to the instance to avoid getting database resource lock while accessing them.
+    ? Please see the method `resolved_resources` on how resource files was handled and how the database was specially handled when `Namespace (parsed_args).deploy_mode` is `True`.
+    """
+
+    # - [1] Check first if the volume mounted storage exists.
+    parsed_args: Namespace = get_args_values()
+    volume_path_to_database: Path = resolve_node_folder_path(
+        node_port=parsed_args.node_port, node_role=parsed_args.node_role
+    )
+
+    if not parsed_args.deploy_mode:
+        logger.warning(
+            "Accessed database state saver, but node is not in deployed mode, ignoring it."
+        )
+        return
+
+    if not volume_path_to_database.is_dir():
+        unconventional_terminate(
+            message="Did the volume mounted storage disappeared? let the administrators notified from this issue."
+        )
+    else:
+        # - [2] When valid, then process the current state of the database.
+        TEMP_DATABASE_FILE: Final[str] = DATABASE_RAW_PATH + ".bak"
+
+        # - [2.1] Copy the database instance file in a new name by appending 'bak' extension on it.
+        shutil_copyfile(DATABASE_RAW_PATH, TEMP_DATABASE_FILE, follow_symlinks=False)
+
+        # - [2.2] Encrypt the new file.
+        await crypt_file(
+            filename=TEMP_DATABASE_FILE,
+            key=parsed_args.key_file[0],
+            enable_async=True,
+            process=CryptFileAction.TO_ENCRYPT,
+            ignore_error=False,
+        )
+
+        # - [2.3] Move the new file to the volume.
+        # ? This overrides the file from the volume-mounted storage.
+        shutil_move(TEMP_DATABASE_FILE, f"{volume_path_to_database}/{DATABASE_NAME}")
+
+        logger.info("Database instance has been saved to the volume-mounted storage.")
+
+    return None
+
+
+async def process_resources_and_return_db_context(
     *,
     runtime: RuntimeLoopContext,
     role: NodeType,
     auth_key: KeyContext = None,
+    env_file: str,
 ) -> Database:
     """
     A non-async initializer for both database and blockchain files.
@@ -251,23 +507,30 @@ async def initialize_resources_and_return_db_context(
     Returns:
         Database | None: Returns the context of the database for accessing the tables. Which can be ORM-accessible.
     """
+    from core import constants
 
     logger.info("Initializing a database ...")
-    db_instance: Database = Database(DATABASE_URL_PATH)
+    print(constants.DATABASE_URL_PATH)
+    db_instance: Database = Database(constants.DATABASE_URL_PATH, factory=Connection)
     sql_engine = create_engine(
-        DATABASE_URL_PATH, connect_args={"check_same_thread": False}
+        constants.DATABASE_URL_PATH,
+        connect_args={"check_same_thread": False, "timeout": 15},
     )
 
-    db_file_ref: Path = Path(DATABASE_RAW_PATH)
-    bc_file_ref: Path = Path(BLOCKCHAIN_RAW_PATH)
+    # event.listen(
+    #     sql_engine,
+    #     "connect",
+    #     lambda cursor, _: cursor.execute("PRAGMA journal_mode=WAL"),
+    # )
+    logger.warning("SQLAlchemy event listener invoked.")
 
-    file_folder = Path(f"{Path(__file__).cwd()}/userfiles")
+    db_file_ref: Path = Path(constants.DATABASE_RAW_PATH)
+    bc_file_ref: Path = Path(constants.BLOCKCHAIN_RAW_PATH)
 
-    if not file_folder.exists():
-        file_folder.mkdir(parents=True, exist_ok=False)
+    print("DEBUG", db_file_ref, constants.BLOCKCHAIN_RAW_PATH, auth_key)
 
     logger.debug(
-        f"SQL Engine Connector (Reference) and Async Instance for the {DATABASE_URL_PATH} has been instantiated."
+        f"SQL Engine Connector (Reference) and Async Instance for the {constants.DATABASE_URL_PATH} has been instantiated."
     )
 
     if runtime == "__main__":
@@ -275,16 +538,17 @@ async def initialize_resources_and_return_db_context(
         # - This is just an additional checking.
         if (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is not None:
             con: Connection | None = None
+
             logger.info("Decrypting the database ...")
             await crypt_file(
-                filename=DATABASE_RAW_PATH,
+                filename=constants.DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
                 ignore_error=True,
             )
 
             try:
-                con = connect(DATABASE_RAW_PATH)
+                con = connect(constants.DATABASE_RAW_PATH)
                 store_db_instance(db_instance)
                 logger.info("Database instance has been saved in-memory.")
 
@@ -316,17 +580,18 @@ async def initialize_resources_and_return_db_context(
             )
             logger.info("Fetched blockchain file content's signature.")
 
+            await db_instance.disconnect()
             # * We need to decrypt the blockchin file first before we do something to it. If we didn't, we are technically reading the encrypted version instead of the exposed version.
 
             await crypt_file(
-                filename=BLOCKCHAIN_RAW_PATH,
+                filename=constants.BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
                 ignore_error=True,
             )
             logger.info("Blockchain file decrypted.")
 
-            with open(BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
+            with open(constants.BLOCKCHAIN_RAW_PATH, "rb") as blockchain_content:
                 blockchain_context_hash = sha256(blockchain_content.read()).hexdigest()
 
             if blockchain_context_hash != blockchain_retrieved_hash:
@@ -338,13 +603,11 @@ async def initialize_resources_and_return_db_context(
             else:
                 logger.info("Blockchain file content signature is valid!")
 
-            await db_instance.disconnect()
-
             return db_instance
 
         elif (db_file_ref.is_file() and bc_file_ref.is_file()) and auth_key is None:
             logger.critical(
-                f"A database exists but there's no key inside of {AUTH_ENV_FILE_NAME} or the file ({AUTH_ENV_FILE_NAME}) is missing. Have you modified it? Please check and try again."
+                f"A database exists but there's no key inside of {env_file} or the file ({env_file}) is missing. Have you modified it? Please check and try again."
             )
             _exit(1)
 
@@ -366,7 +629,7 @@ async def initialize_resources_and_return_db_context(
             logger.info("Database structurized from SQLAlchemy.")
 
             auth_key = await crypt_file(
-                filename=DATABASE_RAW_PATH,
+                filename=constants.DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
                 return_key=True,
@@ -374,20 +637,19 @@ async def initialize_resources_and_return_db_context(
             logger.info("Database has been encrypted to gain the `auth_key`.")
 
             if auth_key is None:
-                raise NoKeySupplied(
-                    initialize_resources_and_return_db_context,
-                    "This part of the function should have a returned new `auth_key`. This was not intended! Please report this issue as soon as possible!",
+                unconventional_terminate(
+                    message="This sequence of the method should return an authorizatio key. This condition should not be possible to be hit. Please try again, and if persists, please report to the developers as possible."
                 )
 
             await crypt_file(
-                filename=DATABASE_RAW_PATH,
+                filename=constants.DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_DECRYPT,
             )
             logger.warning("Temporarily decrypted database to insert signature data.")
 
             # - Write the initial blockchain file.
-            with open(BLOCKCHAIN_RAW_PATH, "w") as temp_writer:
+            with open(constants.BLOCKCHAIN_RAW_PATH, "w") as temp_writer:
                 initial_json_context: dict[
                     str, list[Any]
                 ] = BLOCKCHAIN_NODE_JSON_TEMPLATE
@@ -397,7 +659,7 @@ async def initialize_resources_and_return_db_context(
 
             # - Even though we already write from the file, we have to look at its decrypted form
             # - As we value its actual content, not the hashed form.
-            with open(BLOCKCHAIN_RAW_PATH, "rb") as chain_temp_reader:
+            with open(constants.BLOCKCHAIN_RAW_PATH, "rb") as chain_temp_reader:
                 raw_blockchain_hash = sha256(chain_temp_reader.read()).hexdigest()
 
             # - Insert the resulting hash from the database.
@@ -408,20 +670,22 @@ async def initialize_resources_and_return_db_context(
 
             # - Connect to the database, and then execute the SQL command.
             await gather(
-                db_instance.connect(), db_instance.execute(blockchain_hash_query)
+                db_instance.connect(),
+                db_instance.execute(blockchain_hash_query),
+                save_database_state_to_volume_storage(),
             )
 
             logger.info("Database insertion of blockchain signature is done.")
 
             await crypt_file(
-                filename=BLOCKCHAIN_RAW_PATH,
+                filename=constants.BLOCKCHAIN_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
             )
             logger.info("Blockchain file has been encrypted.")
 
             await crypt_file(
-                filename=DATABASE_RAW_PATH,
+                filename=constants.DATABASE_RAW_PATH,
                 key=auth_key,
                 process=CryptFileAction.TO_ENCRYPT,
             )
@@ -439,10 +703,10 @@ async def initialize_resources_and_return_db_context(
                     input_context=["SERVER Email Address", "SERVER Email Password"],
                     hide_input_from_field=[False, True],
                     generalized_context="Server email credentials",
-                    additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{AUTH_ENV_FILE_NAME}`.",
+                    additional_context=f"There's no going back once proceeded. Though, you can review and change the credentials by looking at the `{env_file}`.",
                 )
 
-            with open(AUTH_ENV_FILE_NAME, "w") as env_writer:
+            with open(env_file, "w") as env_writer:
                 env_context: list[str] = [
                     f"AUTH_KEY={auth_key.decode('utf-8')}",
                     f"SECRET_KEY={token_hex(32)}",
@@ -456,7 +720,7 @@ async def initialize_resources_and_return_db_context(
                     env_writer.write(each_context + "\n")
 
             logger.info(
-                f"Generated keys were saved to the environment file (`{AUTH_ENV_FILE_NAME}`)."
+                f"Generated keys were saved to the environment file (`{env_file}`)."
             )
 
             logger.info(
@@ -480,6 +744,8 @@ async def close_resources(*, key: KeyContext) -> None:
         key (KeyContext): The key that is recently used for decrypting the SQLite database.
 
     """
+    from core import constants
+
     db: Database = get_database_instance()
 
     logger.warning(
@@ -488,7 +754,7 @@ async def close_resources(*, key: KeyContext) -> None:
 
     logger.warning("Closing blockchain by encryption ...")
     await crypt_file(
-        filename=BLOCKCHAIN_RAW_PATH,
+        filename=constants.BLOCKCHAIN_RAW_PATH,
         key=key,
         process=CryptFileAction.TO_ENCRYPT,
         enable_async=True,
@@ -498,7 +764,7 @@ async def close_resources(*, key: KeyContext) -> None:
     logger.warning("Closing database by encryption ...")
     await db.disconnect()  # * Shutdown the database instance.    db.execute()
     await crypt_file(
-        filename=DATABASE_RAW_PATH,
+        filename=constants.DATABASE_RAW_PATH,
         key=key,
         process=CryptFileAction.TO_ENCRYPT,
         enable_async=True,
@@ -529,11 +795,12 @@ def load_env(*, reload: bool = False) -> None:
 
 
 def validate_file_keys(
+    *,
     context: KeyContext | None,
 ) -> tuple[KeyContext, KeyContext]:
 
     global file_ref
-    file_ref = f"{Path(__file__).cwd()}/{context}"
+    file_ref = context
 
     # - Validate if the given context is a path first.
     if Path(file_ref).is_file():
@@ -543,7 +810,7 @@ def validate_file_keys(
         a_key: KeyContext = env.get("AUTH_KEY", None)
         s_key: KeyContext = env.get("SECRET_KEY", None)
 
-        # Validate the (AUTH_KEY and SECRET_KEY)'s length.
+        # * Validate the (AUTH_KEY and SECRET_KEY)'s length.
         if (
             a_key is not None
             and a_key.__len__() == FERNET_KEY_LENGTH
@@ -553,10 +820,15 @@ def validate_file_keys(
 
             return a_key, s_key
 
-        raise NoKeySupplied(
-            validate_file_keys,
-            f"Error: One of the keys either has an invalid value or is missing. Have you modified your {file_ref}? Please check and try again.",
+        unconventional_terminate(
+            message=f"One of the keys either has an invalid value or is missing. Have you modified your {file_ref}? Please check and try again.",
+            early=True,
         )
+
+    unconventional_terminate(
+        message=f"'{file_ref}' is not a valid file? Have you modified it? Please restore available backup and try again.",
+        early=True,
+    )
 
 
 # # File Resource Initializers and Validators, Blockchain and Database — END
@@ -782,27 +1054,6 @@ async def contact_master_node(*, master_host: str, master_port: int) -> None:
 # # This may be moved inside BlockchainMechanism.
 async def look_for_archival_nodes() -> None:
     logger.error("This function is NotYetImplemented.")
-
-
-# # Input Stoppers — START
-def supress_exceptions_and_warnings() -> None:
-    sys.tracebacklimit = 0
-
-
-def unconventional_terminate(*, message: str, early: bool = False) -> None:
-    """A method that terminates the runtime process unconventionally via calling signal or `exit()`.
-
-    Args:
-        message (str): The message to display under `logging.critical(<context>).`
-        early (bool): Indicates that this method were running BEFORE the ASGI instantiated. Invoking this will not run other co-corotines while uvicorn receives the 'signal.CTRL_C_EVENT'.
-    """
-
-    logger.critical(message)
-    if early:
-        supress_exceptions_and_warnings()
-        exit(-1)
-
-    kill_process(getpid(), CALL_TERMINATE_EVENT)
 
 
 # # Input Stoppers — END

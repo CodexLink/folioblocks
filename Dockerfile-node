@@ -13,10 +13,12 @@ ARG NODE_ROLE
 # ! I added default so that there would be less arguments upon running this when building 'ARCHIVAL_MINER_NODE'.
 ARG TARGET_MASTER_HOST=127.17.0.2
 ARG TARGET_MASTER_PORT=6001
+ARG NODE_ENV_PATH
 
 ENV THIS_NODE_HOST=${NODE_HOST}
 ENV THIS_NODE_PORT=${NODE_PORT}
 ENV THIS_NODE_ROLE=${NODE_ROLE}
+ENV THIS_NODE_ENV_PATH=${NODE_ENV_PATH}
 
 ENV MASTER_NODE_HOST=${TARGET_MASTER_HOST}
 ENV MASTER_NODE_PORT=${TARGET_MASTER_PORT}
@@ -42,17 +44,18 @@ COPY node/ ./
 COPY /backup ./backup
 
 # # Decide what node configuration to copy over Docker.
-RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/with_chain/** ./ ;\
-	else cp backup/archival/with_chain/** ./ ; fi
+# ! Note that we have to do this manually because I don't have time to do automation.
+RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/** ./ ;\
+	else cp backup/archival/** ./ ; fi
 
 RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
 	&& rm -rf /usr/local/build ~/.cache/pip
 
+# - Remove the backup files after evaluation.
+RUN rm -rf backup
+
 # # Set the python file to an executable.
 RUN chmod +x main.py
 
-# # Run the file.
-ENTRYPOINT python3 main.py --log-level INFO --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT
-
-# TODO: Not sure if this is working when the stop button is stopped.
-STOPSIGNAL SIGINT
+# # Run the backend.
+ENTRYPOINT python3 main.py --log-level INFO --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT --deploy-mode

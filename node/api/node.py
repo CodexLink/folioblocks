@@ -84,6 +84,7 @@ from core.constants import (
     CERTIFICATE_TOKEN_SECRET_KEY_MIDDLE_INDEX,
     CERTIFICATE_TOKEN_SECRET_KEY_START_INDEX,
 )
+from utils.processors import save_database_state_to_volume_storage
 from utils.processors import (
     validate_previous_consensus_negotiation,
     validate_source_and_origin_associates,
@@ -384,7 +385,10 @@ async def receive_raw_block(
                 status=ConsensusNegotiationStatus.ON_PROGRESS,
             )
         )
-        await database_instance.execute(save_generated_consensus_negotiation_id_query)
+        await gather(
+            database_instance.execute(save_generated_consensus_negotiation_id_query),
+            save_database_state_to_volume_storage(),
+        )
         logger.info(
             f"Consensus Negotiation initiated by Master Node {context_from_master.master_address}!"
         )
@@ -729,13 +733,13 @@ async def certify_miner(
                     store_authored_token_query: Insert = associated_nodes.insert().values(
                         user_address=validated_source_address.unique_address,  # type: ignore
                         certificate=encrypted_authored_token.decode("utf-8"),
-                        # # We need to ensure that the source address and port is right when this was deployed in external.
-                        # source_address=request.client.host,
-                        # source_port=request.client.port,
                         source_address=origin.source_address,
                         source_port=origin.source_port,
                     )
-                    await database_instance.execute(store_authored_token_query)
+                    await gather(
+                        database_instance.execute(store_authored_token_query),
+                        save_database_state_to_volume_storage(),
+                    )
 
                     if isinstance(blockchain_instance, BlockchainMechanism):
                         await blockchain_instance.insert_internal_transaction(

@@ -8,13 +8,14 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-from asyncio import sleep
+from asyncio import gather, sleep
 from logging import Logger, getLogger
 from os import environ as env
 
 from aiohttp import ClientResponse
 from blueprint.models import associated_nodes
 from databases import Database
+from utils.processors import save_database_state_to_volume_storage
 from utils.http import HTTPClient
 from sqlalchemy import select
 from sqlalchemy.sql.expression import Insert, Select
@@ -117,7 +118,10 @@ class ConsensusMechanism:
                 source_port=master_origin_port,
             )
 
-            await self.__database_instance.execute(insert_fetched_certificate_query)
+            await gather(
+                self.__database_instance.execute(insert_fetched_certificate_query),
+                save_database_state_to_volume_storage(),
+            )
 
             logger.info("Generation of Association certificate token were successful!")
 

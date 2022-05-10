@@ -9,7 +9,7 @@ You should have received a copy of the GNU General Public License along with Fol
 """
 
 from argparse import Namespace
-from asyncio import create_task, sleep
+from asyncio import create_task, gather, sleep
 from base64 import b32encode
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -251,6 +251,9 @@ async def authenticate_node_client(
                             and datetime.now() > unused_code_email.expiration
                         ):
                             from utils.email import get_email_instance
+                            from utils.processors import (
+                                save_database_state_to_volume_storage,
+                            )
 
                             create_task(
                                 get_email_instance().send(
@@ -270,7 +273,10 @@ async def authenticate_node_client(
                                 )
                             )
 
-                            await instances[1].execute(insert_generated_token_query)
+                            await gather(
+                                instances[1].execute(insert_generated_token_query),
+                                save_database_state_to_volume_storage(),
+                            )
 
                     else:
                         logger.info(

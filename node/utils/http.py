@@ -23,9 +23,6 @@ from core.constants import (
     HTTP_MICRO_SLEEP_TO_FETCH_REQUEST,
     HTTP_SLEEP_TO_RETRY_SECONDS,
 )
-from utils.exceptions import (
-    HTTPClientFeatureUnavailable,
-)
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 

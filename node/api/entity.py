@@ -57,6 +57,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import Table, false, func, select
 from sqlalchemy.orm import Query
 from sqlalchemy.sql.expression import Insert, Select, Update
+from utils.processors import save_database_state_to_volume_storage
 from utils.email import get_email_instance
 from utils.processors import hash_context, verify_hash_context
 
@@ -257,6 +258,7 @@ async def register_entity(
             await gather(
                 database_instance.execute(data),
                 database_instance.execute(dispose_auth_code),
+                save_database_state_to_volume_storage(),
             )
 
             create_task(
@@ -390,8 +392,11 @@ async def login_entity(
             )
 
             try:
-                await gather(db.execute(logged_user_query), db.execute(new_token))
-
+                await gather(
+                    db.execute(logged_user_query),
+                    db.execute(new_token),
+                    save_database_state_to_volume_storage(),
+                )
                 # - Check if this node does have a association certificate token.
 
                 if fetched_credential_data.type is UserEntity.ARCHIVAL_MINER_NODE_USER:

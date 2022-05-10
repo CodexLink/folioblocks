@@ -8,18 +8,18 @@ FolioBlocks is free software: you can redistribute it and/or modify it under the
 FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
-import logging
 from argparse import Namespace
 from asyncio import create_task, gather, sleep
 from datetime import datetime
 from errno import EADDRINUSE, EADDRNOTAVAIL
+from logging import Logger, getLogger
 from logging.config import dictConfig
 from os import environ as env
 from socket import AF_INET, SOCK_STREAM, error, socket
 from typing import Any, Final, Mapping
-from databases import Database
 
 import uvicorn
+from databases import Database
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_utils.tasks import repeat_every
@@ -53,10 +53,10 @@ from core.constants import (
 )
 from core.dependencies import (
     authenticate_node_client,
+    get_args_values,
     get_database_instance,
     get_identity_tokens,
     get_master_node_properties,
-    store_args_value,
 )
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
@@ -64,10 +64,12 @@ from utils.logger import LoggerHandler
 from utils.processors import (
     close_resources,
     contact_master_node,
-    initialize_resources_and_return_db_context,
     look_for_archival_nodes,
+    process_resources_and_return_db_context,
+    resolve_resources,
     supress_exceptions_and_warnings,
     unconventional_terminate,
+    validate_file_keys,
 )
 
 """
@@ -77,15 +79,26 @@ from utils.processors import (
 """
 parsed_args: Namespace = ArgsHandler.parse_args()
 
-# *Resolve some literal parameters to Enum object.
+# * Resolve some literal parameters to Enum object.
 parsed_args.node_role = (
     NodeType.MASTER_NODE
     if parsed_args.node_role == NodeType.MASTER_NODE.name
     else NodeType.ARCHIVAL_MINER_NODE
 )
 parsed_args.log_level = LoggerLevelCoverage(parsed_args.log_level)
-store_args_value(parsed_args)
 
+# # Handle folders and resources before processing them.
+# ! Note that this method saves the instance of the `parsed_args`.
+resolve_resources(evaluated_args=parsed_args)
+
+# ! Renew `parsed_args` instance.
+parsed_args = get_args_values()
+
+# # Load environment variable on initialization with coverage on `parsed_args` for better control.
+# ! Note that, we are basically doing what is being offered by argparse.type parameter.
+# ! We need to seperate it to ensure that files are being processed first before resolving its contents.
+env_key_file: str = parsed_args.key_file  # * Save it for later.
+parsed_args.key_file = validate_file_keys(context=parsed_args.key_file)
 """
 # About these late import of routers.
 @o Since these API endpoints require evaluation from the `parsed_args`, import them after storing `parsed_args` for them to access later.
@@ -95,6 +108,7 @@ store_args_value(parsed_args)
 
 from api.node import node_router
 
+# # Run the logger configuration.
 logger_config: dict[str, Any] = LoggerHandler.init(
     base_config=uvicorn.config.LOGGING_CONFIG,  # type: ignore # ???
     disable_file_logging=parsed_args.no_log_file,
@@ -102,7 +116,7 @@ logger_config: dict[str, Any] = LoggerHandler.init(
 )
 
 dictConfig(logger_config)
-logger: logging.Logger = logging.getLogger(
+logger: Logger = getLogger(
     ASYNC_TARGET_LOOP
 )  # # Note that, uvicorn will override this in the main thread.
 
@@ -154,10 +168,11 @@ async def pre_initialize() -> None:
 
     await get_http_client_instance().initialize()  # * Initialize the HTTP client for such requests.
 
-    await initialize_resources_and_return_db_context(
+    await process_resources_and_return_db_context(
         runtime=RuntimeLoopContext(__name__),
         role=NodeType(parsed_args.node_role),
         auth_key=parsed_args.key_file[0] if parsed_args.key_file is not None else None,
+        env_file=env_key_file,
     )
 
     if parsed_args.node_role is NodeType.ARCHIVAL_MINER_NODE:
@@ -207,7 +222,9 @@ async def post_initialize() -> None:
 
     # * In the end, both NodeType.MASTER_NODE and NodeType.ARCHIVAL_MINER_NODE will initialize their local or universal (depending on the role) blockchain file.
     create_task(
-        get_blockchain_instance(role=parsed_args.node_role).initialize(),
+        get_blockchain_instance(
+            role=parsed_args.node_role
+        ).initialize(),  # type: ignore
         name=f"initialize_blockchain_as_{parsed_args.node_role.name.lower()}",
     )
 
@@ -223,7 +240,6 @@ async def terminate() -> None:
     identity_tokens: IdentityTokens | None = get_identity_tokens()
     http_instance: HTTPClient = get_http_client_instance()
     database_instance: Database = get_database_instance()
-    # blockchain_instance: BlockchainMechanism = get_blockchain_instance()
 
     if parsed_args.node_role is NodeType.MASTER_NODE:
         email_instance: EmailService | None = get_email_instance()

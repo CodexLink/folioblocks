@@ -10,13 +10,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
-if __name__ == "__main__":
-    raise SystemExit(
-        f"This {__file__} is not designed for main / entrypoint purposes! It only invokes modified ogging properties to the entrypoint code."
-    )
-
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Final
 
 from pydantic import BaseModel
@@ -57,11 +51,7 @@ class LoggerHandler:
 
             Please refer to the uvicorn logging configuration to understand how I override some of these attributes that is already configured. And please refer to the logging module as well for the formatting and other such.
         """
-
-        _folder_handle = Path(f"{Path(__file__).cwd()}/logs")
-
-        if not _folder_handle.exists():
-            _folder_handle.mkdir(parents=True, exist_ok=False)
+        from core.constants import NODE_LOGS_FOLDER_NAME
 
         _custom_config = (
             CustomInjectLoggerConfig().dict()
@@ -80,6 +70,7 @@ class LoggerHandler:
         ]
 
         if not disable_file_logging:
+            print(NODE_LOGS_FOLDER_NAME)
             # ! Since loggers do not strip off terminal colors, we have to copy the same formatters
             # * add the variable of use_colors with a value of False.
             # * Create a variant.
@@ -91,7 +82,7 @@ class LoggerHandler:
             # * Create a general file handler.
             base_config["handlers"]["file_logger"] = {
                 "class": "logging.FileHandler",
-                "filename": f"{Path(__file__).cwd()}/logs/node_id_{datetime.now().strftime(_custom_config['LOG_DATE_FORMAT_IN_FILE'])}.log",
+                "filename": f"{NODE_LOGS_FOLDER_NAME}/node_id_{datetime.now().strftime(_custom_config['LOG_DATE_FORMAT_IN_FILE'])}.log",
                 "formatter": "default_no_colors",
             }
 

@@ -15,6 +15,7 @@ This endpoint should be used for generating users as a associate/organization or
 
 """
 
+from asyncio import gather
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from sqlite3 import IntegrityError
@@ -22,6 +23,7 @@ from sqlite3 import IntegrityError
 from blueprint.models import auth_codes
 from blueprint.schemas import GenerateAuthInput
 from core.constants import BaseAPI, NodeAPI, RequestPayloadContext, UserEntity
+from utils.processors import save_database_state_to_volume_storage
 from utils.email import EmailService, get_email_instance
 from databases import Database
 from fastapi import APIRouter, Header, HTTPException
@@ -95,7 +97,10 @@ async def generate_auth_token_for_other_nodes(
                     expiration=datetime.now() + timedelta(days=2),
                 )
 
-                await db_instance.execute(insert_generated_token_query)
+                await gather(
+                    db_instance.execute(insert_generated_token_query),
+                    save_database_state_to_volume_storage(),
+                )
 
                 await email_instance.send(
                     content=f"<html><body><h1>Auth Code for the Folioblock's {payload.role.value}!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><h4>Auth Code: {generated_token}<b></b></h4><br><p>Didn't know who sent this? Please consult your representives of your organization / institution regarding this matter.</p><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",

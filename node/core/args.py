@@ -12,8 +12,6 @@ You should have received a copy of the GNU General Public License along with Fol
 from argparse import ArgumentParser
 from re import Pattern, compile
 
-from utils.processors import validate_file_keys
-
 from core.constants import (
     AUTH_ENV_FILE_NAME,
     ENUM_NAME_PATTERN,
@@ -50,14 +48,18 @@ for each_enum in [LoggerLevelCoverage, NodeType]:
     eval_enum_name: str = "".join([letters for letters in re_matched])
     locals()[f"_injected_{eval_enum_name.lower()}_choices"] = temp_choice
 
-
+args_handler.add_argument(
+    "-dm",
+    "--deploy-mode",
+    action="store_true",
+    help=FOLIOBLOCKS_HELP[ArgumentParameter("DEPLOYED_DOCKER_MODE")],
+)
 args_handler.add_argument(
     "-kf",
     "--key-file",
     action="store",
     default=AUTH_ENV_FILE_NAME,
     help=FOLIOBLOCKS_HELP[ArgumentParameter("KEY_FILE")],
-    type=validate_file_keys,
 )
 args_handler.add_argument(
     "-ll",

@@ -1,0 +1,18 @@
+# - Any other left-over folders for the instantiated containers.
+
+github/**
+.mypy_cache/**
+.vscode/**
+avatars/**
+files/**
+logs/**
+media/**
+node_modules/**
+web/**
+scripts/**
+**.md
+.gitignore
+/folioblocks-chain.json
+/folioblocks-node.db
+**.properties
+**/LICENSE
