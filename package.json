@@ -3,7 +3,9 @@
   "Description": "A set of commands that contains a set of redundant commands that I can run later.",
   "scripts": {
     "_backend-master": "python node/main.py  -ll DEBUG -nh 127.0.0.1 -np 6001 -nr MASTER_NODE",
-    "_backend-archival": "python node/main.py  -ll DEBUG -nh 127.0.0.1 -np 5001 -nr ARCHIVAL_MINER_NODE -th 127.0.0.1 -tp 6001",
+    "_backend-archival-1": "python node/main.py  -ll DEBUG -nh 127.0.0.1 -np 5001 -nr ARCHIVAL_MINER_NODE -th 127.0.0.1 -tp 6001",
+    "_backend-archival-2": "python node/main.py  -ll DEBUG -nh 127.0.0.1 -np 5002 -nr ARCHIVAL_MINER_NODE -th 127.0.0.1 -tp 6001",
+    "_backend-archival-3": "python node/main.py  -ll DEBUG -nh 127.0.0.1 -np 5003 -nr ARCHIVAL_MINER_NODE -th 127.0.0.1 -tp 6001",
     "backend-master": "pwsh -Command clear; npm run _backend-master;",
     "backend-archival": "pwsh -Command clear; npm run _backend-archival;",
     "clean-logs": "rmdir /s /q logs",
@@ -40,8 +42,12 @@
     "docker-node-archival-miner-3-clear": "pwsh -Command docker stop folioblocks-archival-miner-instance; docker rm folioblocks-archival-miner-instance",
     "docker-node-archival-miner-3-run": "docker run -t -d -p 5003:5003 --network=host --name folioblocks-archival-miner-instance folioblocks-node-archival",
     "reload-master-node": "pwsh -Command clear; npm run clear-node-files; cp backup/master/** .; npm run backend-master",
-    "reload-archival-node": "pwsh -Command clear; npm run clear-node-files; cp backup/archival/** .; npm run backend-archival",
+    "reload-archival-node-1": "pwsh -Command clear; npm run clear-node-files; cp backup/archival/1/** .; npm run backend-archival-1",
+    "reload-archival-node-2": "pwsh -Command clear; npm run clear-node-files; cp backup/archival/2/** .; npm run backend-archival-2",
+    "reload-archival-node-3": "pwsh -Command clear; npm run clear-node-files; cp backup/archival/3/** .; npm run backend-archival-3",
     "reset-master-node": "pwsh -Command clear; npm run clear-node-files; npm run backend-master",
-    "reset-archival-node": "pwsh -Command clear; npm run clear-node-files; npm run backend-archival"
+    "reset-archival-node-1": "pwsh -Command clear; npm run clear-node-files; npm run backend-archival-1",
+    "reset-archival-node-2": "pwsh -Command clear; npm run clear-node-files; npm run backend-archival-2",
+    "reset-archival-node-3": "pwsh -Command clear; npm run clear-node-files; npm run backend-archival-3"
   }
 }
