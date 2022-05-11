@@ -817,11 +817,6 @@ def validate_file_keys(
             early=True,
         )
 
-    unconventional_terminate(
-        message=f"'{file_ref}' is not a valid file? Have you modified it? Please restore available backup and try again.",
-        early=True,
-    )
-
 
 # # File Resource Initializers and Validators, Blockchain and Database — END
 
