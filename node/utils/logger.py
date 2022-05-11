@@ -70,7 +70,6 @@ class LoggerHandler:
         ]
 
         if not disable_file_logging:
-            print(NODE_LOGS_FOLDER_NAME)
             # ! Since loggers do not strip off terminal colors, we have to copy the same formatters
             # * add the variable of use_colors with a value of False.
             # * Create a variant.

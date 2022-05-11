@@ -55,7 +55,6 @@ from core.constants import (
     TransactionActions,
     TransactionContextMappingType,
     UserEntity,
-    random_generator,
 )
 from core.dependencies import (
     EnsureAuthorized,
@@ -77,7 +76,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import PydanticValueError
 from sqlalchemy import func, select
-from sqlalchemy.sql.expression import ClauseElement, Delete, Insert, Select, Update
+from sqlalchemy.sql.expression import Insert, Select, Update
 from blueprint.schemas import NodeMineConsensusSuccessProofTransaction
 from core.constants import (
     CERTIFICATE_TOKEN_SECRET_KEY_END_INDEX,
@@ -586,7 +585,6 @@ async def receive_file_from_dashboard(
         wrapped_to_model: StudentLogTransaction = StudentLogTransaction(
             **{
                 "address_origin": address_origin,
-                "type": content_type,
                 "name": name,
                 "description": description,
                 "role": role,

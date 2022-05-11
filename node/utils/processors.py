@@ -282,7 +282,7 @@ def resolve_node_folder_path(
         resolved_nth_node = str(int(str(node_port)[1:]))
 
     return Path(
-        f"../{AZURE_SHARED_FILE_FOLDER_NAME}/{node_role.name.lower()}-{resolved_nth_node}_resources"
+        f"../{AZURE_SHARED_FILE_FOLDER_NAME}/{node_role.name.lower()}_{resolved_nth_node}_resources"
         if resolved_nth_node is not None
         else f"../{AZURE_SHARED_FILE_FOLDER_NAME}/{node_role.name.lower()}_resources"
     )
@@ -319,12 +319,14 @@ def resolve_resources(*, evaluated_args: Namespace) -> None:
             )
 
         # @o Inject the path for other resources and initialize it here.
-        constants.USER_FILES_FOLDER_NAME = (
-            f"{node_resource_path}/{constants.USER_FILES_FOLDER_NAME}"
-        )
-        constants.USER_AVATAR_FOLDER_NAME = (
-            f"{node_resource_path}/{constants.USER_AVATAR_FOLDER_NAME}"
-        )
+        if evaluated_args.node_role is NodeType.MASTER_NODE:
+            constants.USER_FILES_FOLDER_NAME = (
+                f"{node_resource_path}/{constants.USER_FILES_FOLDER_NAME}"
+            )
+            constants.USER_AVATAR_FOLDER_NAME = (
+                f"{node_resource_path}/{constants.USER_AVATAR_FOLDER_NAME}"
+            )
+
         constants.NODE_LOGS_FOLDER_NAME = (
             f"{node_resource_path}/{constants.NODE_LOGS_FOLDER_NAME}"
         )
@@ -412,17 +414,19 @@ def resolve_resources(*, evaluated_args: Namespace) -> None:
                 # ! Remove then right after moving itself (copy) to the volume-mounted storage.
                 old_env_file_ref.unlink()
 
-    user_avatar_folder: Path = Path(constants.USER_AVATAR_FOLDER_NAME)
-    user_files_folder: Path = Path(constants.USER_FILES_FOLDER_NAME)
+    if evaluated_args.node_role is NodeType.MASTER_NODE:
+        user_avatar_folder: Path = Path(constants.USER_AVATAR_FOLDER_NAME)
+        user_files_folder: Path = Path(constants.USER_FILES_FOLDER_NAME)
+
+        # - Check if we need to create folders.
+        if not user_avatar_folder.exists():
+            user_avatar_folder.mkdir(parents=True, exist_ok=False)
+
+        if not user_files_folder.exists():
+            user_files_folder.mkdir(parents=True, exist_ok=False)
+
+    # - Both nodes will need logs.
     node_logs_folder: Path = Path(constants.NODE_LOGS_FOLDER_NAME)
-
-    # - Check if we need to create folders.
-
-    if not user_avatar_folder.exists():
-        user_avatar_folder.mkdir(parents=True, exist_ok=False)
-
-    if not user_files_folder.exists():
-        user_files_folder.mkdir(parents=True, exist_ok=False)
 
     if not node_logs_folder.exists():
         node_logs_folder.mkdir(parents=True, exist_ok=False)
@@ -502,24 +506,16 @@ async def process_resources_and_return_db_context(
     from core import constants
 
     logger.info("Initializing a database ...")
-    print(constants.DATABASE_URL_PATH)
     db_instance: Database = Database(constants.DATABASE_URL_PATH, factory=Connection)
     sql_engine = create_engine(
         constants.DATABASE_URL_PATH,
         connect_args={"check_same_thread": False, "timeout": 15},
     )
 
-    # event.listen(
-    #     sql_engine,
-    #     "connect",
-    #     lambda cursor, _: cursor.execute("PRAGMA journal_mode=WAL"),
-    # )
     logger.warning("SQLAlchemy event listener invoked.")
 
     db_file_ref: Path = Path(constants.DATABASE_RAW_PATH)
     bc_file_ref: Path = Path(constants.BLOCKCHAIN_RAW_PATH)
-
-    print("DEBUG", db_file_ref, constants.BLOCKCHAIN_RAW_PATH, auth_key)
 
     logger.debug(
         f"SQL Engine Connector (Reference) and Async Instance for the {constants.DATABASE_URL_PATH} has been instantiated."

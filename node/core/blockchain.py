@@ -29,9 +29,6 @@ from blueprint.models import (
 from blueprint.schemas import (
     AdditionalContextTransaction,
     AgnosticCredentialValidator,
-    StudentLogTransaction,
-    StudentUserBaseTransaction,
-    StudentUserTransaction,
     ArchivalMinerNodeInformation,
     Block,
     BlockOverview,
@@ -51,6 +48,10 @@ from blueprint.schemas import (
     OrganizationUserBaseFields,
     OrganizationUserBaseTransaction,
     OrganizationUserTransaction,
+    PortfolioLoadedContext,
+    StudentLogTransaction,
+    StudentUserBaseTransaction,
+    StudentUserTransaction,
     Transaction,
     TransactionDetail,
     TransactionOverview,
@@ -69,14 +70,11 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
-from core.constants import BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK
-from core.constants import BLOCKCHAIN_FILENAME_RANDOM_CHAR_LENGTH
-from blueprint.schemas import PortfolioLoadedContext
-from utils.processors import save_database_state_to_volume_storage
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
     hash_context,
+    save_database_state_to_volume_storage,
     unconventional_terminate,
     validate_organization_existence,
     validate_previous_consensus_negotiation,
@@ -90,6 +88,7 @@ from core.constants import (
     ASYNC_TARGET_LOOP,
     BLOCK_HASH_LENGTH,
     BLOCKCHAIN_BLOCK_TIMER_IN_SECONDS,
+    BLOCKCHAIN_FILENAME_RANDOM_CHAR_LENGTH,
     BLOCKCHAIN_GENESIS_MAX_CHAR_DATA,
     BLOCKCHAIN_GENESIS_MIN_CHAR_DATA,
     BLOCKCHAIN_HASH_BLOCK_DIFFICULTY,
@@ -99,6 +98,7 @@ from core.constants import (
     BLOCKCHAIN_NODE_JSON_TEMPLATE,
     BLOCKCHAIN_REQUIRED_GENESIS_BLOCKS,
     BLOCKCHAIN_SECONDS_TO_MINE_FROM_ARCHIVAL_MINER,
+    BLOCKCHAIN_TIME_TRUNCATION_ON_TX_TO_BLOCK,
     FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
@@ -111,7 +111,6 @@ from core.constants import (
     TRANSACTION_PAYLOAD_MAX_CHAR_COUNT,
     TRANSACTION_PAYLOAD_MIN_CHAR_COUNT,
     TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY,
-    USER_FILES_FOLDER_NAME,
     AddressUUID,
     AssociatedNodeStatus,
     BlockchainFileContext,
@@ -415,15 +414,18 @@ class BlockchainMechanism(ConsensusMechanism):
         )
 
     async def get_chain(self) -> str:
-        # At this state of the system, the blockchain file is currently unlocked. Therefore give it.
+        # ! These are late imports due to changes from the path as per the evaluation of the method `resolve_resources` at processors.py.
+        from core.constants import BLOCKCHAIN_RAW_PATH
 
         # Adjust function for forcing to save new data when fetched.
-        async with aopen(BLOCKCHAIN_NAME, "r") as chain_reader:
+        async with aopen(BLOCKCHAIN_RAW_PATH, "r") as chain_reader:
             data: str = await chain_reader.read()
 
         return data
 
     async def get_chain_hash(self) -> HashUUID:
+        # ! These are late imports due to changes from the path as per the evaluation of the method `resolve_resources` at processors.py.
+
         get_chain_hash_query = select([file_signatures.c.hash_signature]).where(
             file_signatures.c.filename == BLOCKCHAIN_NAME
         )
@@ -908,7 +910,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 else:
                     logger.info(
-                        "Association certificate token exists. Ignoring establishment from the `MASTER_NODE`."
+                        "Association certificate token exists. Establishment from the `MASTER_NODE` is skipped."
                     )
 
             logger.info(
@@ -2657,6 +2659,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.
                 if upstream_chain_content.ok:
                     dict_blockchain_content = await upstream_chain_content.json()
+                    print("DEBUG ON FETCH RAW", dict_blockchain_content)
 
                     in_memory_chain: frozendict | None = (
                         self.__process_block_deserialization_to_memory(
