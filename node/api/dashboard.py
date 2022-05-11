@@ -684,7 +684,6 @@ async def get_portfolio(
     # - [2] Load the portfolio properties.
     # ! This will not be used for rendering the share button state.
     # ! This was fetched to better render the portfolio from its current state.
-    print(confirmed_student_address)
     get_portfolio_properties_query: Select = select(
         [
             portfolio_settings.c.sharing_state,

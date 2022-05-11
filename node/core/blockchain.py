@@ -64,7 +64,7 @@ from fastapi import HTTPException
 from frozendict import frozendict
 from orjson import dumps as export_to_json
 from orjson import loads as import_raw_json_to_dict
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailError, EmailStr
 from pydantic import ValidationError as PydanticValidationError
 from pympler.asizeof import asizeof
 from sqlalchemy import func, select
@@ -1273,8 +1273,6 @@ class BlockchainMechanism(ConsensusMechanism):
                             "utf-8"
                         )
 
-                        print("DEBUG ENSURE GET FILE", encrypter_key, end="\n\n\n")
-
                         file_encrypter: Fernet = Fernet(
                             urlsafe_b64encode(encrypter_key)
                         )
@@ -1326,14 +1324,36 @@ class BlockchainMechanism(ConsensusMechanism):
                                 f"{user_file_storage_ref}/{data.context.file}"
                             )
 
-                    create_task(
-                        self.__email_service.send(
-                            content=f"<html><body><h1>Someone from your organization added a new log referring to you.</h1><p>This was to notify you that an address <code>{data.context.validated_by}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.name}</li><li><b>Description</b>: {data.context.description}</li><li><b>Your Role (from this log)</b>: {data.context.role}</li><p>Please note that this information is considered as <strong>log</strong>. There may be an additional information such as a <strong>file</strong> and <strong>timestamps</strong> to support this information provided to you. </p> <p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
-                            subject="New Log Information-Association Notice",
-                            to=data.context.email,  # type: ignore
-                        ),
-                        name=f"{get_email_instance.__name__}_send_new_log_notification",
+                    # - Get email of the `to_address`.
+                    get_to_address_query: Select = select([users.c.email]).where(
+                        users.c.unique_address == to_address
                     )
+
+                    to_address_email: str | None = (
+                        await self.__database_instance.fetch_val(get_to_address_query)
+                    )
+
+                    if to_address_email is None:
+                        unconventional_terminate(
+                            message="Destination (to) address doesn't seem to exists! This should not be possible. Please consult your administration and the developers to look at the issue."
+                        )
+                    else:
+                        try:
+                            EmailStr.validate(to_address_email)
+
+                        except EmailError:
+                            unconventional_terminate(
+                                message="Email address of the user is not a valid email address! This is not possible. Please consult your administration and the developers to look at the issue."
+                            )
+
+                        create_task(
+                            self.__email_service.send(
+                                content=f"<html><body><h1>Someone from your organization added a new log referring to you.</h1><p>This was to notify you that an address <code>{data.context.validated_by}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.name}</li><li><b>Description</b>: {data.context.description}</li><li><b>Your Role (from this log)</b>: {data.context.role}</li><p>Please note that this information is considered as <strong>log</strong>. There may be an additional information such as a <strong>file</strong> and <strong>timestamps</strong> to support this information provided to you. </p> <p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
+                                subject="New Log Information-Association Notice",
+                                to=EmailStr(to_address_email),
+                            ),
+                            name=f"{get_email_instance.__name__}_send_new_log_notification",
+                        )
 
                 else:
                     exception_message = f"Cannot find transaction map for the address {to_address} with the content type {TransactionContextMappingType.STUDENT_BASE}."
@@ -2063,7 +2083,7 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.warning("There's no block inside blockchain.")
 
     # # Cannot do keyword arguments here as per stated on excerpt: https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments
-    async def __hash_block(self, block: Block) -> Block:
+    def __hash_block(self, block: Block) -> Block:
         # If success, then return the hash of the block based from the difficulty.
         self.blockchain_ready = False
         prev: float = time()
@@ -2103,7 +2123,7 @@ class BlockchainMechanism(ConsensusMechanism):
             )
         )
 
-        mined_block: Block = await block_hashing_processor
+        mined_block: Block = block_hashing_processor
 
         logger.info(f"Block #{block.id} has been mined.")
 
@@ -2659,7 +2679,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - For some reason, in my implementation, I also returned the hash with respect to the content.
                 if upstream_chain_content.ok:
                     dict_blockchain_content = await upstream_chain_content.json()
-                    print("DEBUG ON FETCH RAW", dict_blockchain_content)
 
                     in_memory_chain: frozendict | None = (
                         self.__process_block_deserialization_to_memory(
