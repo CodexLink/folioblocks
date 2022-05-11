@@ -6,31 +6,37 @@
 
 FROM python:3.10.4-slim-buster
 
+ARG NODE_ENV_PATH=node-env.vars
 ARG NODE_HOST
+ARG NODE_LOG_LEVEL
 ARG NODE_PORT
 ARG NODE_ROLE
+ARG NTH_NODE
 
 # ! I added default so that there would be less arguments upon running this when building 'ARCHIVAL_MINER_NODE'.
 ARG TARGET_MASTER_HOST=127.17.0.2
 ARG TARGET_MASTER_PORT=6001
-ARG NODE_ENV_PATH
-ARG NTH_NODE=0
 
+# # Environment variables.
+# * As per what I know, ARG lost its value due to layer, don't have a reference from now but its good to be safe at this point.
+
+ENV ARCHIVAL_NTH_NODE=${NTH_NODE}
+ENV MASTER_NODE_HOST=${TARGET_MASTER_HOST}
+ENV MASTER_NODE_PORT=${TARGET_MASTER_PORT}
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+ENV THIS_NODE_ENV_PATH=${NODE_ENV_PATH}
 ENV THIS_NODE_HOST=${NODE_HOST}
 ENV THIS_NODE_PORT=${NODE_PORT}
 ENV THIS_NODE_ROLE=${NODE_ROLE}
-ENV THIS_NODE_ENV_PATH=${NODE_ENV_PATH}
+ENV THIS_NODE_LOG_LEVEL=${NODE_LOG_LEVEL}
 
-ENV MASTER_NODE_HOST=${TARGET_MASTER_HOST}
-ENV MASTER_NODE_PORT=${TARGET_MASTER_PORT}
-
+# # Expose the port.
 EXPOSE $THIS_NODE_PORT
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
 # # Fetch poetry and put on a different folder.
-RUN apt-get update; apt-get install -y curl && curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python - \
+# @o For the retry mechanism, adapted at https://stackoverflow.com/questions/42873285/curl-retry-mechanism.
+RUN apt-get update; apt-get install -y curl && curl --connect-timeout 30 --retry 15 --retry-delay 0 --retry-max-time 30 -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python - \
 	&& ln -s "$HOME/.poetry/bin/poetry" /usr/local/bin/poetry \
 	&& mkdir -p /usr/local/build
 
@@ -47,16 +53,13 @@ COPY /backup ./backup
 # # Decide what node configuration to copy over Docker.
 # ! Note that we have to do this manually because I don't have time to do automation.
 RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/** ./ ;\
-	else cp backup/archival/${NTH_NODE}/** ./ ; fi
-
-RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
-	&& rm -rf /usr/local/build ~/.cache/pip
+	else cp backup/archival/${ARCHIVAL_NTH_NODE}/** ./ ; fi
 
 # - Remove the backup files after evaluation.
-RUN rm -rf backup
-
 # # Set the python file to an executable.
-RUN chmod +x main.py
+RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
+	&& rm -rf /usr/local/build ~/.cache/pip && rm -rf backup && chmod +x main.py
 
 # # Run the backend.
-ENTRYPOINT python3 main.py --log-level INFO --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT --deploy-mode
+# ! Ensure that the 'deploy-mode' parameter is not invoked when deploying locally!
+ENTRYPOINT python3 main.py --log-level $THIS_NODE_LOG_LEVEL --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT --deploy-mode

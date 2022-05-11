@@ -1676,6 +1676,11 @@ class BlockchainMechanism(ConsensusMechanism):
             await sleep(self.block_timer_seconds)
 
             # - Since we already have a node, do not let this one go.
+
+            # ! Use this condition only when preparing for the deployment.
+            # if (time() - self.__time_elapsed_from_tx_collection) > 300.0:
+
+            # ! Use this condition when already deployed.
             if (
                 calculated_user_tx >= BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK
             ) and not len(self.__unsent_block_container):
