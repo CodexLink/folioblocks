@@ -632,10 +632,15 @@ export default defineComponent({
             void this.$router.push({ path: '/' });
           })
           .catch((e) => {
+            const responseDetail =
+              e.response.data === undefined
+                ? `${e.message}. Server may be unvailable. Please try again later.`
+                : e.response.data.detail;
+
             this.$q.notify({
               color: 'negative',
               position: 'top',
-              message: `There was an error when submitting your credentials. Reason: ${e.response.data.detail}`,
+              message: `There was an error when submitting your credentials. Reason: ${responseDetail}`,
               timeout: 15000,
               progress: true,
               icon: 'report_problem',

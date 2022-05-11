@@ -734,12 +734,15 @@ export default {
           this.clearRegistrationForm(false);
         })
         .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'negative',
             position: 'top',
-            message: `There was an error when submitting your credentials. Reason: ${
-              e.response.data.detail || e.message
-            }`,
+            message: `There was an error when submitting your credentials. Reason: ${responseDetail}`,
             timeout: 15000,
             progress: true,
             icon: 'report_problem',
@@ -865,10 +868,15 @@ export default {
             this.clearLogForm(false);
           })
           .catch((e) => {
+            const responseDetail =
+              e.response.data === undefined
+                ? `${e.message}. Server may be unvailable. Please try again later.`
+                : e.response.data.detail;
+
             this.$q.notify({
               color: 'negative',
               position: 'top',
-              message: `There was an error when submitting log information. Reason: ${e.response.data.detail}`,
+              message: `There was an error when submitting log information. Reason: ${responseDetail}`,
               timeout: 10000,
               progress: true,
               icon: 'report_problem',
@@ -947,10 +955,15 @@ export default {
             this.clearRemarkForm(false);
           })
           .catch((e) => {
+            const responseDetail =
+              e.response.data === undefined
+                ? `${e.message}. Server may be unvailable. Please try again later.`
+                : e.response.data.detail;
+
             this.$q.notify({
               color: 'negative',
               position: 'top',
-              message: `There was an error when submitting extra information. Reason: ${e.response.data.detail}`,
+              message: `There was an error when submitting extra information. Reason: ${responseDetail}`,
               timeout: 10000,
               progress: true,
               icon: 'report_problem',

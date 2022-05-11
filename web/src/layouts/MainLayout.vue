@@ -236,10 +236,15 @@ export default defineComponent({
           // * Go back to home page.
           this.$router.push({ path: '/' });
 
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'red',
             position: 'top',
-            message: e.message || e.response.data.detail,
+            message: `There was an error when accessing the page. Info: ${responseDetail}`,
             timeout: 10000,
             progress: true,
             icon: 'mdi-cancel',

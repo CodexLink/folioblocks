@@ -602,10 +602,15 @@ export default defineComponent({
           this.isProcessing = false;
         })
         .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'negative',
             position: 'top',
-            message: `There was an error when fetching your information. Due to this, switches will be disabled. Please refresh and try again. Reason: ${e.response.data.detail}`,
+            message: `There was an error when fetching your information. Due to this, switches will be disabled. Please refresh and try again. Reason: ${responseDetail}`,
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
@@ -628,10 +633,15 @@ export default defineComponent({
           this.isProcessing = false;
         })
         .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'negative',
             position: 'top',
-            message: `There was an error when fetching your information. Due to this, fields will be disabled. Please refresh and try again. Reason: ${e.response.data.detail}`,
+            message: `There was an error when fetching your information. Due to this, fields will be disabled. Please refresh and try again. Reason: ${responseDetail}`,
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
@@ -681,10 +691,15 @@ export default defineComponent({
           }, 3000);
         })
         .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'negative',
             position: 'top',
-            message: `There was an error when submitting new information. Reason: ${e.response.data.detail}`,
+            message: `There was an error when submitting new information. Reason: ${responseDetail}`,
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
@@ -736,10 +751,15 @@ export default defineComponent({
           }, 3000);
         })
         .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'negative',
             position: 'top',
-            message: `There was an error when submitting portfolio settings. Due to this, lease refresh and try again. Reason: ${e.response.data.detail}`,
+            message: `There was an error when submitting portfolio settings. Due to this, lease refresh and try again. Reason: ${responseDetail}`,
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
@@ -880,10 +900,15 @@ export default defineComponent({
           this.portfolio_log_info_rendering_state = false;
         })
         .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
           this.$q.notify({
             color: 'negative',
             position: 'top',
-            message: `There was an error when fetching portfolio. Reason: ${e.response.data.detail}`,
+            message: `There was an error when fetching portfolio. Reason: ${responseDetail}`,
             timeout: 10000,
             progress: true,
             icon: 'report_problem',
