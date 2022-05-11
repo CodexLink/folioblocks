@@ -1804,7 +1804,6 @@ class BlockchainMechanism(ConsensusMechanism):
                         f"Block {generated_block.id} has been sent and is in the process of hashing! (By: {available_node_info.miner_address})"
                     )
 
-                    first_instance = False  # * Remove the limit and conform to the number of transactions required based on active nodes.
                     self.__time_elapsed_from_tx_collection = (
                         time()
                     )  # * Reset the timer.

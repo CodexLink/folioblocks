@@ -163,7 +163,6 @@ async def crypt_file(
         )
         if process == CryptFileAction.TO_DECRYPT:
             if key is None:
-                pass
                 unconventional_terminate(
                     message="Decryption operation cannot continue due to not having a key."
                 )
@@ -391,16 +390,9 @@ def resolve_resources(*, evaluated_args: Namespace) -> None:
 
         # - If it exists, then we copy the file from the volume mounted to the instance folder.
         else:
-            if not volume_database_path.exists():
-                unconventional_terminate(
-                    message="Failed to copy from the volume mounted storage to the instance, are you sure that the storage account is enabled or not deleted? Please notify developers for this issue if persisting after attempts on retry.",
-                    early=True,
-                )
-
-            else:
-                shutil_copyfile(
-                    volume_database_path, old_database_file_ref, follow_symlinks=False
-                )
+            shutil_copyfile(
+                volume_database_path, old_database_file_ref, follow_symlinks=False
+            )
 
         if not Path(evaluated_args.key_file).exists():
             old_env_file_ref: Path = Path(ENV_OLD_REF)
