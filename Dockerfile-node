@@ -14,6 +14,7 @@ ARG NODE_ROLE
 ARG TARGET_MASTER_HOST=127.17.0.2
 ARG TARGET_MASTER_PORT=6001
 ARG NODE_ENV_PATH
+ARG NTH_NODE=0
 
 ENV THIS_NODE_HOST=${NODE_HOST}
 ENV THIS_NODE_PORT=${NODE_PORT}
@@ -46,7 +47,7 @@ COPY /backup ./backup
 # # Decide what node configuration to copy over Docker.
 # ! Note that we have to do this manually because I don't have time to do automation.
 RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/** ./ ;\
-	else cp backup/archival/** ./ ; fi
+	else cp backup/archival/${NTH_NODE}/** ./ ; fi
 
 RUN pip3 install --no-cache-dir -r /usr/local/build/requirements.txt \
 	&& rm -rf /usr/local/build ~/.cache/pip
