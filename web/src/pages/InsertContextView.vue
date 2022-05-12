@@ -732,6 +732,8 @@ export default {
             icon: 'report_problem',
           });
           this.clearRegistrationForm(false);
+
+          this.isProcessing = false;
         })
         .catch((e) => {
           const responseDetail =
@@ -747,9 +749,9 @@ export default {
             progress: true,
             icon: 'report_problem',
           });
-        });
 
-      this.isProcessing = false;
+          this.isProcessing = false;
+        });
     },
     submitStudentFormError() {
       this.$q.notify({
@@ -764,16 +766,16 @@ export default {
     },
     clearRegistrationForm(showMessage = true) {
       // ! Clear Context
-      this.new_student_first_name = '';
-      this.new_student_last_name = '';
-      this.new_student_username = '';
-      this.new_student_email = '';
-      this.new_student_password = '';
-      this.new_student_description = '';
-      this.new_student_personal_skills = '';
-      this.new_student_recent_program = '';
+      this.new_student_first_name = null;
+      this.new_student_last_name = null;
+      this.new_student_username = null;
+      this.new_student_email = null;
+      this.new_student_password = null;
+      this.new_student_description = null;
+      this.new_student_personal_skills = null;
+      this.new_student_recent_program = null;
       this.new_student_recorded_year_level = 1;
-      this.new_student_prefer_role = '';
+      this.new_student_prefer_role = null;
 
       if (showMessage)
         this.$q.notify({
@@ -866,6 +868,8 @@ export default {
               icon: 'report_problem',
             });
             this.clearLogForm(false);
+
+            this.isProcessing = false;
           })
           .catch((e) => {
             const responseDetail =
@@ -881,9 +885,10 @@ export default {
               progress: true,
               icon: 'report_problem',
             });
+
+            this.isProcessing = false;
           });
       }
-      this.isProcessing = false;
     },
     errorOnLog() {
       this.$q.notify({
@@ -953,6 +958,8 @@ export default {
               icon: 'report_problem',
             });
             this.clearRemarkForm(false);
+
+            this.isProcessing = false;
           })
           .catch((e) => {
             const responseDetail =
@@ -968,9 +975,10 @@ export default {
               progress: true,
               icon: 'report_problem',
             });
+
+            this.isProcessing = false;
           });
       }
-      this.isProcessing = false;
     },
     errorOnRemark() {
       this.$q.notify({
@@ -1034,6 +1042,8 @@ export default {
             resolved_students.push(each_student);
           }
           this.students = resolved_students;
+
+          this.isFetchingStudent = false;
         })
         .catch((e) => {
           this.$q.notify({
@@ -1044,9 +1054,9 @@ export default {
             progress: true,
             icon: 'report_problem',
           });
-        });
 
-      this.isFetchingStudent = false;
+          this.isFetchingStudent = false;
+        });
     },
     directToPortfolio() {
       void this.$router.push({

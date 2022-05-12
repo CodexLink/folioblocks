@@ -567,7 +567,7 @@ export default defineComponent({
         email: this.email,
         auth_code: this.register_auth_code,
       };
-      let payloadModified = false;
+      let payloadConditionSufficient = false;
 
       // ! Check the fields from the organization.
       // - We need to ensure that both cases for referencing and creating a new organization should be handled here.
@@ -587,7 +587,7 @@ export default defineComponent({
         ).toISOString();
         defaultPayload.association_description = this.org_description;
 
-        payloadModified = true;
+        payloadConditionSufficient = true;
       }
       // * Case for creating an account with reference to the organization. Address should only be filled.
       else if (
@@ -599,7 +599,7 @@ export default defineComponent({
       ) {
         defaultPayload.association_address = this.org_address;
 
-        payloadModified = true;
+        payloadConditionSufficient = true;
       } else {
         this.$q.notify({
           color: 'negative',
@@ -612,7 +612,7 @@ export default defineComponent({
         });
       }
 
-      if (payloadModified)
+      if (payloadConditionSufficient) {
         // * Once the payload has been resolved (it's fields, ofc), do API call.
         axios
           .post(`http://${MASTER_NODE_BACKEND_URL}/entity/register`, {
@@ -629,6 +629,7 @@ export default defineComponent({
               progress: true,
               icon: 'mdi-account-check',
             });
+            this.isProcessing = false;
             void this.$router.push({ path: '/' });
           })
           .catch((e) => {
@@ -645,9 +646,20 @@ export default defineComponent({
               progress: true,
               icon: 'report_problem',
             });
+            this.isProcessing = false;
           });
-
-      this.isProcessing = false;
+      } else {
+        this.$q.notify({
+          color: 'negative',
+          position: 'top',
+          message:
+            'Payload condition regarding organization is not sufficient.',
+          timeout: 15000,
+          progress: true,
+          icon: 'report_problem',
+        });
+        this.isProcessing = false;
+      }
     },
     errorOnSubmit() {
       this.$q.notify({

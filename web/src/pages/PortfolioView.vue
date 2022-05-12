@@ -405,13 +405,15 @@
             <q-card-actions align="right">
               <q-btn
                 flat
+                v-ripple
                 style="color: #3700b3"
                 label="Close Modal"
                 @click="portfolio_modal = false"
               />
               <q-btn
+                v-ripple
                 flat
-                class="red"
+                style="color: #ff0080"
                 :disable="portfolio_setting_btn_click_state"
                 label="Apply Settings"
                 @click="submitPortfolioSettings"
@@ -495,12 +497,14 @@
             <q-card-actions align="right">
               <q-btn
                 flat
+                v-ripple
                 style="color: #3700b3"
                 label="Close Modal"
                 @click="portfolio_modal = false"
               />
               <q-btn
                 flat
+                v-ripple
                 type="submit"
                 style="color: #ff0080"
                 label="Apply New Info"

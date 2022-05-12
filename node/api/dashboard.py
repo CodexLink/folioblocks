@@ -51,7 +51,6 @@ from core.constants import (
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MAX,
     FILE_PAYLOAD_TO_ADDRESS_CHAR_LIMIT_MIN,
     FILE_PAYLOAD_TO_ADDRESS_START_TRUNCATION_INDEX,
-    USER_FILES_FOLDER_NAME,
     HashUUID,
     TransactionActions,
 )
@@ -824,6 +823,10 @@ async def get_portfolio_file(
     ),
 ) -> Response:
     # # This endpoint doesn't care who you are at this point. Since address were specified, portfolio settings are going to be the dependency of the endpoint whether, to return a file or not.
+
+    # ! Late import due to variable change on initial phase of the node.
+    from core.constants import USER_FILES_FOLDER_NAME
+
     # - [1] Get the student address.
     validate_user_address_query: Select = select([func.count()]).where(
         users.c.unique_address == address_ref
@@ -912,14 +915,16 @@ async def get_portfolio_file(
         "utf-8"
     )
 
+    # @o Variable hint.
     decrypted_file_content: bytes = b""
+
     async with aopen(final_resolve_path_to_file, "rb") as file_decrypter:
         file_read_content: bytes = await file_decrypter.read()
 
         decrypter_instance: Fernet = Fernet(
             key=urlsafe_b64encode(constructed_key_to_decrypt)
         )
-        decrypted_file_content: bytes = decrypter_instance.decrypt(file_read_content)
+        decrypted_file_content = decrypter_instance.decrypt(file_read_content)
 
     return Response(content=decrypted_file_content, media_type="application/pdf")
 

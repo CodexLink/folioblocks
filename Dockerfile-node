@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # - Before building the Docker, ensure that you setup the initial configs of the node.
+
 # - You have to setup email credentials as well as the account from the master node, or just the credentials.
+
 # - Ensure that the nodes were able to initialize as well as shutdown gracefully in the sense that the files were able to encrypt-decrpyt such files.
 
 FROM python:3.10.4-slim-buster
@@ -14,10 +16,12 @@ ARG NODE_ROLE
 ARG NTH_NODE
 
 # ! I added default so that there would be less arguments upon running this when building 'ARCHIVAL_MINER_NODE'.
+
 ARG TARGET_MASTER_HOST=127.17.0.2
 ARG TARGET_MASTER_PORT=6001
 
 # # Environment variables.
+
 # * As per what I know, ARG lost its value due to layer, don't have a reference from now but its good to be safe at this point.
 
 ENV ARCHIVAL_NTH_NODE=${NTH_NODE}
@@ -32,34 +36,44 @@ ENV THIS_NODE_ROLE=${NODE_ROLE}
 ENV THIS_NODE_LOG_LEVEL=${NODE_LOG_LEVEL}
 
 # # Expose the port.
+
 EXPOSE $THIS_NODE_PORT
 
 # # Fetch poetry and put on a different folder.
+
 # @o For the retry mechanism, adapted at https://stackoverflow.com/questions/42873285/curl-retry-mechanism.
 RUN apt-get update; apt-get install -y curl && curl --connect-timeout 30 --retry 15 --retry-delay 0 --retry-max-time 30 -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python - \
+
 	&& ln -s "$HOME/.poetry/bin/poetry" /usr/local/bin/poetry \
 	&& mkdir -p /usr/local/build
 
 # # Copy the dependencies for the poetry to install.
+
 WORKDIR /usr/local/build
 COPY poetry.lock pyproject.toml ./
 RUN poetry export -f requirements.txt -o requirements.txt --without-hashes
 
 # # Copy our backend server from their respective folder.
+
 WORKDIR /usr/local/folioblocks-node/
 COPY node/ ./
 COPY /backup ./backup
 
 # # Decide what node configuration to copy over Docker.
+
 # ! Note that we have to do this manually because I don't have time to do automation.
-RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/** ./ ;\
+RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/** ./ ; \
+
 	else cp backup/archival/${ARCHIVAL_NTH_NODE}/** ./ ; fi
 
 # - Remove the backup files after evaluation.
+
 # # Set the python file to an executable.
 RUN pip3 install --retries 99 --timeout 60 --default-timeout 60 --no-cache-dir -r /usr/local/build/requirements.txt \
+
 	&& rm -rf /usr/local/build ~/.cache/pip && rm -rf backup && chmod +x main.py
 
 # # Run the backend.
+
 # ! Ensure that the 'deploy-mode' parameter is not invoked when deploying locally!
-ENTRYPOINT python3 main.py --log-level $THIS_NODE_LOG_LEVEL --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT --deploy-mode
+ENTRYPOINT python3 main.py --log-level $THIS_NODE_LOG_LEVEL --node-host $THIS_NODE_HOST --node-port $THIS_NODE_PORT --node-role $THIS_NODE_ROLE --target-host $MASTER_NODE_HOST --target-port $MASTER_NODE_PORT

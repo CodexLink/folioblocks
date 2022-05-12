@@ -1198,7 +1198,7 @@ class BlockchainMechanism(ConsensusMechanism):
                                 self.__email_service.send(
                                     content=f"<html><body><h1>Hello from Folioblocks::Dashboard Users!</h1><p>Thank you for registering as a <b>`{UserEntity.ORGANIZATION_DASHBOARD_USER.value if isinstance(data.context, OrganizationUserTransaction) else UserEntity.STUDENT_DASHBOARD_USER.value}`</b>!<br><br>The following are your information regarding credentials and your origin reference:<br><li>Your Address: <b>{new_uuid}</b></li>{inserter_context if inserter_context is not None else ''}<li>Association Address: <b>{data.context.association_address if isinstance(data.context, OrganizationUserTransaction) else data.context.institution}</li><li>Username: <b>{data.context.username}</b></li><li>Password: <b>{data.context.password}</b></li><p>Where,</p><li><strong>Association Address</strong> — refers to your organization.</li><li><strong>Inserter Address</strong> — refers to the inserter from your organization. Their name is exposed to ensure you may know that person as your representative from your organization.</li><p>Please note that, we sent off to you your credentials as there's no forget password system currently in-place. Keep this email safe!</p><li>If you are a `<b><i>{UserEntity.STUDENT_DASHBOARD_USER.value}</b></i>`, please be responsible on your portfolio as it may expose some important information when your portfolio setting is misconfigured. Our system is used for origin verification without third-party.</li><li>For `<b><i>{UserEntity.ORGANIZATION_DASHBOARD_USER.value}</b></i>` please be responsible as any data you insert cannot be modified and will be reflected from the student you selected from the dashboard. You may be liable when you inserted a wrong context as everything is recorded in the blockchain.</li><br><br>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                     subject="Hello from Folioblocks::Users!",
-                                    to=data.context.email,  # type: ignore
+                                    to=data.context.email,
                                 ),
                                 name=f"{get_email_instance.__name__}_send_register_welcome_user",
                             )
@@ -1329,17 +1329,17 @@ class BlockchainMechanism(ConsensusMechanism):
                         users.c.unique_address == to_address
                     )
 
-                    to_address_email: str | None = (
+                    log_ctx_to_address_email: str | None = (
                         await self.__database_instance.fetch_val(get_to_address_query)
                     )
 
-                    if to_address_email is None:
+                    if log_ctx_to_address_email is None:
                         unconventional_terminate(
                             message="Destination (to) address doesn't seem to exists! This should not be possible. Please consult your administration and the developers to look at the issue."
                         )
                     else:
                         try:
-                            EmailStr.validate(to_address_email)
+                            EmailStr.validate(log_ctx_to_address_email)
 
                         except EmailError:
                             unconventional_terminate(
@@ -1350,7 +1350,7 @@ class BlockchainMechanism(ConsensusMechanism):
                             self.__email_service.send(
                                 content=f"<html><body><h1>Someone from your organization added a new log referring to you.</h1><p>This was to notify you that an address <code>{data.context.validated_by}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.name}</li><li><b>Description</b>: {data.context.description}</li><li><b>Your Role (from this log)</b>: {data.context.role}</li><p>Please note that this information is considered as <strong>log</strong>. There may be an additional information such as a <strong>file</strong> and <strong>timestamps</strong> to support this information provided to you. </p> <p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                                 subject="New Log Information-Association Notice",
-                                to=EmailStr(to_address_email),
+                                to=EmailStr(log_ctx_to_address_email),
                             ),
                             name=f"{get_email_instance.__name__}_send_new_log_notification",
                         )
@@ -1370,11 +1370,19 @@ class BlockchainMechanism(ConsensusMechanism):
                 logger.debug(
                     f"Accepted at {TransactionActions.ORGANIZATION_REFER_EXTRA_INFO.name} or {TransactionActions.INSTITUTION_ORG_STUDENT_REFER_EXTRA_INFO.name} by doing nothing due to there's nothing to process."
                 )
+
+                # * Fetch `to_address`'s email address for the notification of someone inserting context to them.
+                get_to_address_email_query: Select = select([users.c.email]).where(
+                    users.c.unique_address == to_address
+                )
+
+                additional_ctx_to_address_email: EmailStr = EmailStr(EmailStr.validate(await self.__database_instance.fetch_val(get_to_address_email_query)))
+
                 create_task(
                     self.__email_service.send(
                         content=f"<html><body><h1>Someone from your organization added a new extra information / remarks referring to you.</h1><p>This was to notify you that an address <code>{data.context.inserter}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.title}</li><li><b>Description</b>: {data.context.description}</li><p>Please note that this information is considered as <strong>extra or remarks</strong> as the provided information from this email is as-is from what will be shown in the portfolio.</p><p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                         subject="New Remarks Information-Association Notice",
-                        to=data.context.email,  # type: ignore
+                        to=additional_ctx_to_address_email
                     ),
                     name=f"{get_email_instance.__name__}_send_new_extra_notification",
                 )
@@ -2104,7 +2112,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 == "0" * BLOCKCHAIN_HASH_BLOCK_DIFFICULTY
             ):
                 logger.info(
-                    f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{block.hash_block}`, which has been mined for {time() - prev} under {nth} iteration/s!"
+                    f"Block #{block.id} with a nonce value of {block.contents.nonce} has a resulting hash value of `{block.hash_block}`, which has been hashed for {time() - prev} second/s under {nth} iteration/s!"
                 )
 
                 self.blockchain_ready = True
