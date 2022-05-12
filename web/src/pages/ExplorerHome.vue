@@ -270,14 +270,8 @@ export default defineComponent({
         });
     },
     onSearchSubmit() {
-      // ! Directing to block.
-      if (Number.isInteger(parseInt(this.searchContext))) {
-        void this.$router.push({
-          path: `/explorer/block/${this.searchContext}`,
-        });
-      }
       // ! Directing to address.
-      else if (
+      if (
         this.searchContext.startsWith('fl:') &&
         this.searchContext.length === 35
       ) {
@@ -289,6 +283,12 @@ export default defineComponent({
       else if (this.searchContext.length === 64) {
         void this.$router.push({
           path: `/explorer/transaction/${this.searchContext}`,
+        });
+      }
+      // ! Directing to block.
+      else if (Number.isInteger(parseInt(this.searchContext))) {
+        void this.$router.push({
+          path: `/explorer/block/${this.searchContext}`,
         });
       } else {
         this.$q.notify({

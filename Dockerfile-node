@@ -67,7 +67,7 @@ RUN if [ "${NODE_ROLE}" = "MASTER_NODE" ]; then cp backup/master/** ./ ; \
 # - Remove the backup files after evaluation.
 
 # # Set the python file to an executable.
-RUN pip3 install --retries 99 --timeout 60 --default-timeout 60 --no-cache-dir -r /usr/local/build/requirements.txt \
+RUN pip install --retries 99 --timeout 10 --no-cache-dir -r /usr/local/build/requirements.txt \
 	&& rm -rf /usr/local/build ~/.cache/pip && rm -rf backup && chmod +x main.py
 
 

@@ -145,6 +145,7 @@ async def authenticate_node_client(
 
     from utils.processors import (
         ensure_input_prompt,
+        save_database_state_to_volume_storage,
     )  # @o Imported inside method due to circular dependency.
 
     user_credentials: UserCredentials
@@ -231,9 +232,13 @@ async def authenticate_node_client(
                                     .values(code=generated_token)
                                 )
 
-                                await instances[1].execute(
-                                    new_code_from_previous_email_query
+                                await gather(
+                                    instances[1].execute(
+                                        new_code_from_previous_email_query
+                                    ),
+                                    save_database_state_to_volume_storage(),
                                 )
+
                                 master_email_address = EmailStr(
                                     unused_code_email.to_email
                                 )

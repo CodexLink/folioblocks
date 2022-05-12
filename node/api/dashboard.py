@@ -9,6 +9,7 @@ FolioBlocks is distributed in the hope that it will be useful, but WITHOUT ANY W
 You should have received a copy of the GNU General Public License along with FolioBlocks. If not, see <https://www.gnu.org/licenses/>.
 """
 
+from asyncio import gather
 from base64 import urlsafe_b64encode
 from datetime import datetime, timedelta
 from http import HTTPStatus
@@ -57,6 +58,7 @@ from core.constants import (
 from core.constants import FILE_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
 from blueprint.schemas import PortfolioLoadedContext
 from blueprint.schemas import DashboardStudent, DashboardOrganization
+from utils.processors import save_database_state_to_volume_storage
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
@@ -422,7 +424,10 @@ async def save_user_profile(
                 preferred_role=preferred_role,
             )
         )
-        await database_instance.execute(update_user_editable_info)
+        await gather(
+            database_instance.execute(update_user_editable_info),
+            save_database_state_to_volume_storage(),
+        )
 
     except IntegrityError:
         raise HTTPException(
@@ -1037,7 +1042,10 @@ async def save_portfolio_settings(
             )
         )
 
-        await database_instance.execute(update_portfolio_state_query)
+        await gather(
+            database_instance.execute(update_portfolio_state_query),
+            save_database_state_to_volume_storage(),
+        )
 
     except IntegrityError:
         raise HTTPException(

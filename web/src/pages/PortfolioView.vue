@@ -351,7 +351,10 @@
                 <q-item-label>Enable Portfolio Sharing</q-item-label>
                 <q-item-label caption
                   >Allow others to see this portfolio by explicitly referring to
-                  your address.</q-item-label
+                  your address. Note that
+                  <strong>file sharing option pre-requisites this</strong>,
+                  disabling forbids the requestor to access the file as an
+                  applicant / organization entity.</q-item-label
                 >
               </q-item-section>
               <q-item-section side>
@@ -928,12 +931,29 @@ export default defineComponent({
     getFile(address_origin, file_hash) {
       let portfolioFileURL = `http://${MASTER_NODE_BACKEND_URL}/dashboard/portfolio/${address_origin}/file/${file_hash}`;
 
-      axios.get(portfolioFileURL, { responseType: 'blob' }).then((response) => {
-        let blob = new Blob([response.data], { type: 'application/pdf' });
-        let url = window.URL.createObjectURL(blob);
+      axios
+        .get(portfolioFileURL, { responseType: 'blob' })
+        .then((response) => {
+          let blob = new Blob([response.data], { type: 'application/pdf' });
+          let url = window.URL.createObjectURL(blob);
 
-        window.open(url);
-      });
+          window.open(url);
+        })
+        .catch((e) => {
+          const responseDetail =
+            e.response.data === undefined
+              ? `${e.message}. Server may be unvailable. Please try again later.`
+              : e.response.data.detail;
+
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: `Cannot fetch the file. You may have disabled portfolio access. | Other Reason: ${responseDetail}`,
+            timeout: 10000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
     },
   },
 });

@@ -1376,13 +1376,19 @@ class BlockchainMechanism(ConsensusMechanism):
                     users.c.unique_address == to_address
                 )
 
-                additional_ctx_to_address_email: EmailStr = EmailStr(EmailStr.validate(await self.__database_instance.fetch_val(get_to_address_email_query)))
+                additional_ctx_to_address_email: EmailStr = EmailStr(
+                    EmailStr.validate(
+                        await self.__database_instance.fetch_val(
+                            get_to_address_email_query
+                        )
+                    )
+                )
 
                 create_task(
                     self.__email_service.send(
                         content=f"<html><body><h1>Someone from your organization added a new extra information / remarks referring to you.</h1><p>This was to notify you that an address <code>{data.context.inserter}</code> from your organization associated the following context to your portfolio.<br><li><b>Title</b>: {data.context.title}</li><li><b>Description</b>: {data.context.description}</li><p>Please note that this information is considered as <strong>extra or remarks</strong> as the provided information from this email is as-is from what will be shown in the portfolio.</p><p>To verify that this address sent this information, check your portfolio as it will provide the links regarding the origin of this message from origin address to a block associating this transaction.</p><p>Also, please note that at the time of you received this message, the log information may not have yet processed from the blockchain, please wait awhile before checking it back.</p><p>Should any questions should be delivered from this email. Thank you and we are hoping to be part of integrity</p><br><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",  # type: ignore
                         subject="New Remarks Information-Association Notice",
-                        to=additional_ctx_to_address_email
+                        to=additional_ctx_to_address_email,
                     ),
                     name=f"{get_email_instance.__name__}_send_new_extra_notification",
                 )
@@ -1646,8 +1652,11 @@ class BlockchainMechanism(ConsensusMechanism):
                     .values(status=ConsensusNegotiationStatus.COMPLETED)
                 )
 
-                await get_database_instance().execute(
-                    update_completed_consensus_negotiation_query
+                await gather(
+                    get_database_instance().execute(
+                        update_completed_consensus_negotiation_query
+                    ),
+                    save_database_state_to_volume_storage(),
                 )
 
                 logger.info(f"Consensus Negotiation ID `{recorded_consensus_negotiation}` with the peer (receiver) address `{master_address_ref}` has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
@@ -2720,7 +2729,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     )
                 else:
                     logger.warning(
-                        f"Update or hash validation processing is not successful due to condition unmet from HTTP status. Re-attempting in 5 seconds ..."
+                        f"Hash update or validation processing is not successful due to condition unmet from HTTP status. Re-attempting in 5 seconds ..."
                     )
                     await sleep(5)
                     continue
@@ -2742,7 +2751,10 @@ class BlockchainMechanism(ConsensusMechanism):
             .values(hash_signature=new_hash)
         )
 
-        await self.__database_instance.execute(blockchain_hash_update_query)
+        await gather(
+            self.__database_instance.execute(blockchain_hash_update_query),
+            save_database_state_to_volume_storage(),
+        )
 
 
 # # This approach was (not completely) taken from stackoverflow.

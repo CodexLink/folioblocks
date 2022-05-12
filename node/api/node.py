@@ -257,6 +257,7 @@ async def receive_hashed_block(
         await gather(
             database_instance.execute(update_consensus_negotiation_query),
             database_instance.execute(update_associate_state_query),
+            save_database_state_to_volume_storage(),
         )
 
         # - Since we lost the identity value of the enums from the fields, we need to re-bind them so that the loaded block from memory has a referrable enum when called.
@@ -771,8 +772,9 @@ async def certify_miner(
                             )
                         )
 
-                        await database_instance.execute(
-                            update_association_initial_query
+                        await gather(
+                            database_instance.execute(update_association_initial_query),
+                            save_database_state_to_volume_storage(),
                         )
 
                         # # Then return it.

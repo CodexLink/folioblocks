@@ -58,6 +58,7 @@ from core.dependencies import (
     get_identity_tokens,
     get_master_node_properties,
 )
+from utils.processors import save_database_state_to_volume_storage
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.logger import LoggerHandler
@@ -267,6 +268,7 @@ async def terminate() -> None:
             await gather(
                 database_instance.execute(master_token_to_expired_query),
                 database_instance.execute(master_state_to_down_query),
+                save_database_state_to_volume_storage(),
             )
 
             logger.info(
@@ -344,7 +346,10 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
                         .values(state=TokenStatus.EXPIRED)
                     )  # - Change the state of the token when past through expiration.
 
-                    await database_instance.execute(token_to_del)
+                    await gather(
+                        database_instance.execute(token_to_del),
+                        save_database_state_to_volume_storage(),
+                    )
 
                     logger.info(
                         f"Token {token.token[:25]}(...) was set to {TokenStatus.EXPIRED.name} due to its expiration date {token.expiration}."

@@ -165,7 +165,7 @@
                   Following fields require to specify your organization as a new
                   entity from the system. Should there be an existing
                   organization must
-                  <strong>only fill the organization address</strong> and
+                  <strong>only fill the organization address</strong> as well as setting the organization type as <strong>Existing</strong> and
                   nothing else.
                 </h4>
                 <h4>

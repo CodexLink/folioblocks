@@ -186,7 +186,10 @@ async def register_entity(
             .values(is_used=True)
         )
 
-        await database_instance.execute(dispose_auth_code_for_org)
+        await gather(
+            database_instance.execute(dispose_auth_code_for_org),
+            save_database_state_to_volume_storage(),
+        )
 
         return JSONResponse(
             content={
@@ -322,13 +325,15 @@ async def register_entity(
     description="An API endpoint that logs an entity to the blockchain network.",
 )
 async def login_entity(
-    *, credentials: EntityLoginCredentials, db: Any = Depends(get_database_instance)
+    *,
+    credentials: EntityLoginCredentials,
+    database_instance: Any = Depends(get_database_instance),
 ) -> EntityLoginResult:  # * We didn't use aiohttp.BasicAuth because frontend has a form, and we don't need a prompt.
 
     credential_to_look: Select = users.select().where(
         users.c.username == credentials.username
     )
-    fetched_credential_data = await db.fetch_one(credential_to_look)
+    fetched_credential_data = await database_instance.fetch_one(credential_to_look)
 
     if fetched_credential_data is not None:
 
@@ -356,7 +361,9 @@ async def login_entity(
                 & (tokens.c.state == TokenStatus.CREATED_FOR_USE.name)
             )
 
-            other_tokens: list[Mapping] = await db.fetch_all(other_tokens_query)
+            other_tokens: list[Mapping] = await database_instance.fetch_all(
+                other_tokens_query
+            )
 
             # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
             if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
@@ -393,8 +400,8 @@ async def login_entity(
 
             try:
                 await gather(
-                    db.execute(logged_user_query),
-                    db.execute(new_token),
+                    database_instance.execute(logged_user_query),
+                    database_instance.execute(new_token),
                     save_database_state_to_volume_storage(),
                 )
                 # - Check if this node does have a association certificate token.
@@ -412,7 +419,9 @@ async def login_entity(
                     )
 
                     associated_token_from_logged_user: Mapping | None = (
-                        await db.fetch_one(logged_user_has_association_token_query)
+                        await database_instance.fetch_one(
+                            logged_user_has_association_token_query
+                        )
                     )
 
                     if associated_token_from_logged_user is not None:
@@ -425,7 +434,12 @@ async def login_entity(
                             .values(status=AssociatedNodeStatus.CURRENTLY_AVAILABLE)
                         )
 
-                        await db.execute(update_associate_node_state_query)
+                        await gather(
+                            database_instance.execute(
+                                update_associate_node_state_query
+                            ),
+                            save_database_state_to_volume_storage(),
+                        )
 
                         logger.info(
                             f"Associate Reference ({fetched_credential_data.unique_address}) has been updated to {AssociatedNodeStatus.CURRENTLY_AVAILABLE.name}."
@@ -470,14 +484,14 @@ async def login_entity(
 async def logout_entity(
     *,
     x_token: JWTToken = Header(..., description="The acquired token to invalidate."),
-    db: Any = Depends(get_database_instance),
+    database_instance: Any = Depends(get_database_instance),
 ) -> None:
 
     fetched_token_query: Select = tokens.select().where(
         (tokens.c.token == x_token) & (tokens.c.state != TokenStatus.EXPIRED)
     )
 
-    fetched_token = await db.fetch_one(fetched_token_query)
+    fetched_token = await database_instance.fetch_one(fetched_token_query)
 
     if fetched_token is not None:
         token_ref: Update = (
@@ -491,7 +505,7 @@ async def logout_entity(
             users.c.unique_address == fetched_token.from_user
         )
 
-        user_ref = await db.fetch_one(user_ref_query)
+        user_ref = await database_instance.fetch_one(user_ref_query)
 
         if user_ref is not None:
 
@@ -503,7 +517,7 @@ async def logout_entity(
                     associated_nodes.c.user_address == user_ref.unique_address
                 )
 
-                associate_from_user_ref = await db.fetch_one(
+                associate_from_user_ref = await database_instance.fetch_one(
                     associate_from_user_ref_query
                 )
 
@@ -516,7 +530,9 @@ async def logout_entity(
                         .values(status=AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE)
                     )
 
-                    await db.execute(update_associate_state_from_user_query)
+                    await database_instance.execute(
+                        update_associate_state_from_user_query
+                    )
 
                     logger.info(
                         f"An associate ({associate_from_user_ref.user_address}) reference status has been updated to {AssociatedNodeStatus.CURRENTLY_NOT_AVAILABLE.name}."
@@ -527,7 +543,10 @@ async def logout_entity(
                     "Ignoring this extra step due to condition regarding user role."
                 )
 
-        await db.execute(token_ref)
+        await gather(
+            database_instance.execute(token_ref),
+            save_database_state_to_volume_storage(),
+        )
         return
 
     raise HTTPException(
