@@ -1,9 +1,9 @@
 {
-  "name": "folioblocks",
-  "version": "0.0.1",
-  "description": "A Quasar Framework app",
+  "name": "folioblocks-web",
+  "version": "1.0.0",
+  "description": "Credential Verification System using Blockchain Technology | A Vue.js + Quasar SPA frontend for the backend display of folioblocks <https://github.com/CodexLink/folioblocks>.",
   "productName": "Folioblocks",
-  "author": "Ronan and Janrey `CodexLink` Licas",
+  "author": "Ronan Marasigan <https://github.com/rmarasigan-tip> and Janrey `CodexLink` Licas <https://github.com/CodexLink>",
   "private": true,
   "scripts": {
     "lint": "eslint --ext .js,.ts,.vue ./",
