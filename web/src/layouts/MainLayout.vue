@@ -184,7 +184,7 @@ import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
 import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
-import { useRoute, useRouter } from 'vue-router';
+import { useMeta, useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({
   name: 'Dashboard',
@@ -205,6 +205,18 @@ export default defineComponent({
     const leftDrawerOpen = ref(false);
     const containsNoAuth =
       $q.localStorage.getItem('token') === null ? true : false;
+
+    // ! DISCLAIMER: Yes, I know I have to buy a domain to get an SSL certificate but we don't have much time left.
+    useMeta(() => {
+      return {
+        meta: {
+          equiv: {
+            'http-equiv': 'Content-Security-Policy',
+            content: 'upgrade-insecure-requests',
+          },
+        },
+      };
+    });
 
     return {
       activeLink: ref(''),

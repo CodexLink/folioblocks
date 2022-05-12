@@ -165,7 +165,8 @@
                   Following fields require to specify your organization as a new
                   entity from the system. Should there be an existing
                   organization must
-                  <strong>only fill the organization address</strong> as well as setting the organization type as <strong>Existing</strong> and
+                  <strong>only fill the organization address</strong> as well as
+                  setting the organization type as <strong>Existing</strong> and
                   nothing else.
                 </h4>
                 <h4>
@@ -410,7 +411,7 @@ import { defineComponent, ref } from 'vue';
 import RegisterContainer from 'src/components/RegisterContainer.vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
-import { useQuasar } from 'quasar';
+import { useMeta, useQuasar } from 'quasar';
 import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 export default defineComponent({
   name: 'EntryForm',
@@ -446,6 +447,18 @@ export default defineComponent({
     const $route = useRoute();
     const $router = useRouter();
     const $q = useQuasar();
+
+    // ! DISCLAIMER: Yes, I know I have to buy a domain to get an SSL certificate but we don't have much time left.
+    useMeta(() => {
+      return {
+        meta: {
+          equiv: {
+            'http-equiv': 'Content-Security-Policy',
+            content: 'upgrade-insecure-requests',
+          },
+        },
+      };
+    });
 
     return {
       tab: ref($route.params.action),
