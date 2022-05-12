@@ -184,7 +184,7 @@ import { defineComponent, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import axios from 'axios';
 import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
-import { useMeta, useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({
   name: 'Dashboard',
@@ -206,18 +206,6 @@ export default defineComponent({
     const containsNoAuth =
       $q.localStorage.getItem('token') === null ? true : false;
 
-    // ! DISCLAIMER: Yes, I know I have to buy a domain to get an SSL certificate but we don't have much time left.
-    useMeta(() => {
-      return {
-        meta: {
-          equiv: {
-            'http-equiv': 'Content-Security-Policy',
-            content: 'upgrade-insecure-requests',
-          },
-        },
-      };
-    });
-
     return {
       activeLink: ref(''),
       containsNoAuth,
@@ -232,7 +220,7 @@ export default defineComponent({
 
     if (!this.containsNoAuth) {
       axios
-        .get(`http://${MASTER_NODE_BACKEND_URL}/dashboard`, {
+        .get(`https://${MASTER_NODE_BACKEND_URL}/dashboard`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },
@@ -274,7 +262,7 @@ export default defineComponent({
       if (this.containsNoAuth) return;
 
       await axios.post(
-        `http://${MASTER_NODE_BACKEND_URL}/entity/logout`,
+        `https://${MASTER_NODE_BACKEND_URL}/entity/logout`,
         {
           /* ... data */
         },

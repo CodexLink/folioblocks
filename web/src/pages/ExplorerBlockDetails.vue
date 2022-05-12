@@ -184,7 +184,7 @@ export default defineComponent({
       this.associated_tx_loading_state = true;
       axios
         .get(
-          `http://${MASTER_NODE_BACKEND_URL}/explorer/block/${this.$route.params.id}`
+          `https://${MASTER_NODE_BACKEND_URL}/explorer/block/${this.$route.params.id}`
         )
         .then((response) => {
           // * Assign context from the block information.

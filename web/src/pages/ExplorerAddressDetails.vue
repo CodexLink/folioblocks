@@ -173,7 +173,7 @@ export default defineComponent({
       this.associated_tx_loading_state = true;
       axios
         .get(
-          `http://${MASTER_NODE_BACKEND_URL}/explorer/address/${this.$route.params.uuid}`
+          `https://${MASTER_NODE_BACKEND_URL}/explorer/address/${this.$route.params.uuid}`
         )
         .then((response) => {
           // * Assign context from the variables.

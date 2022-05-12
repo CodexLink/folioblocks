@@ -155,7 +155,7 @@ export default defineComponent({
     getTransactions() {
       this.txs_loading_state = true;
       axios
-        .get(`http://${MASTER_NODE_BACKEND_URL}/explorer/transactions`)
+        .get(`https://${MASTER_NODE_BACKEND_URL}/explorer/transactions`)
         .then((response) => {
           // * Assign from the tmeporary variable to modify transaction actions.
           let resolved_txs = [];

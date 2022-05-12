@@ -411,7 +411,7 @@ import { defineComponent, ref } from 'vue';
 import RegisterContainer from 'src/components/RegisterContainer.vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
-import { useMeta, useQuasar } from 'quasar';
+import { useQuasar } from 'quasar';
 import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 export default defineComponent({
   name: 'EntryForm',
@@ -448,18 +448,6 @@ export default defineComponent({
     const $router = useRouter();
     const $q = useQuasar();
 
-    // ! DISCLAIMER: Yes, I know I have to buy a domain to get an SSL certificate but we don't have much time left.
-    useMeta(() => {
-      return {
-        meta: {
-          equiv: {
-            'http-equiv': 'Content-Security-Policy',
-            content: 'upgrade-insecure-requests',
-          },
-        },
-      };
-    });
-
     return {
       tab: ref($route.params.action),
       org_options: [
@@ -477,7 +465,7 @@ export default defineComponent({
       this.isProcessing = true;
 
       axios
-        .post(`http://${MASTER_NODE_BACKEND_URL}/entity/login`, {
+        .post(`https://${MASTER_NODE_BACKEND_URL}/entity/login`, {
           username: this.login_username,
           password: this.login_password,
         })
@@ -500,7 +488,7 @@ export default defineComponent({
 
               // * Logout the token gracefully, without handling the error since we didn't do anything regarding storing something from the localStorage..
               axios.post(
-                `http://${MASTER_NODE_BACKEND_URL}/entity/logout`,
+                `https://${MASTER_NODE_BACKEND_URL}/entity/logout`,
                 {
                   /* ... data*/
                 },
@@ -628,7 +616,7 @@ export default defineComponent({
       if (payloadConditionSufficient) {
         // * Once the payload has been resolved (it's fields, ofc), do API call.
         axios
-          .post(`http://${MASTER_NODE_BACKEND_URL}/entity/register`, {
+          .post(`https://${MASTER_NODE_BACKEND_URL}/entity/register`, {
             ...defaultPayload,
           })
           .then((_response) => {

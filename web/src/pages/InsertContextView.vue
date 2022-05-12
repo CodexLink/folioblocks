@@ -703,7 +703,7 @@ export default {
       // ! Send a request.
       axios
         .post(
-          `http://${MASTER_NODE_BACKEND_URL}/node/receive_context`,
+          `https://${MASTER_NODE_BACKEND_URL}/node/receive_context`,
           {
             first_name: this.new_student_first_name,
             last_name: this.new_student_last_name,
@@ -849,7 +849,7 @@ export default {
 
         axios
           .post(
-            `http://${MASTER_NODE_BACKEND_URL}/node/receive_context_log`,
+            `https://${MASTER_NODE_BACKEND_URL}/node/receive_context_log`,
             logForm,
             {
               headers: {
@@ -936,7 +936,7 @@ export default {
       } else {
         axios
           .post(
-            `http://${MASTER_NODE_BACKEND_URL}/node/receive_context`,
+            `https://${MASTER_NODE_BACKEND_URL}/node/receive_context`,
             {
               address_origin: this.targetted_address,
               title: this.new_remark_title,
@@ -1027,7 +1027,7 @@ export default {
     getStudents() {
       this.isFetchingStudent = true;
       axios
-        .get(`http://${MASTER_NODE_BACKEND_URL}/dashboard/students`, {
+        .get(`https://${MASTER_NODE_BACKEND_URL}/dashboard/students`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },
