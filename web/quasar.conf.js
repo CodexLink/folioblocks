@@ -45,8 +45,8 @@ module.exports = configure(function (ctx) {
       vueRouterMode: 'hash', // available values: 'hash', 'history'
       // env: require('dotenv').config().parsed,
       env: {
-        // TARGET_MASTER_NODE_ADDRESS: 'folioblocks.southeastasia.azurecontainer.io',
-        TARGET_MASTER_NODE_ADDRESS: '127.0.0.1:6001',
+        TARGET_MASTER_NODE_ADDRESS: 'folioblocks.southeastasia.azurecontainer.io',
+        // TARGET_MASTER_NODE_ADDRESS: '127.0.0.1:6001',
       },
       // transpile: false,
 
