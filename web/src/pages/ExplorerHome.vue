@@ -243,7 +243,7 @@ export default defineComponent({
   methods: {
     updateDashboard() {
       axios
-        .get(`https://${MASTER_NODE_BACKEND_URL}/explorer/chain`)
+        .get(`${MASTER_NODE_BACKEND_URL}/explorer/chain`)
         .then((response) => {
           this.n_blocks = response.data.node_info.total_blocks;
           this.txs_mapping_count = response.data.node_info.total_tx_mappings;

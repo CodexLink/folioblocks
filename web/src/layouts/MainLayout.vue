@@ -220,7 +220,7 @@ export default defineComponent({
 
     if (!this.containsNoAuth) {
       axios
-        .get(`https://${MASTER_NODE_BACKEND_URL}/dashboard`, {
+        .get(`${MASTER_NODE_BACKEND_URL}/dashboard`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },
@@ -262,7 +262,7 @@ export default defineComponent({
       if (this.containsNoAuth) return;
 
       await axios.post(
-        `https://${MASTER_NODE_BACKEND_URL}/entity/logout`,
+        `${MASTER_NODE_BACKEND_URL}/entity/logout`,
         {
           /* ... data */
         },

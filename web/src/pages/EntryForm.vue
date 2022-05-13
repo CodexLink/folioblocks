@@ -465,7 +465,7 @@ export default defineComponent({
       this.isProcessing = true;
 
       axios
-        .post(`https://${MASTER_NODE_BACKEND_URL}/entity/login`, {
+        .post(`${MASTER_NODE_BACKEND_URL}/entity/login`, {
           username: this.login_username,
           password: this.login_password,
         })
@@ -488,7 +488,7 @@ export default defineComponent({
 
               // * Logout the token gracefully, without handling the error since we didn't do anything regarding storing something from the localStorage..
               axios.post(
-                `https://${MASTER_NODE_BACKEND_URL}/entity/logout`,
+                `${MASTER_NODE_BACKEND_URL}/entity/logout`,
                 {
                   /* ... data*/
                 },
@@ -616,7 +616,7 @@ export default defineComponent({
       if (payloadConditionSufficient) {
         // * Once the payload has been resolved (it's fields, ofc), do API call.
         axios
-          .post(`https://${MASTER_NODE_BACKEND_URL}/entity/register`, {
+          .post(`${MASTER_NODE_BACKEND_URL}/entity/register`, {
             ...defaultPayload,
           })
           .then((_response) => {

@@ -1,4 +1,4 @@
-export const MASTER_NODE_BACKEND_URL = process.env.TARGET_MASTER_NODE_ADDRESS
+export const MASTER_NODE_BACKEND_URL = `${process.env.BUILT_LOCALLY ? 'http' : 'https'}://${process.env.BUILT_LOCALLY ? process.env.TARGET_MASTER_NODE_ADDRESS_DEV : process.env.TARGET_MASTER_NODE_ADDRESS_PROD}`
 
 export const TABLE_DEFAULT_ROW_COUNT = 100
 

@@ -157,7 +157,7 @@ export default defineComponent({
       this.isLoadingContextFinished = false;
       axios
         .get(
-          `https://${MASTER_NODE_BACKEND_URL}/explorer/transaction/${this.$route.params.tx_hash}`
+          `${MASTER_NODE_BACKEND_URL}/explorer/transaction/${this.$route.params.tx_hash}`
         )
         .then((response) => {
           // * Destructure.

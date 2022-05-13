@@ -222,7 +222,7 @@ export default defineComponent({
   methods: {
     getUserDashboardContext() {
       axios
-        .get(`https://${MASTER_NODE_BACKEND_URL}/dashboard`, {
+        .get(`${MASTER_NODE_BACKEND_URL}/dashboard`, {
           headers: {
             'X-Token': this.$q.localStorage.getItem('token'),
           },

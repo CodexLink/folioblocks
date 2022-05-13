@@ -160,7 +160,7 @@ export default defineComponent({
     getAddresses() {
       this.addresses_loading_state = true;
       axios
-        .get(`https://${MASTER_NODE_BACKEND_URL}/explorer/addresses`)
+        .get(`${MASTER_NODE_BACKEND_URL}/explorer/addresses`)
         .then((response) => {
           // * Define the temporary container.
           let resolved_addresses = [];

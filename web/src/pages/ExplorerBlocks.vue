@@ -142,7 +142,7 @@ export default defineComponent({
     getBlocks() {
       this.block_loading_state = true;
       axios
-        .get(`https://${MASTER_NODE_BACKEND_URL}/explorer/blocks`)
+        .get(`${MASTER_NODE_BACKEND_URL}/explorer/blocks`)
         .then((response) => {
           // * Assign from the tmeporary variable to modify transaction actions.
           let resolved_blocks = [];
