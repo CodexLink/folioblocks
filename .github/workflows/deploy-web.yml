@@ -34,9 +34,9 @@ jobs:
       # # From https://stackoverflow.com/questions/58482655/what-is-the-closest-to-npm-ci-in-yarn
       - name: Step 3 | Remove Modules & Install Packages from Yarn
         run: |
-          cd web && rm -rf node_modules && yarn install --frozen-lockfile
+          cd web && yarn install
 
-      - name: Step 4 | Install Packages
+      - name: Step 4 | Build Folioblocks-Web
         run: cd web && yarn build
 
       - name: Step 5 | Deploy from `gh-pages`

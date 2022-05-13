@@ -10,7 +10,7 @@
     "backend-archival-1": "pwsh -Command clear; npm run _backend-archival-1;",
     "backend-archival-2": "pwsh -Command clear; npm run _backend-archival-2;",
     "backend-archival-3": "pwsh -Command clear; npm run _backend-archival-3;",
-    "clear-deployed-nodes": "pwsh -Command az acr repository delete --name folio --repository folioblocks-node-archival-1 --yes; az acr repository delete --name folio --repository folioblocks-node-archival-2 --yes; az acr repository delete --name folio --repository folioblocks-node-archival-3 --yes;",
+    "clear-deployed-nodes": "pwsh -Command az acr repository delete --name folio --repository folioblocks-node-master --yes; az acr repository delete --name folio --repository folioblocks-node-archival-1 --yes; az acr repository delete --name folio --repository folioblocks-node-archival-2 --yes; az acr repository delete --name folio --repository folioblocks-node-archival-3 --yes;",
     "clean-logs": "rmdir /s /q logs",
     "clear-node-files": "pwsh -Command Remove-Item -Force -Path ./folioblocks-chain.json, ./folioblocks-node.db, ./node-env.vars",
     "clean-processes": "taskkill /im python.exe /f",
