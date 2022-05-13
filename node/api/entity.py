@@ -56,7 +56,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import Table, false, func, select
 from sqlalchemy.orm import Query
-from sqlalchemy.sql.expression import Insert, Select, Update
+from sqlalchemy.sql.expression import Delete, Insert, Select, Update
 from utils.processors import save_database_state_to_volume_storage
 from utils.email import get_email_instance
 from utils.processors import hash_context, verify_hash_context
@@ -365,12 +365,29 @@ async def login_entity(
                 other_tokens_query
             )
 
-            # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
-            if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
-                raise HTTPException(
-                    detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username}` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}. Please logout other tokens or wait for them to expire.",
-                    status_code=HTTPStatus.FORBIDDEN,
+            # - Exception, specially for our scenario. We delete other tokens upon logging in, which should only renew our token instead.
+            if (
+                fetched_credential_data.type is UserEntity.MASTER_NODE_USER
+                or fetched_credential_data.type is UserEntity.ARCHIVAL_MINER_NODE_USER
+            ):
+                # ! Note that we should only maintain one node per account, other organization who hosts the nodes should have seperate accounts for those.
+                delete_existing_alive_tokens_query: Delete = tokens.delete().where(
+                    (tokens.c.from_user == fetched_credential_data.unique_address)
+                    & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
                 )
+
+                await gather(
+                    database_instance.execute(delete_existing_alive_tokens_query),
+                    save_database_state_to_volume_storage(),
+                )
+
+            else:
+                # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
+                if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
+                    raise HTTPException(
+                        detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username} ({fetched_credential_data.type})` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}. Please logout other tokens or wait for them to expire.",
+                        status_code=HTTPStatus.FORBIDDEN,
+                    )
 
             # - If all other conditions are clear, then create the JWT token.
             jwt_expire_at: datetime | None = None
