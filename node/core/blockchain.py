@@ -2549,20 +2549,6 @@ class BlockchainMechanism(ConsensusMechanism):
                 ).decode("utf-8")
             )
 
-        print(
-            "DEBUG THIS, encrypted.",
-            payload_to_encrypt.dict(),
-            export_to_json(payload_to_encrypt.dict()),
-            sha256(export_to_json(payload_to_encrypt.dict())).hexdigest(),
-        )
-
-        print(
-            "DEBUG THIS, raw",
-            payload.dict(),
-            export_to_json(payload.dict()),
-            sha256(export_to_json(payload.dict())).hexdigest(),
-        )
-
         # - Build the transaction
         try:
             built_internal_transaction: Transaction = Transaction(

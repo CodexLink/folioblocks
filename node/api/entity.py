@@ -371,13 +371,17 @@ async def login_entity(
                 or fetched_credential_data.type is UserEntity.ARCHIVAL_MINER_NODE_USER
             ):
                 # ! Note that we should only maintain one node per account, other organization who hosts the nodes should have seperate accounts for those.
-                delete_existing_alive_tokens_query: Delete = tokens.delete().where(
-                    (tokens.c.from_user == fetched_credential_data.unique_address)
-                    & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
+                update_existing_alive_tokens_query: Update = (
+                    tokens.update()
+                    .where(
+                        (tokens.c.from_user == fetched_credential_data.unique_address)
+                        & (tokens.c.state == TokenStatus.CREATED_FOR_USE)
+                    )
+                    .values(state=TokenStatus.LOGGED_OUT)
                 )
 
                 await gather(
-                    database_instance.execute(delete_existing_alive_tokens_query),
+                    database_instance.execute(update_existing_alive_tokens_query),
                     save_database_state_to_volume_storage(),
                 )
 
