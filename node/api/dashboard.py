@@ -757,7 +757,6 @@ async def get_portfolio(
             if resolved_tx_info is not None:
                 resolved_tx_logs_container.append(resolved_tx_info)
 
-    print("!!!!!!", tx_log_student_refs, tx_extra_student_refs)
 
     if tx_extra_student_refs is not None:
         for extra_info in tx_extra_student_refs:
@@ -771,7 +770,6 @@ async def get_portfolio(
             if resolved_tx_extra is not None:
                 resolved_tx_extra_container.append(resolved_tx_extra)
 
-                print("Got something from extra", resolved_tx_extra)
     # - [6] Resolve other attributes that is out of `log` and `extra` fields.
     # @o Type-hints.
 

@@ -450,7 +450,6 @@ class BlockchainMechanism(ConsensusMechanism):
             block_target_transactions = self.__chain["chain"][block_index - 1][
                 "contents"
             ]["transactions"]
-            print(block_target_transactions)
 
         except IndexError:
             logger.error("Blockchain index is out of range or out of scope.")
@@ -1740,8 +1739,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         update_tx_block_ref_query: Update = (
                             tx_content_mappings.update()
                             .where(
-                                (tx_content_mappings.c.tx_ref == each_tx.tx_hash)
-                                & (tx_content_mappings.c.block_no_ref != self.leading_block_id)
+                                tx_content_mappings.c.tx_ref == each_tx.tx_hash
                             )
                             .values(block_no_ref=self.leading_block_id)
                         )
