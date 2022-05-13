@@ -300,5 +300,5 @@ folioblocks-chain.json
 folioblocks-node.db
 node-env.vars
 backup/**
-userfiles/**
+files/**
 avatars/**

@@ -450,6 +450,7 @@ class BlockchainMechanism(ConsensusMechanism):
             block_target_transactions = self.__chain["chain"][block_index - 1][
                 "contents"
             ]["transactions"]
+            print(block_target_transactions)
 
         except IndexError:
             logger.error("Blockchain index is out of range or out of scope.")
@@ -1723,7 +1724,34 @@ class BlockchainMechanism(ConsensusMechanism):
             if (
                 calculated_user_tx >= BLOCKCHAIN_MINIMUM_USER_TRANSACTIONS_TO_BLOCK
             ) and not len(self.__unsent_block_container):
-                logger.info(f"Number of required transactions were sufficient!")
+                logger.info("Number of required transactions were sufficient!")
+
+                # - Before proceeding, ensure that the generated.
+                logger.info(
+                    "Updating other previously binded-transactions (to database) to see if block number reference mismatches the current leading block."
+                )
+
+                require_updates: bool = False
+
+                for each_tx in self.__transaction_container:
+                    if isinstance(each_tx, GroupTransaction):
+                        require_updates = True
+
+                        update_tx_block_ref_query: Update = (
+                            tx_content_mappings.update()
+                            .where(
+                                (tx_content_mappings.c.tx_ref == each_tx.tx_hash)
+                                & (tx_content_mappings.c.block_no_ref != self.leading_block_id)
+                            )
+                            .values(block_no_ref=self.leading_block_id)
+                        )
+
+                        await self.__database_instance.execute(
+                            update_tx_block_ref_query
+                        )
+
+                if require_updates:
+                    await save_database_state_to_volume_storage()
 
                 # - Create a block from all of the transactions.
                 generated_block = await self.__create_block()
