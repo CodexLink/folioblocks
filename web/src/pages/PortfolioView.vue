@@ -72,7 +72,7 @@
               }}</span>
               |
 
-              <span class="text-weight-bold q-ma-md q-mb-sm"> Role: </span
+              <span class="text-weight-bold q-ma-md q-mb-sm"> Role:</span
               >{{ log.context.role }}
             </q-item-label>
 
@@ -91,15 +91,8 @@
             </q-item-label>
             <q-item-label class="q-ml-md" style="margin-top: 2%">
               <span class="text-weight-bold text-justify q-mb-sm q-mr-md">
-                Duration Start:</span
-              >{{ log.context.duration_start }}
-              <span v-if="log.context.duration_end">|</span>
-              <span
-                class="text-weight-bold text-justify q-mb-sm q-mr-md"
-                v-if="log.context.duration_end"
-              >
-                Duration End:</span
-              >{{ log.context.duration_end }}
+                Timestamp:</span
+              >{{ log.context.timestamp }}
               <q-card-actions align="right">
                 <q-btn
                   outline
