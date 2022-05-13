@@ -51,12 +51,12 @@
         class="q-mt-sm"
       />
       <q-card-section style="margin-bottom: 0.5%">
-        <div class="text-h6">Logs</div>
+        <div class="text-h6">Documents / Logs</div>
         <div class="text-subtitle1">
           A set of contentful information that can be known as
-          <strong>logs</strong>, which should contains supporting context with
-          documents (if given). The following are associated logs to you. Click
-          them to get more infomration regarding this log.
+          <strong>documents / logs</strong>, which should contains supporting
+          context with documents (if given). The following are associated logs
+          to you. Click them to get more infomration regarding this log.
         </div>
       </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">
@@ -125,11 +125,12 @@
       />
 
       <q-card-section style="margin-bottom: 0.5%">
-        <div class="text-h6">Extras</div>
+        <div class="text-h6">Extras / Remarks</div>
         <div class="text-subtitle1">
-          A set of information that can be known as <strong>remarks</strong>. It
-          may contain judgements that reflects the state of this student. Click
-          them to get to the transaction proof.
+          A set of information that can be known as
+          <strong>extra / remarks</strong>. It may contain judgements that
+          reflects the state of this student. Click them to get to the
+          transaction proof.
         </div>
       </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">

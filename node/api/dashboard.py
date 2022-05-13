@@ -656,7 +656,7 @@ async def get_portfolio(
         confirmed_student_address = result_portfolio_context
 
         logger.info(
-            f"Student Portfolio Access: via {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} context."
+            f"Student Portfolio Access: via {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} Context."
         )
 
     else:  # * Resolves to `authorized_anonymous_user` and `authorized_org_user` being None.

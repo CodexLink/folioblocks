@@ -784,7 +784,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         )
 
                         return TransactionDetail(
-                            from_block=block_idx,
+                            from_block=block_idx + 1,
                             transaction=Transaction(**each_transaction),
                         )
 

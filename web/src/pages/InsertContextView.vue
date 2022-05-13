@@ -561,7 +561,7 @@
               color="secondary"
               v-model="new_student_password"
               type="password"
-              label="Password"
+              label="Student Password"
               :disable="isProcessing"
               hint="The password that the student uses. The developers recommends random generation of password to avoid bias."
               counter

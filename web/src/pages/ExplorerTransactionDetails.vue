@@ -42,6 +42,9 @@
 
             <p>
               Action: <strong>{{ tx_action }}</strong>
+              <em
+                >( <strong>{{ tx_action_number }}</strong> )</em
+              >
             </p>
 
             <router-link
@@ -75,7 +78,7 @@
             <code style="color: red">{{ tx_context_type_classification }}</code>
           </p>
           <p>
-            Contents:
+            Payload:
             <code class="text-justify" style="background: aliceblue">{{
               tx_literal_context
             }}</code>
@@ -135,6 +138,7 @@ export default defineComponent({
       isLoadingContextFinished: ref(false),
       tx_hash: ref('—'),
       tx_action: ref('—'),
+      tx_action_number: ref('—'),
       tx_source_address: ref('—'),
       tx_dest_address: ref('—'),
       tx_timestamp: ref('—'),
@@ -169,7 +173,7 @@ export default defineComponent({
           this.tx_source_address = response.data.transaction.from_address;
           this.tx_dest_address = response.data.transaction.to_address;
           this.tx_timestamp = response.data.transaction.timestamp;
-          this.tx_literal_context = response.data.transaction.payload.context;
+          this.tx_literal_context = response.data.transaction.payload;
           this.tx_context_signature_raw =
             response.data.transaction.signatures.raw;
           this.tx_context_signature_encrypted =
