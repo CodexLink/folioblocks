@@ -225,7 +225,7 @@ export default defineComponent({
               color: 'red',
               position: 'top',
               message: `Failed to fetch block context from the chain, please try again later. Reason: ${e.message}`,
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'mdi-cancel',
             });

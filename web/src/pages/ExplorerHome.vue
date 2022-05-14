@@ -260,7 +260,7 @@ export default defineComponent({
             color: 'red',
             position: 'top',
             message: `There was an error when fetching from the chain. Please come back and try again later. Reason: ${e.message}`,
-            Interval: 10000,
+            Interval: 5000,
             progress: true,
             icon: 'mdi-cancel',
           });
@@ -296,7 +296,7 @@ export default defineComponent({
           position: 'top',
           message:
             'Failed to parse the context given, are you sure this is correct?',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'mdi-cancel',
         });

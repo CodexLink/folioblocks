@@ -325,7 +325,26 @@
       >
         <q-tab-panel name="share_settings">
           <q-card-section>
-            <div class="text-h6 text-weight-bold">Share Settings</div>
+            <div class="text-h6 text-weight-bold">
+              Share Settings
+
+              <q-btn
+                v-if="isStudent"
+                flat
+                v-ripple
+                color="indigo"
+                style="float: right"
+                label="Copy Portfolio Link"
+                @click="copyPortfolioLink"
+                :disable="!last_state_portfolio_sharing_state"
+              >
+                <q-tooltip class="bg-purple" :offset="[10, 10]">
+                  Copies a link inlined with your portfolio's address for
+                  outside access. Note that this was enabled, only when the
+                  portfolio sharing was enabled.
+                </q-tooltip>
+              </q-btn>
+            </div>
           </q-card-section>
 
           <q-card-section class="text-justify">
@@ -334,9 +353,10 @@
             affected, <strong>including you</strong>.
           </q-card-section>
           <q-card-section class="text-justify">
-            <strong>Be careful</strong>, by applying changes (in the means of
-            clicking the apply button) will subject you to rate-limitation of
-            <strong>3 minutes.</strong>
+            <strong>Be careful</strong>, change these settings when necessary.
+            Due to implementation issues, there will be a
+            <strong>cooldown of 5 seconds</strong>
+            before it allows state changes.
           </q-card-section>
 
           <q-list style="padding-top: 3%">
@@ -432,7 +452,7 @@
             <q-card-section class="text-justify">
               Here are the fields that you can interchange even when blockchain
               already imprints the initial state of these fields.
-              <strong>Be careful</strong>, change only if necessary.
+              <strong>Be careful</strong>, change only when necessary.
             </q-card-section>
 
             <q-card-section>
@@ -518,9 +538,9 @@
 <script>
 import { defineComponent, ref } from 'vue';
 
-import { useQuasar } from 'quasar';
+import { copyToClipboard, useQuasar } from 'quasar';
 import axios from 'axios';
-import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
+import { FRONTEND_WEBAPP_URL, MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 import { useRoute, useRouter } from 'vue-router';
 
 export default defineComponent({
@@ -552,6 +572,8 @@ export default defineComponent({
       portfolio_sharing_state: ref(false),
       portfolio_show_email_state: ref(false),
       portfolio_allow_file_state: ref(false),
+      last_state_portfolio_sharing_state: ref(false),
+      portfolio_access_link: ref(null),
 
       portfolio_setting_btn_click_state: ref(false),
       editable_info_btn_click_state: ref(false),
@@ -600,6 +622,14 @@ export default defineComponent({
           this.portfolio_show_email_state = response.data.expose_email_info;
           this.portfolio_allow_file_state = response.data.show_files;
 
+          this.last_state_portfolio_sharing_state =
+            response.data.enable_sharing;
+
+          if (this.last_state_portfolio_sharing_state)
+            this.portfolio_access_link = `${FRONTEND_WEBAPP_URL}/#/portfolio?address=${this.$q.localStorage.getItem(
+              'address'
+            )}`;
+
           this.isProcessing = false;
         })
         .catch((e) => {
@@ -612,7 +642,7 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `There was an error when fetching your information. Due to this, switches will be disabled. Please refresh and try again. Reason: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -643,7 +673,7 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `There was an error when fetching your information. Due to this, fields will be disabled. Please refresh and try again. Reason: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -683,7 +713,7 @@ export default defineComponent({
             position: 'top',
             message:
               'Editable information has been saved! Refreshing in 3 seconds ...',
-            timeout: 10000,
+            timeout: 3000,
             progress: true,
             icon: 'report_problem',
           });
@@ -701,7 +731,7 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `There was an error when submitting new information. Reason: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -714,7 +744,7 @@ export default defineComponent({
         position: 'top',
         message:
           'There was an error from one of the fields. Please check and try again.',
-        timeout: 10000,
+        timeout: 5000,
         progress: true,
         icon: 'report_problem',
       });
@@ -743,7 +773,7 @@ export default defineComponent({
             position: 'top',
             message:
               'Portfolio settings has been saved! Refreshing in 3 seconds ...',
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -761,7 +791,7 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `There was an error when submitting portfolio settings. Due to this, lease refresh and try again. Reason: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -822,7 +852,7 @@ export default defineComponent({
           position: 'top',
           message:
             'You are not allowed to access this view. If you are an anonymous, please ensure that the address you copied is exactly 35 characters or the address were not found.',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'report_problem',
         });
@@ -848,7 +878,7 @@ export default defineComponent({
               : this.isOrg
               ? "You are accessing this student's portfolio as a preview. Note that you cannot modify these entries anymore."
               : "You are accessing this as a student, please check your portfolio settings on the bottom-right to adjust your portfolio's output.",
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'info',
           });
@@ -910,7 +940,7 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `There was an error when fetching portfolio. Reason: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -943,7 +973,30 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `Cannot fetch the file. You may have disabled portfolio access. | Other Reason: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
+            progress: true,
+            icon: 'report_problem',
+          });
+        });
+    },
+    copyPortfolioLink() {
+      copyToClipboard(this.portfolio_access_link)
+        .then(() => {
+          this.$q.notify({
+            color: 'green',
+            position: 'top',
+            message: 'Portfolio link copied to clipboard.',
+            timeout: 3000,
+            progress: true,
+            icon: 'info',
+          });
+        })
+        .catch(() => {
+          this.$q.notify({
+            color: 'negative',
+            position: 'top',
+            message: 'Cannot copy the portfolio link to the clipboard.',
+            timeout: 3000,
             progress: true,
             icon: 'report_problem',
           });

@@ -245,7 +245,7 @@ export default defineComponent({
             color: 'red',
             position: 'top',
             message: `There was an error when accessing the page. Info: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'mdi-cancel',
           });
@@ -280,7 +280,7 @@ export default defineComponent({
         color: 'green',
         position: 'top',
         message: 'Logout successful! See you next time!',
-        timeout: 10000,
+        timeout: 5000,
         progress: true,
         icon: 'mdi-account-check',
       });
@@ -316,7 +316,7 @@ export default defineComponent({
           color: 'red',
           position: 'top',
           message: 'You are unauthorized to navigate the requested page.',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'mdi-cancel',
         });

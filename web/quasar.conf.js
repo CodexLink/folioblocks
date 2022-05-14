@@ -10,6 +10,8 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const { configure } = require('quasar/wrappers')
 
+require('dotenv').config()
+
 module.exports = configure(function (ctx) {
   return {
     // https://quasar.dev/quasar-cli/supporting-ts
@@ -41,13 +43,15 @@ module.exports = configure(function (ctx) {
     ],
 
     // Full list of options: https://quasar.dev/quasar-cli/quasar-conf-js#Property%3A-build
+
     build: {
       vueRouterMode: 'hash', // available values: 'hash', 'history'
-      // env: require('dotenv').config().parsed,
       env: {
         TARGET_MASTER_NODE_ADDRESS_PROD: 'folioblocks.southeastasia.azurecontainer.io',
         TARGET_MASTER_NODE_ADDRESS_DEV: '127.0.0.1:6001',
-        BUILT_LOCALLY: false
+        FRONTEND_ADDRESS_PROD: 'codexlink.github.io',
+        FRONTEND_ADDRESS_DEV: '127.0.0.1:' + process.env.WEB_PORT,
+        BUILT_LOCALLY: true
       },
       // transpile: false,
 

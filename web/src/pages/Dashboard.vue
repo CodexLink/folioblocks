@@ -359,7 +359,7 @@ export default defineComponent({
             position: 'top',
             message:
               'Failed to parse data from the dashboard. Please try again.',
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'mdi-cancel',
           });

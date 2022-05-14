@@ -30,7 +30,7 @@ from blueprint.schemas import (
 from core.blockchain import BlockchainMechanism, get_blockchain_instance
 from core.constants import (
     ASYNC_TARGET_LOOP,
-    PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE,
+    PORTFOLIO_COOLDOWN_SECONDS_TO_ALLOW_STATE_CHANGE,
     USER_AVATAR_FOLDER_NAME,
     AddressUUID,
     BaseAPI,
@@ -757,7 +757,6 @@ async def get_portfolio(
             if resolved_tx_info is not None:
                 resolved_tx_logs_container.append(resolved_tx_info)
 
-
     if tx_extra_student_refs is not None:
         for extra_info in tx_extra_student_refs:
             resolved_tx_extra: PortfolioLoadedContext | None = await blockchain_instance.get_content_from_chain(
@@ -1039,7 +1038,7 @@ async def save_portfolio_settings(
                 expose_email_state=portfolio_state_payload.expose_email_info,
                 show_files=portfolio_state_payload.show_files,
                 datetime_to_allowed_changes=datetime.now()
-                + timedelta(minutes=PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE),
+                + timedelta(seconds=PORTFOLIO_COOLDOWN_SECONDS_TO_ALLOW_STATE_CHANGE),
             )
         )
 

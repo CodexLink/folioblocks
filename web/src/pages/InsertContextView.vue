@@ -727,7 +727,7 @@ export default {
             color: 'green',
             position: 'top',
             message: `Student registration finished! | Info: ${response.data.detail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -759,7 +759,7 @@ export default {
         position: 'top',
         message:
           'There was an error from one of the fields. Please check and try again.',
-        timeout: 10000,
+        timeout: 5000,
         progress: true,
         icon: 'report_problem',
       });
@@ -782,7 +782,7 @@ export default {
           color: 'green',
           position: 'top',
           message: 'Student registration fields has been cleared!',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'mdi-account-check',
         });
@@ -796,7 +796,7 @@ export default {
           color: 'negative',
           position: 'top',
           message: 'Duration start field is required!',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'report_problem',
         });
@@ -813,7 +813,7 @@ export default {
                 position: 'top',
                 message:
                   'Duration end seems to be earlier than the duration start. Please fix that.',
-                timeout: 10000,
+                timeout: 5000,
                 progress: true,
                 icon: 'report_problem',
               });
@@ -863,7 +863,7 @@ export default {
               color: 'green',
               position: 'top',
               message: `Log information has been sent from the node to blockchain! Remember about the notice regarding taking the new information in-effect. | Info: ${response.data.detail}`,
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'report_problem',
             });
@@ -881,7 +881,7 @@ export default {
               color: 'negative',
               position: 'top',
               message: `There was an error when submitting log information. Reason: ${responseDetail}`,
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'report_problem',
             });
@@ -896,7 +896,7 @@ export default {
         position: 'top',
         message:
           'There was an error from one of the log fields. Please check and ensure that all conditions are met, then try again.',
-        timeout: 10000,
+        timeout: 5000,
         progress: true,
         icon: 'report_problem',
       });
@@ -915,7 +915,7 @@ export default {
           color: 'green',
           position: 'top',
           message: 'Log referral fields has been cleared!',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'mdi-account-check',
         });
@@ -929,7 +929,7 @@ export default {
           color: 'negative',
           position: 'top',
           message: `There was an error when submitting extra information. Reason: ${e.request.statusText}`,
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'report_problem',
         });
@@ -953,7 +953,7 @@ export default {
               color: 'green',
               position: 'top',
               message: `Extra information has been sent from the nodes to blockchain! Remember about the notice regarding taking the new information in-effect. | Info: ${response.data.detail}`,
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'report_problem',
             });
@@ -971,7 +971,7 @@ export default {
               color: 'negative',
               position: 'top',
               message: `There was an error when submitting extra information. Reason: ${responseDetail}`,
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'report_problem',
             });
@@ -986,7 +986,7 @@ export default {
         position: 'top',
         message:
           'There was an error from one of the remark fields. Please check and ensure that all conditions are met, then try again.',
-        timeout: 10000,
+        timeout: 5000,
         progress: true,
         icon: 'report_problem',
       });
@@ -1001,7 +1001,7 @@ export default {
           color: 'green',
           position: 'top',
           message: 'Student remark fields has been cleared!',
-          timeout: 10000,
+          timeout: 5000,
           progress: true,
           icon: 'mdi-account-check',
         });
@@ -1050,7 +1050,7 @@ export default {
             color: 'negative',
             position: 'top',
             message: `Cannot fetch students. Reason: ${e.message}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });

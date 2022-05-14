@@ -1,4 +1,6 @@
-export const MASTER_NODE_BACKEND_URL = `${process.env.BUILT_LOCALLY ? 'http' : 'https'}://${process.env.BUILT_LOCALLY ? process.env.TARGET_MASTER_NODE_ADDRESS_DEV : process.env.TARGET_MASTER_NODE_ADDRESS_PROD}`
+const PROTOCOL_USAGE = `${process.env.BUILT_LOCALLY ? 'http' : 'https'}://`
+export const MASTER_NODE_BACKEND_URL = `${PROTOCOL_USAGE}${process.env.BUILT_LOCALLY ? process.env.TARGET_MASTER_NODE_ADDRESS_DEV : process.env.TARGET_MASTER_NODE_ADDRESS_PROD}`
+export const FRONTEND_WEBAPP_URL = `${PROTOCOL_USAGE}${process.env.BUILT_LOCALLY ? process.env.FRONTEND_ADDRESS_DEV : process.env.FRONTEND_ADDRESS_PROD}`
 
 export const TABLE_DEFAULT_ROW_COUNT = 100
 

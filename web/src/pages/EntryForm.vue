@@ -481,7 +481,7 @@ export default defineComponent({
                 position: 'top',
                 message:
                   'Node-related account is not allowed to use the dashboard. Your account can be used in logging at folioblocks-node-cli.',
-                timeout: 10000,
+                timeout: 5000,
                 progress: true,
                 icon: 'mdi-account-cancel-outline',
               });
@@ -513,7 +513,7 @@ export default defineComponent({
                 color: 'green',
                 position: 'top',
                 message: 'Login successful!',
-                timeout: 10000,
+                timeout: 5000,
                 progress: true,
                 icon: 'mdi-account-check',
               });
@@ -537,7 +537,7 @@ export default defineComponent({
             color: 'negative',
             position: 'top',
             message: `There was an error when submitting your credentials. | Info: ${responseDetail}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
@@ -626,7 +626,7 @@ export default defineComponent({
               position: 'top',
               message:
                 'Registration successful! Please check your email and login.',
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'mdi-account-check',
             });
@@ -668,7 +668,7 @@ export default defineComponent({
         position: 'top',
         message:
           'There was an error from one of the fields. Please check and try again.',
-        timeout: 10000,
+        timeout: 5000,
         progress: true,
         icon: 'report_problem',
       });

@@ -187,7 +187,7 @@ export default defineComponent({
               color: 'green',
               position: 'top',
               message: 'Addresses has been updated.',
-              timeout: 10000,
+              timeout: 5000,
               progress: true,
               icon: 'mdi-account-check',
             });
@@ -198,7 +198,7 @@ export default defineComponent({
             color: 'red',
             position: 'top',
             message: `Failed to fetch transactions from the server. Please try again later. Reason: ${e.message}`,
-            timeout: 10000,
+            timeout: 5000,
             progress: true,
             icon: 'mdi-cancel',
           });

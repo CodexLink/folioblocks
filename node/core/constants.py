@@ -165,7 +165,7 @@ DATABASE_URL_PATH: str = f"sqlite:///{DATABASE_RAW_PATH}"
 BLOCKCHAIN_RAW_PATH: str = f"{Path(__file__).cwd()}/{BLOCKCHAIN_NAME}"
 
 # # Constraints, Portfolio
-PORTFOLIO_MINUTES_TO_ALLOW_STATE_CHANGE: Final[int] = 1
+PORTFOLIO_COOLDOWN_SECONDS_TO_ALLOW_STATE_CHANGE: Final[int] = 5
 
 # # Constants, Template Models with Pydantic
 BLOCKCHAIN_NODE_JSON_TEMPLATE: dict[str, list[Any]] = {"chain": []}
