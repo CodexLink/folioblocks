@@ -310,7 +310,7 @@
                   v-model="register_password"
                   label="Password"
                   counter
-                  :type="register_show_password ? 'password' : 'text'"
+                  :type="register_show_password ? 'text' : 'password'"
                   :disable="isProcessing"
                   :rules="[
                     (val) =>
@@ -322,7 +322,7 @@
                   <template v-slot:append>
                     <q-icon
                       :name="
-                        register_show_password ? 'visibility_off' : 'visibility'
+                        register_show_password ? 'visibility' : 'visibility_off'
                       "
                       class="cursor-pointer"
                       @click="register_show_password = !register_show_password"
@@ -335,7 +335,7 @@
                   v-model="register_confirm_password"
                   label="Confirm Password"
                   counter
-                  :type="register_show_confirm_password ? 'password' : 'text'"
+                  :type="register_show_confirm_password ? 'text' : 'password'"
                   :rules="[
                     (val) =>
                       (val.length >= 8 &&
@@ -349,8 +349,8 @@
                     <q-icon
                       :name="
                         register_show_confirm_password
-                          ? 'visibility_off'
-                          : 'visibility'
+                          ? 'visibility'
+                          : 'visibility_off'
                       "
                       class="cursor-pointer"
                       @click="
@@ -438,8 +438,8 @@ export default defineComponent({
       login_password: ref(''),
 
       login_show_password: ref(true),
-      register_show_password: ref(true),
-      register_show_confirm_password: ref(true),
+      register_show_password: ref(false),
+      register_show_confirm_password: ref(false),
     };
   },
 

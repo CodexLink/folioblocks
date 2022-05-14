@@ -159,12 +159,14 @@
                 <q-file
                   class="input"
                   v-model="new_log_file"
-                  label="Document Proof (PDF Files Only)"
-                  hint="This is optionally recommended as this can be used as a supporting context. Should contain no sensitive information and 5MB max."
+                  label="Document Proof (PDF Only, 5MB Max)"
+                  hint="This is optionally recommended as this can be used as a supporting context. Should contain no sensitive information."
                   filled
                   multiple
                   clearable
-                  cor
+                  lazy-rules
+                  :error="new_log_file_invalid"
+                  @focus="new_log_file_invalid = false"
                   :disable="isProcessing"
                   accept=".pdf"
                   max-file-size="5242880"
@@ -172,6 +174,10 @@
                   <template v-slot:prepend>
                     <q-icon name="attach_file" />
                   </template>
+                  <template v-slot:error
+                    >A document or a supporting context in a PDF form is
+                    required!</template
+                  >
                 </q-file>
 
                 <q-input
@@ -179,8 +185,8 @@
                   filled
                   v-model="new_log_date_start"
                   mask="date"
-                  :rules="['new_log_date_start']"
                   label="Log Date Start"
+                  :error="new_log_date_start_invalid"
                   readonly
                   :disable="isProcessing"
                   hint="The date from where this log has started."
@@ -196,6 +202,7 @@
                         <q-date
                           v-model="new_log_date_start"
                           today-btn
+                          @click="new_log_date_start_invalid = false"
                           :options="optionsFn"
                           color="secondary"
                         >
@@ -211,15 +218,19 @@
                       </q-popup-proxy>
                     </q-icon>
                   </template>
+                  <template v-slot:error>
+                    The date may be missing or is colliding with the log date
+                    end.
+                  </template>
                 </q-input>
 
                 <q-input
                   class="input"
                   filled
                   v-model="new_log_date_end"
+                  :error="new_log_date_end_invalid"
                   mask="date"
                   :disable="isProcessing"
-                  :rules="['new_log_date_end']"
                   label="Log Date End"
                   readonly
                   hint="The date from where this log has ended. This is optional. However, when it contains a date, it should not start as early as the `Log Date Start`!"
@@ -234,6 +245,7 @@
                       >
                         <q-date
                           v-model="new_log_date_end"
+                          @click="new_log_date_end_invalid = false"
                           today-btn
                           :options="optionsFn"
                           color="secondary"
@@ -249,6 +261,9 @@
                         </q-date>
                       </q-popup-proxy>
                     </q-icon>
+                  </template>
+                  <template v-slot:error>
+                    The date is colliding with the log date start.
                   </template>
                 </q-input>
 
@@ -267,7 +282,19 @@
                     type="submit"
                     class="insert"
                     color="secondary"
-                    :disable="isProcessing"
+                    :disable="
+                      isProcessing ||
+                      this.new_log_name === null ||
+                      this.new_log_name === '' ||
+                      this.new_log_description === null ||
+                      this.new_log_description === '' ||
+                      this.new_log_role === null ||
+                      this.new_log_role === '' ||
+                      this.new_log_file === null ||
+                      this.new_log_file === '' ||
+                      this.new_log_date_start === null ||
+                      new_log_date_start === ''
+                    "
                     label="Insert"
                   />
                 </div>
@@ -351,7 +378,13 @@
                     class="insert"
                     color="secondary"
                     type="submit"
-                    :disable="isProcessing"
+                    :disable="
+                      isProcessing ||
+                      new_remark_title === null ||
+                      new_remark_title === '' ||
+                      new_remark_description === null ||
+                      new_remark_description === ''
+                    "
                     label="Insert"
                   />
                 </div>
@@ -455,11 +488,18 @@
                 v-model="new_student_email"
                 label="E-mail"
                 counter
-                lazy-rules
+                :error="new_student_email_invalid"
+                @focus="new_student_email_invalid = false"
                 hint="Ask the student regarding what email to use as this will be exposed for contacting purposes."
                 :disable="isProcessing"
                 :rules="[(val) => val.includes('@') || 'Invalid email format.']"
-              />
+                lazy-rules
+              >
+                <template v-slot:error>
+                  Please change the value of this field as your input already
+                  exists from the system.
+                </template></q-input
+              >
 
               <q-input
                 class="inputnew"
@@ -469,7 +509,9 @@
                 v-model="new_student_username"
                 label="Username"
                 hint="This will be wary of this as it will be used to login."
+                :error="new_student_username_invalid"
                 :disable="isProcessing"
+                @focus="new_student_username_invalid = false"
                 counter
                 :rules="[
                   (val) =>
@@ -477,7 +519,12 @@
                     'This should contain not less than 8 characters or more than 24 characters.',
                 ]"
                 lazy-rules
-              />
+              >
+                <template v-slot:error>
+                  Please change the value of this field as your input already
+                  exists from the system.
+                </template></q-input
+              >
             </div>
 
             <q-input
@@ -525,12 +572,11 @@
                 label="Year Level"
                 type="number"
                 :disable="isProcessing"
-                hint="Reference hint whether this student graduated in 4th year or 5th year."
+                hint="Reference hint whether this student graduated in 3rd year or 5th year."
                 counter
                 :rules="[
                   (val) =>
-                    (val >= 1 && val <= 6) ||
-                    'Year level cannot go below 1 or 7 and above.',
+                    (val >= 3 && val <= 5) || 'Year level cannot go below 2.',
                 ]"
                 lazy-rules
               />
@@ -554,24 +600,75 @@
               lazy-rules
             />
 
-            <q-input
-              class="input"
-              outlined
-              dense
-              color="secondary"
-              v-model="new_student_password"
-              type="password"
-              label="Student Password"
-              :disable="isProcessing"
-              hint="The password that the student uses. The developers recommends random generation of password to avoid bias."
-              counter
-              :rules="[
-                (val) =>
-                  (val.length >= 8 && val.length <= 64) ||
-                  'This should contain not less than 8 characters or more than 64 characters.',
-              ]"
-              lazy-rules
-            />
+            <div class="row">
+              <q-input
+                class="inputnew"
+                outlined
+                dense
+                color="secondary"
+                v-model="new_student_password"
+                label="Student Password"
+                :disable="isProcessing"
+                :type="new_student_show_password ? 'text' : 'password'"
+                hint="The password that the student will use to login."
+                counter
+                :rules="[
+                  (val) =>
+                    (val.length >= 8 && val.length <= 64) ||
+                    'This should contain not less than 8 characters or more than 64 characters.',
+                ]"
+                lazy-rules
+              >
+                <template v-slot:append>
+                  <q-icon
+                    :name="
+                      new_student_show_password
+                        ? 'visibility'
+                        : 'visibility_off'
+                    "
+                    class="cursor-pointer"
+                    @click="
+                      new_student_show_password = !new_student_show_password
+                    "
+                  />
+                </template>
+              </q-input>
+              <q-input
+                class="inputnew"
+                outlined
+                dense
+                color="secondary"
+                v-model="new_student_password_confirm"
+                label="Student Password Confirm"
+                :type="new_student_show_confirm_password ? 'text' : 'password'"
+                :disable="isProcessing"
+                hint="Repeat the password to confirm the password."
+                counter
+                :rules="[
+                  (val) =>
+                    (val.length >= 8 &&
+                      val.length <= 64 &&
+                      val == new_student_password) ||
+                    'This should match your password to confirm your password.',
+                ]"
+                lazy-rules
+              >
+                <template v-slot:append>
+                  <q-icon
+                    :name="
+                      new_student_show_confirm_password
+                        ? 'visibility'
+                        : 'visibility_off'
+                    "
+                    class="cursor-pointer"
+                    @click="
+                      new_student_show_confirm_password =
+                        !new_student_show_confirm_password
+                    "
+                  />
+                </template>
+              </q-input>
+            </div>
 
             <div class="text-center q-ma-md">
               <q-btn
@@ -588,7 +685,29 @@
                 class="insert"
                 type="submit"
                 color="secondary"
-                :disable="isProcessing"
+                :disable="
+                  isProcessing ||
+                  new_student_first_name === null ||
+                  new_student_first_name === '' ||
+                  new_student_last_name === null ||
+                  new_student_last_name === '' ||
+                  new_student_username === null ||
+                  new_student_username === '' ||
+                  new_student_email === null ||
+                  new_student_email === '' ||
+                  new_student_password === null ||
+                  new_student_password === '' ||
+                  new_student_password_confirm === null ||
+                  new_student_password_confirm === '' ||
+                  new_student_description === null ||
+                  new_student_description === '' ||
+                  new_student_personal_skills === null ||
+                  new_student_personal_skills === '' ||
+                  new_student_recent_program === null ||
+                  new_student_recent_program === '' ||
+                  new_student_prefer_role === null ||
+                  new_student_prefer_role === ''
+                "
                 label="Insert"
               />
             </div>
@@ -648,11 +767,22 @@ export default {
       new_student_username: ref(''),
       new_student_email: ref(''),
       new_student_password: ref(''),
+      new_student_password_confirm: ref(''),
       new_student_description: ref(''),
       new_student_personal_skills: ref(''),
       new_student_recent_program: ref(''),
-      new_student_recorded_year_level: ref(''),
+      new_student_recorded_year_level: ref(4),
       new_student_prefer_role: ref(''),
+
+      new_student_username_invalid: ref(false),
+      new_student_email_invalid: ref(false),
+
+      new_log_date_start_invalid: ref(false),
+      new_log_date_end_invalid: ref(false),
+      new_log_file_invalid: ref(false),
+
+      new_student_show_password: ref(false),
+      new_student_show_confirm_password: ref(false),
 
       existing_user: ref(false),
       new_user: ref(false),
@@ -709,7 +839,7 @@ export default {
             last_name: this.new_student_last_name,
             email: this.new_student_email,
             username: this.new_student_username,
-            password: this.new_student_password,
+            password: this.new_student_password_confirm,
             program: this.new_student_recent_program,
             year_level: this.new_student_recorded_year_level,
             preferred_role: this.new_student_prefer_role,
@@ -750,6 +880,19 @@ export default {
             icon: 'report_problem',
           });
 
+          // ! Catch the error and render the field to change.
+          // * Don't do this when error doesn't provide `detail` dictionary.
+          if (e.response.data !== undefined) {
+            let field_error = e.response.data.detail.split(
+              'UNIQUE constraint failed: '
+            )[1];
+
+            if (field_error == 'users.email') {
+              this.new_student_email_invalid = true;
+            } else if (field_error == 'users.username') {
+              this.new_student_username_invalid = true;
+            }
+          }
           this.isProcessing = false;
         });
     },
@@ -771,11 +914,18 @@ export default {
       this.new_student_username = null;
       this.new_student_email = null;
       this.new_student_password = null;
+      this.new_student_password_confirm = null;
       this.new_student_description = null;
       this.new_student_personal_skills = null;
       this.new_student_recent_program = null;
       this.new_student_recorded_year_level = 1;
       this.new_student_prefer_role = null;
+
+      this.new_student_show_password = false;
+      this.new_student_show_confirm_password = false;
+
+      this.new_student_email_invalid = false;
+      this.new_student_username_invalid = false;
 
       if (showMessage)
         this.$q.notify({
@@ -800,6 +950,8 @@ export default {
           progress: true,
           icon: 'report_problem',
         });
+
+        this.isProcessing = false;
       } else {
         // ! Validate the date of the duration if 'new_log_date_end' is not None.
         if (this.new_log_date_end !== null) {
@@ -817,6 +969,10 @@ export default {
                 progress: true,
                 icon: 'report_problem',
               });
+
+              this.new_log_date_start_invalid = true;
+              this.new_log_date_end_invalid = true;
+
               this.isProcessing = false;
               return;
             }
@@ -900,6 +1056,14 @@ export default {
         progress: true,
         icon: 'report_problem',
       });
+
+      if (this.new_log_file === null || this.new_log_file === '') {
+        this.new_log_file_invalid = true;
+      }
+
+      if (this.new_log_date_start === null || this.new_log_date_start === '') {
+        this.new_log_date_start_invalid = true;
+      }
     },
     clearLogForm(showMessage = true) {
       // ! Clear Context
@@ -909,6 +1073,11 @@ export default {
       this.new_log_file = null;
       this.new_log_date_start = null;
       this.new_log_date_end = null;
+
+      this.new_log_file_invalid = false;
+
+      this.new_log_date_start_invalid = false;
+      this.new_log_date_end_invalid = false;
 
       if (showMessage)
         this.$q.notify({

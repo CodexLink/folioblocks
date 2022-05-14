@@ -218,7 +218,7 @@ async def register_entity(
             or credentials.last_name is not None
         ):
             raise HTTPException(
-                detail=f"Fields for the organization registration were detected. Are you trying to register as a {UserEntity.ARCHIVAL_MINER_NODE_USER.name} or {UserEntity.MASTER_NODE_USER.name}? Please use the `folioblocks-node-cli`.",
+                detail=f"Fields for the organization registration were detected. Are you trying to register as a Node User (Archival or Master)? Please use the `folioblocks-node-cli`.",
                 status_code=HTTPStatus.FORBIDDEN,
             )
 
@@ -308,7 +308,7 @@ async def register_entity(
         except IntegrityError as e:
             raise HTTPException(
                 status_code=HTTPStatus.CONFLICT,
-                detail=f"Your credential already exists. Please request to replace your password if you already have an account. | Info: {e}",
+                detail=f"Your credential already exists. | Info: {e}",
             )
     else:
         raise HTTPException(

@@ -548,7 +548,7 @@ async def receive_file_from_dashboard(
     name: str = Form(...),
     description: str = Form(...),
     role: str = Form(...),
-    file: UploadFile | None = File(None),
+    file: UploadFile = File(...),
     duration_start: datetime = Form(...),
     duration_end: datetime | None = Form(None),
     auth_instance: JWTToken = Depends(
