@@ -1233,7 +1233,7 @@ async def validate_source_and_origin_associates(
 
     if source_address_association is None:
         raise HTTPException(
-            detail=f"Given token resolving to user (either both `source` and `target` users / addresses) fails to be resolved or the given type of an existing user is not allowed.",
+            detail=f"Given token resolving to user (either both `source` and `target` users / addresses) fails to be resolved or the given type of an existing user is not allowed to be processed.",
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         )
 

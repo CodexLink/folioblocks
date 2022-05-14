@@ -488,7 +488,7 @@ async def get_portfolio(
 
     if address is None and returned_address_ref is None:
         raise HTTPException(
-            detail="Failed to access portfolio as the parameter is empty or the user is not authorized to do so.",
+            detail="Failed to access portfolio as the given parameter is empty or the user is not authorized to do so.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
@@ -875,7 +875,7 @@ async def get_portfolio_file(
         resolved_tx_hash: str = splitted_file_hash_ref[1]
     except IndexError:
         raise HTTPException(
-            detail="File not found.", status_code=HTTPStatus.NOT_ACCEPTABLE
+            detail="File reference not found.", status_code=HTTPStatus.NOT_ACCEPTABLE
         )
 
     # * Get the transaction mapping.
@@ -966,7 +966,7 @@ async def get_portfolio_settings(
 
     if not contains_tx_mapping:
         raise HTTPException(
-            detail="Student contains no transaction mapping of their content. Report this issue to the developers for possible-workaround.",
+            detail="Student contains no transaction mapping of their content. This should not be possible. Report this issue to the developers for possible-workaround.",
             status_code=HTTPStatus.NOT_FOUND,
         )
 
@@ -1024,7 +1024,7 @@ async def save_portfolio_settings(
 
     if portfolio_expiration > datetime.now():
         raise HTTPException(
-            detail=f"Rate-limited, expires at {portfolio_expiration}. Please comeback later.",
+            detail=f"Rate-limited, you can apply new changes right after {portfolio_expiration}.",
             status_code=HTTPStatus.TOO_EARLY,
         )
 

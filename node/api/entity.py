@@ -121,7 +121,7 @@ async def register_entity(
 
     if new_user_auth_register is None:
         raise HTTPException(
-            detail="Provided `auth_token` is not found.",
+            detail="Provided `auth_token` were not found.",
             status_code=HTTPStatus.NOT_FOUND,
         )
     if (
@@ -193,7 +193,7 @@ async def register_entity(
 
         return JSONResponse(
             content={
-                "detail": f"Registration of {new_user_auth_register.account_type} is finished. Please check your email."
+                "detail": f"Registration process as a {new_user_auth_register.account_type} has been processed successfully! Please check your email for more information."
             },
             status_code=HTTPStatus.ACCEPTED,
         )
@@ -389,7 +389,7 @@ async def login_entity(
                 # - Check if this user has more than MAX_JWT_HOLD_TOKEN active JWT tokens.
                 if len(other_tokens) >= MAX_JWT_HOLD_TOKEN:
                     raise HTTPException(
-                        detail=f"This user `{fetched_credential_data.unique_address}` -> `{fetched_credential_data.username} ({fetched_credential_data.type})` withold/s {len(other_tokens)} JWT tokens. The maximum value that the user can withold should be only {MAX_JWT_HOLD_TOKEN}. Please logout other tokens or wait for them to expire.",
+                        detail=f"This user withold/s a maximum of {len(other_tokens)} JWT tokens. Please logout other tokens or wait for them to expire.",
                         status_code=HTTPStatus.FORBIDDEN,
                     )
 
@@ -480,7 +480,7 @@ async def login_entity(
 
             except IntegrityError as e:
                 raise HTTPException(
-                    detail=f"For some reason, there's an existing data of a request for new token. This is an error, please report this to the developer as possible. | Additional Info: {e}",
+                    detail=f"There's was an existing request for the new token. | Additional Info: {e}",
                     status_code=HTTPStatus.BAD_REQUEST,
                 )
 

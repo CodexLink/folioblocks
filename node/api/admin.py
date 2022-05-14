@@ -110,7 +110,7 @@ async def generate_auth_token_for_other_nodes(
 
             except IntegrityError:
                 raise HTTPException(
-                    detail=f"Cannot provide anymore `auth_token` to a user due to already having an un-expired token.",
+                    detail=f"Cannot provide anymore `auth_token` to this user due to an existing not expired token. Please check their email and try again.",
                     status_code=HTTPStatus.FORBIDDEN,
                 )
 

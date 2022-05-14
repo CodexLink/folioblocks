@@ -565,7 +565,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                 else:
                     raise HTTPException(
-                        detail="Detected transaction content types which are not supported by this method. Please contact the developer regarding this issue.",
+                        detail="Detected transaction content types that are not supported by this method. Please contact the developer regarding this issue.",
                         status_code=HTTPStatus.FORBIDDEN,
                     )
 
@@ -642,7 +642,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         if secret is None:
                             raise HTTPException(
-                                detail="Failed to parse information, please try again later",
+                                detail="Failed to parse internal node information, please try again later",
                                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
                             )
                         else:

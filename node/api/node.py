@@ -531,7 +531,7 @@ async def receive_action_from_dashboard(
     else:
         return JSONResponse(
             content={
-                "detail": f"An action `{resolved_action.name}` with a content-type of `{resolved_content_type.name}`, given by {resolved_from_address} to {resolved_to_address if resolved_to_address is not None else '<unknown, determined via process>'} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
+                "detail": f"A remark reference has been processed successfully and will be enqueued in the blockchain."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
             },
             status_code=HTTPStatus.OK,
         )
@@ -615,14 +615,14 @@ async def receive_file_from_dashboard(
 
         return JSONResponse(
             content={
-                "detail": f"An student log content given by <address hidden> to {address_origin} has been processed successfully."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
+                "detail": f"A student document / log reference has been processed successfully and will be enqueued in blockchain."  # type: ignore # ! Enum gets disregarded when variable is assigned to `NoneType`.
             },
             status_code=HTTPStatus.OK,
         )
 
     except PydanticValueError as e:
         raise HTTPException(
-            detail=f"Cannot wrapped the payload to a respective model ({StudentLogTransaction}). | Info: {e}",
+            detail=f"Cannot wrapped the payload to a respective model ({StudentLogTransaction}). This should not be possible. Please report the following information. | Info: {e}",
             status_code=HTTPStatus.BAD_REQUEST,
         )
 
