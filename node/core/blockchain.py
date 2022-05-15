@@ -70,6 +70,7 @@ from pympler.asizeof import asizeof
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from core.constants import BLOCKCHAIN_INDEX_COUNT_COVERAGE_TO_RECOVER_TXS
 from utils.email import EmailService, get_email_instance
 from utils.http import HTTPClient, get_http_client_instance
 from utils.processors import (
@@ -440,15 +441,16 @@ class BlockchainMechanism(ConsensusMechanism):
         tx_target: HashUUID,
         tx_timestamp: datetime,
         show_file: bool,
+        block_mismatch: bool = False,
     ) -> PortfolioLoadedContext | None:
 
         logger.info(
             f"Obtaining content from the chain at block {block_index}, targetting transaction hash: {tx_target}."
         )
         try:  # - Handle potential error when specified `block_index` is out of range from the in-memory loaded chain.
-            block_target_transactions = self.__chain["chain"][block_index]["contents"][
-                "transactions"
-            ]
+            block_target_transactions = self.__chain["chain"][block_index - 1][
+                "contents"
+            ]["transactions"]
 
         except IndexError:
             logger.error("Blockchain index is out of range or out of scope.")
@@ -498,6 +500,23 @@ class BlockchainMechanism(ConsensusMechanism):
                     raise HTTPException(
                         detail=f"Cannot decrypt the context due to key signature mismatch. | Info: {e}",
                         status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+                    )
+
+                # - If the block was mistmatched from the target transaction and this was the block that matches this transaction then update the transaction context mapping.
+                if block_mismatch:
+                    update_tx_map_to_block_query: Update = (
+                        tx_content_mappings.update()
+                        .where(tx_content_mappings.c.tx_ref == tx_target)
+                        .values(block_no_ref=block_index)
+                    )
+
+                    await gather(
+                        self.__database_instance.execute(update_tx_map_to_block_query),
+                        save_database_state_to_volume_storage(),
+                    )
+
+                    logger.warning(
+                        f"Transaction '{tx_target}' reference map to block #{block_index} (which was previously mismatched) were finally resolved! Database will be updated."
                     )
 
                 # - To resolve the dictionary, which should conform with the pydantic model, resolve its fields.
@@ -567,6 +586,56 @@ class BlockchainMechanism(ConsensusMechanism):
                         detail="Detected transaction content types that are not supported by this method. Please contact the developer regarding this issue.",
                         status_code=HTTPStatus.FORBIDDEN,
                     )
+
+        if not block_mismatch:
+            # - If we cannot find the transaction from this block index, then its time to iterate through the whole blocks.
+            # ! Although this will be a dangerous due to its iteration and the scale of the blocks available, we cannot predict how much when this transaction woll jump to the other block.
+            # @o To make things less easier as possible, we need to set a specific coverage that iterations on a certain amount of blocks.
+            # ? This method is likely the second method that resolves the transaction reference towards the blocks. The first one did help but its not enough.
+
+            logger.error(
+                f"Transaction '{tx_target}' were not found from the specified block #{block_index}. Attempting to find the right block."
+            )
+
+            # - Check for the block coverage of the block.
+
+            computed_block_floor: int = (
+                block_index - 1
+            ) - BLOCKCHAIN_INDEX_COUNT_COVERAGE_TO_RECOVER_TXS
+            computed_block_ceiling: int = (
+                block_index - 1
+            ) + BLOCKCHAIN_INDEX_COUNT_COVERAGE_TO_RECOVER_TXS
+
+            block_floor: int = 1 if computed_block_floor <= 0 else computed_block_floor
+            block_ceiling: int = (
+                self.main_block_id
+                if computed_block_ceiling >= self.main_block_id
+                else computed_block_ceiling
+            )
+
+            for block_coverage_index in range(block_floor, block_ceiling):
+                recursive_response: PortfolioLoadedContext | None = (
+                    await self.get_content_from_chain(
+                        block_index=block_coverage_index,
+                        tx_target=tx_target,
+                        tx_timestamp=tx_timestamp,
+                        show_file=show_file,
+                        block_mismatch=True,
+                    )
+                )
+
+                if isinstance(recursive_response, PortfolioLoadedContext):
+                    logger.info(
+                        "Recursion for resolving block mismatch reference to transaction hash has been finished."
+                    )
+                    return recursive_response
+
+            raise HTTPException(
+                detail="There was a transaction from the blockchain that is missing and cannot be resolved. Please report this issue to the developers to get it fixed.",
+                status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
+
+        return None
 
     @ensure_blockchain_ready()
     async def get_transaction(self, *, tx_hash: HashUUID) -> TransactionDetail | None:
