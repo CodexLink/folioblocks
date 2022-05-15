@@ -1730,6 +1730,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
                 require_updates: bool = False
+                last_leading_block_id: int = self.leading_block_id
 
                 for each_tx in self.__transaction_container:
                     if isinstance(each_tx, GroupTransaction):
@@ -1738,7 +1739,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         update_tx_block_ref_query: Update = (
                             tx_content_mappings.update()
                             .where(tx_content_mappings.c.tx_ref == each_tx.tx_hash)
-                            .values(block_no_ref=self.leading_block_id)
+                            .values(block_no_ref=last_leading_block_id)
                         )
 
                         await self.__database_instance.execute(
