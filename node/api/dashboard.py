@@ -586,7 +586,7 @@ async def get_portfolio(
 
     # - [1] Check if student has a `STUDENT_BASE` tx_mapping with a variety of conditions handled.
 
-    # @o Condition for the organization accessing the portfolio.
+    # @o Condition for the anonymous or organization accessing the portfolio.
     if authorized_anonymous_user or authorized_org_user:
         # - Check if the specified portfolio exists.
         check_portfolio_validity_query: Select = select(
@@ -659,7 +659,7 @@ async def get_portfolio(
             f"Student Portfolio Access: via {'Organization' if authorized_org_user and not authorized_anonymous_user else 'Anonymous / Direct link'} Context."
         )
 
-    else:  # * Resolves to `authorized_anonymous_user` and `authorized_org_user` being None.
+    else:  # * Resolves to `authorized_anonymous_user` and NOT `authorized_org_user`.
 
         # - Check if this student has its own transaction mapping.
         get_tx_ref_student_query: Select = select(
@@ -679,7 +679,7 @@ async def get_portfolio(
 
         if tx_ref_student is None:
             raise HTTPException(
-                detail=f"Student transaction mapping not found. This may be you are an organization and not an authorized `{UserEntity.STUDENT_DASHBOARD_USER.name}`.",
+                detail=f"Student portfolio reference to transaction mapping not found. This may occur when the student doesn't allow viewing of their portfolio.",
                 status_code=HTTPStatus.NOT_FOUND,
             )
 

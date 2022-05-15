@@ -445,11 +445,10 @@ class BlockchainMechanism(ConsensusMechanism):
         logger.info(
             f"Obtaining content from the chain at block {block_index}, targetting transaction hash: {tx_target}."
         )
-
         try:  # - Handle potential error when specified `block_index` is out of range from the in-memory loaded chain.
-            block_target_transactions = self.__chain["chain"][block_index - 1][
-                "contents"
-            ]["transactions"]
+            block_target_transactions = self.__chain["chain"][block_index]["contents"][
+                "transactions"
+            ]
 
         except IndexError:
             logger.error("Blockchain index is out of range or out of scope.")
@@ -1738,9 +1737,7 @@ class BlockchainMechanism(ConsensusMechanism):
 
                         update_tx_block_ref_query: Update = (
                             tx_content_mappings.update()
-                            .where(
-                                tx_content_mappings.c.tx_ref == each_tx.tx_hash
-                            )
+                            .where(tx_content_mappings.c.tx_ref == each_tx.tx_hash)
                             .values(block_no_ref=self.leading_block_id)
                         )
 
