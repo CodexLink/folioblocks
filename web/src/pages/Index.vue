@@ -63,14 +63,19 @@
 
               <q-item-section> Dashboard </q-item-section>
             </q-item>
-            <q-item clickable v-ripple to="/entry/login">
+            <q-item clickable v-ripple to="/entry/login" v-if="!isAuthorized">
               <q-item-section avatar>
                 <q-icon name="mdi-login" />
               </q-item-section>
 
               <q-item-section> Login </q-item-section>
             </q-item>
-            <q-item clickable v-ripple to="/entry/register">
+            <q-item
+              clickable
+              v-ripple
+              to="/entry/register"
+              v-if="!isAuthorized"
+            >
               <q-item-section avatar>
                 <q-icon name="mdi-account-plus" />
               </q-item-section>
@@ -93,7 +98,7 @@
             Tired of the getting rejected by suspicions of your credentials?
             Blockchain can help you gain that trust, and with us!
           </p>
-          <div class="btn">
+          <div class="btn" v-if="!isAuthorized">
             <q-btn
               class="loginbtn"
               outline

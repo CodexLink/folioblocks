@@ -46,11 +46,12 @@ module.exports = configure(function (ctx) {
 
     build: {
       vueRouterMode: 'hash', // available values: 'hash', 'history'
+      // ! Environment variables for the Production were declared here to avoid complication of parameters when building on GH Pages.
       env: {
         TARGET_MASTER_NODE_ADDRESS_PROD: 'folioblocks.southeastasia.azurecontainer.io',
-        TARGET_MASTER_NODE_ADDRESS_DEV: '127.0.0.1:6001',
+        TARGET_MASTER_NODE_ADDRESS_DEV: `127.0.0.1:${process.env.TARGET_MASTER_NODE_PORT}`,
         FRONTEND_ADDRESS_PROD: 'codexlink.github.io/folioblocks',
-        FRONTEND_ADDRESS_DEV: '127.0.0.1:' + process.env.WEB_PORT,
+        FRONTEND_ADDRESS_DEV: `127.0.0.1:${process.env.WEB_PORT}`,
         BUILT_LOCALLY: false
       },
       // transpile: false,

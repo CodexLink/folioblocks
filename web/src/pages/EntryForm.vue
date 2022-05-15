@@ -182,6 +182,8 @@
                   color="secondary"
                   counter
                   v-model="org_name"
+                  :error="register_org_name_invalid"
+                  @focus="register_org_name_invalid = false"
                   label="Organization Name"
                   hint="Must be in Title Case."
                   :rules="[
@@ -192,7 +194,12 @@
                   ]"
                   lazy-rules
                   :disable="isProcessing"
-                />
+                >
+                  <template v-slot:error>
+                    If you are inserting an existing organization, please clear
+                    this field.
+                  </template>
+                </q-input>
 
                 <q-input
                   class="double"
@@ -200,6 +207,8 @@
                   counter
                   color="secondary"
                   v-model="org_address"
+                  :error="register_org_address_invalid"
+                  @focus="register_org_address_invalid = false"
                   label="Organization Address"
                   hint="Must
                 start with 'fl:'."
@@ -207,11 +216,16 @@
                     (val) =>
                       !val.length ||
                       (val.length == 35 && val.startsWith('fl:')) ||
-                      'Invalid, format, follow the hint, and should be exactly 35 characters.',
+                      'Invalid format, should start with prefix `fl:` and should be exactly 35 characters.',
                   ]"
                   lazy-rules
                   :disable="isProcessing"
-                />
+                >
+                  <template v-slot:error>
+                    This may be required. If you are inserting a new
+                    organization, please clear this field, otherwise, proceed.
+                  </template>
+                </q-input>
               </div>
 
               <q-select
@@ -220,9 +234,18 @@
                 outlined
                 v-model="org_type_chosen"
                 :options="org_options"
+                :error="register_org_type_invalid"
+                @focus="register_org_type_invalid = false"
                 label="Organization Type"
                 :disable="isProcessing"
-              />
+              >
+                <template v-slot:error>
+                  For existing organization, please choose
+                  <strong>existing</strong> and fill up
+                  <strong>ONLY</strong> the organization address, otherwise,
+                  fill other fields that shows an error.
+                </template>
+              </q-select>
 
               <q-input
                 class="data"
@@ -232,6 +255,8 @@
                 type="textarea"
                 label="Organization Description"
                 counter
+                :error="register_org_description_invalid"
+                @focus="register_org_description_invalid = false"
                 hint="Be careful, content should be finalized before submitting."
                 :rules="[
                   (val) =>
@@ -241,7 +266,12 @@
                 ]"
                 lazy-rules
                 :disable="isProcessing"
-              />
+              >
+                <template v-slot:error>
+                  This may be required. If you are inserting an existing
+                  organization, please clear this field, otherwise, add a date.
+                </template>
+              </q-input>
 
               <q-input
                 filled
@@ -249,13 +279,21 @@
                 class="data"
                 mask="date"
                 prefix="Organization Founded"
-                :rules="['org_date']"
-                lazy-rules
                 readonly
+                :error="register_org_founded_invalid"
                 hint="The date from where your institution or your organization was founded."
                 :disable="isProcessing"
               >
                 <template v-slot:append>
+                  <q-icon
+                    name="cancel"
+                    v-if="org_date"
+                    @click.stop="
+                      org_date = '';
+                      register_org_founded_invalid = false;
+                    "
+                    class="cursor-pointer"
+                  />
                   <q-icon name="event" class="cursor-pointer">
                     <q-popup-proxy
                       ref="qDateProxy"
@@ -265,6 +303,7 @@
                     >
                       <q-date
                         v-model="org_date"
+                        @click="register_org_founded_invalid = false"
                         color="secondary"
                         today-btn
                         :options="optionsFn"
@@ -281,6 +320,11 @@
                       </q-date>
                     </q-popup-proxy>
                   </q-icon>
+                </template>
+                <template v-slot:error>
+                  This may be required. If you are inserting an existing
+                  organization, please clear this field, otherwise, check for
+                  other fields.
                 </template>
               </q-input>
 
@@ -370,8 +414,15 @@
                 label="Authentication Code"
                 hint="Remember, talk to your representatives to get your authentication code."
                 :disable="isProcessing"
+                :error="register_auth_code_invalid"
+                @focus="register_auth_code_invalid = false"
                 :rules="[(val) => val.length || 'This cannot be empty!']"
-              />
+              >
+                <template v-slot:error>
+                  Authentication code is invalid. Check your email inbox and try
+                  again.
+                </template>
+              </q-input>
 
               <q-separator />
 
@@ -436,6 +487,14 @@ export default defineComponent({
 
       login_username: ref(''),
       login_password: ref(''),
+
+      register_org_name_invalid: ref(false),
+      register_org_address_invalid: ref(false),
+      register_org_type_invalid: ref(false),
+      register_org_description_invalid: ref(false),
+      register_org_founded_invalid: ref(false),
+      register_username_invalid: ref(false),
+      register_auth_code_invalid: ref(false),
 
       login_show_password: ref(true),
       register_show_password: ref(false),
@@ -541,6 +600,7 @@ export default defineComponent({
             progress: true,
             icon: 'report_problem',
           });
+
           this.isProcessing = false;
         });
     },
@@ -572,14 +632,15 @@ export default defineComponent({
 
       // ! Check the fields from the organization.
       // - We need to ensure that both cases for referencing and creating a new organization should be handled here.
+      console.log(this.org_date, typeof this.org_date);
 
       // * Case for creating an organization. Org address should contain nothing.
       if (
         this.org_name.length &&
         !this.org_address.length &&
         this.org_description.length &&
-        (this.org_type_chosen.value == 1 || this.org_type_chosen.value == 2) &&
-        this.org_date.length
+        this.org_type_chosen.value !== null &&
+        this.org_date !== ''
       ) {
         defaultPayload.association_name = this.org_name;
         defaultPayload.association_type = this.org_type_chosen.value;
@@ -596,7 +657,7 @@ export default defineComponent({
         this.org_address.length &&
         !this.org_description.length &&
         this.org_type_chosen.value === null &&
-        !this.org_date.length
+        (this.org_date === null || this.org_date === '')
       ) {
         defaultPayload.association_address = this.org_address;
 
@@ -606,11 +667,50 @@ export default defineComponent({
           color: 'negative',
           position: 'top',
           message:
-            'There was an error when submitting your credentials. Please keep the organization address filled only when the organization exists, otherwise, fill other fields except for the organization address.',
-          timeout: 15000,
+            'Please keep the organization address filled only when the organization exists, otherwise, fill other fields except for the organization address.',
+          timeout: 5000,
           progress: true,
           icon: 'report_problem',
         });
+
+        // ! Condition for handling other fields (excluding the address) for the organization.
+        if (this.org_type_chosen.value === null) {
+          if (this.org_name !== '') this.register_org_name_invalid = true;
+          else this.register_org_name_invalid = false;
+
+          if (this.org_description !== '')
+            this.register_org_description_invalid = true;
+          else this.register_org_description_invalid = false;
+
+          if (this.org_date !== '') this.register_org_founded_invalid = true;
+          else this.register_org_founded_invalid = false;
+
+          if (this.org_address !== '')
+            this.register_org_address_invalid = false;
+          else this.register_org_address_invalid = true;
+
+          this.register_org_type_invalid = true;
+          this.isProcessing = false;
+          return;
+        } else {
+          if (this.org_name === '') this.register_org_name_invalid = true;
+          else this.register_org_name_invalid = false;
+
+          if (this.org_description === '')
+            this.register_org_description_invalid = true;
+          else this.register_org_description_invalid = false;
+
+          if (this.org_date === '') this.register_org_founded_invalid = true;
+          else this.register_org_founded_invalid = false;
+
+          if (this.org_address === '')
+            this.register_org_address_invalid = false;
+          else this.register_org_address_invalid = true;
+
+          this.register_org_type_invalid = true;
+          this.isProcessing = false;
+          return;
+        }
       }
 
       if (payloadConditionSufficient) {
@@ -643,23 +743,28 @@ export default defineComponent({
               color: 'negative',
               position: 'top',
               message: `There was an error when submitting your credentials. Reason: ${responseDetail}`,
-              timeout: 15000,
+              timeout: 5000,
               progress: true,
               icon: 'report_problem',
             });
+
+            // ! Clear previous errors.
+            this.register_org_address_invalid = false;
+            this.register_org_name_invalid = false;
+            this.register_org_type_invalid = false;
+            this.register_org_description_invalid = false;
+            this.register_org_founded_invalid = false;
+
+            if (e.response.data !== undefined) {
+              if (
+                e.response.data.detail.includes('`auth_token` were not found.')
+              ) {
+                this.register_auth_code_invalid = true;
+              }
+            }
+
             this.isProcessing = false;
           });
-      } else {
-        this.$q.notify({
-          color: 'negative',
-          position: 'top',
-          message:
-            'Payload condition regarding organization is not sufficient.',
-          timeout: 15000,
-          progress: true,
-          icon: 'report_problem',
-        });
-        this.isProcessing = false;
       }
     },
     errorOnSubmit() {

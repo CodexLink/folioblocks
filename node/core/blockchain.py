@@ -253,7 +253,7 @@ class BlockchainMechanism(ConsensusMechanism):
                         ]["hash_block"]
 
                         logger.info(
-                            f"Follow-up appending block #{each_hashed_block} from the chain ..."
+                            f"Follow-up appending block #{each_hashed_block.id} from the chain ..."
                         )
                         await self.append_block(
                             context=each_hashed_block, process_container=True

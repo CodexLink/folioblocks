@@ -236,6 +236,15 @@
                   hint="The date from where this log has ended. This is optional. However, when it contains a date, it should not start as early as the `Log Date Start`!"
                 >
                   <template v-slot:append>
+                    <q-icon
+                      name="cancel"
+                      v-if="new_log_date_end"
+                      @click.stop="
+                        new_log_date_end = null;
+                        new_log_date_end_invalid = false;
+                      "
+                      class="cursor-pointer"
+                    />
                     <q-icon name="event" class="cursor-pointer">
                       <q-popup-proxy
                         ref="qDateProxy"
@@ -875,7 +884,7 @@ export default {
             color: 'negative',
             position: 'top',
             message: `There was an error when submitting your credentials. Reason: ${responseDetail}`,
-            timeout: 15000,
+            timeout: 5000,
             progress: true,
             icon: 'report_problem',
           });
