@@ -49,7 +49,7 @@ module.exports = configure(function (ctx) {
       env: {
         TARGET_MASTER_NODE_ADDRESS_PROD: 'folioblocks.southeastasia.azurecontainer.io',
         TARGET_MASTER_NODE_ADDRESS_DEV: '127.0.0.1:6001',
-        FRONTEND_ADDRESS_PROD: 'codexlink.github.io',
+        FRONTEND_ADDRESS_PROD: 'codexlink.github.io/folioblocks',
         FRONTEND_ADDRESS_DEV: '127.0.0.1:' + process.env.WEB_PORT,
         BUILT_LOCALLY: false
       },
