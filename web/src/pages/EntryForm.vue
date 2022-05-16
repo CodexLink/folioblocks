@@ -153,11 +153,18 @@
                 v-model="email"
                 type="email"
                 label="E-mail"
+                :error="register_email_invalid"
+                @focus="register_email_invalid = false"
                 counter
                 lazy-rules
                 :disable="isProcessing"
                 :rules="[(val) => val.includes('@') || 'Invalid email format.']"
-              />
+              >
+                <template v-slot:error>
+                  E-mail may be already used. Please contact your administrator
+                  on this issue.
+                </template>
+              </q-input>
               <q-separator />
               <div>
                 <h4><strong>Organization Information</strong></h4>
@@ -489,6 +496,7 @@ export default defineComponent({
       login_password: ref(''),
 
       register_org_name_invalid: ref(false),
+      register_email_invalid: ref(false),
       register_org_address_invalid: ref(false),
       register_org_type_invalid: ref(false),
       register_org_description_invalid: ref(false),
@@ -758,6 +766,24 @@ export default defineComponent({
             if (e.response.data !== undefined) {
               if (
                 e.response.data.detail.includes('`auth_token` were not found.')
+              ) {
+                this.register_auth_code_invalid = true;
+              } else if (
+                e.response.data.detail.includes(
+                  'UNIQUE constraint failed: users.username'
+                )
+              ) {
+                this.register_username_invalid = true;
+              } else if (
+                e.response.data.detail.includes(
+                  'UNIQUE constraint failed: users.email'
+                )
+              ) {
+                this.register_email_invalid = true;
+              } else if (
+                e.response.data.detail.includes(
+                  'The supplied parameter for the `association` address reference does not exist'
+                )
               ) {
                 this.register_auth_code_invalid = true;
               }
