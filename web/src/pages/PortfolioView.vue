@@ -56,7 +56,7 @@
           A set of contentful information that can be known as
           <strong>documents / logs</strong>, which should contains supporting
           context with documents (if given). The following are associated logs
-          to you. Click them to get more infomration regarding this log.
+          to you. Click them to get more information regarding this log.
         </div>
       </q-card-section>
       <q-scroll-area style="height: 100%; max-width: 100%">

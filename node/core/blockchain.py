@@ -1838,7 +1838,9 @@ class BlockchainMechanism(ConsensusMechanism):
             )
 
             # @o When there's no miner active, sleep for a while and requeue again.
-            if available_node_info is None and generated_block:
+            if available_node_info is None and generated_block is not None:
+
+                # ! Logs regarding this code block was already outputted from the `self.__get_available_archival_miner_nodes()`.
                 self.__unsent_block_container.append(generated_block)
                 continue
 
@@ -1846,7 +1848,11 @@ class BlockchainMechanism(ConsensusMechanism):
             # @o Create a Consensus Negotiation ID for the nodes to remember that this happened.
             # @o Even though we already have the certification token, we still need this one to track current negotiations between nodes.
 
-            if generated_block is not None:
+            if available_node_info is not None and generated_block is not None:
+
+                # ! Modify the block's validator.
+                generated_block.contents.validator = available_node_info.miner_address
+
                 generated_consensus_negotiation_id: str = token_urlsafe(
                     BLOCKCHAIN_NEGOTIATION_ID_LENGTH
                 )
@@ -2045,7 +2051,9 @@ class BlockchainMechanism(ConsensusMechanism):
             prev_hash_block=resolved_prev_hash_block,
             contents=HashableBlock(
                 nonce=None,  # - This was determined during the process of hashing.
-                validator=self.node_identity[0],
+                validator=self.node_identity[
+                    0
+                ],  # ! This will get overidden on self.__block_timer_executor.
                 transactions=shadow_transaction_container,
                 timestamp=datetime.now(),
             ),
