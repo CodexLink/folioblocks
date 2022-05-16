@@ -42,9 +42,6 @@
 
             <p>
               Action: <strong>{{ tx_action }}</strong>
-              <em
-                >( <strong>{{ tx_action_number }}</strong> )</em
-              >
             </p>
 
             <router-link
@@ -138,7 +135,6 @@ export default defineComponent({
       isLoadingContextFinished: ref(false),
       tx_hash: ref('—'),
       tx_action: ref('—'),
-      tx_action_number: ref('—'),
       tx_source_address: ref('—'),
       tx_dest_address: ref('—'),
       tx_timestamp: ref('—'),

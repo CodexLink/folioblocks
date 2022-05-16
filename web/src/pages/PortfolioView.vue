@@ -70,19 +70,17 @@
               ><span class="text-weight-bold q-mb-sm">{{
                 log.context.name
               }}</span>
-              |
-
-              <span class="text-weight-bold q-ma-md q-mb-sm"> Role:</span
+              |<span class="text-weight-bold q-ma-md q-mb-sm">Role:</span
               >{{ log.context.role }}
             </q-item-label>
 
             <q-item-label class="q-ml-md" style="margin-top: 2%">
               <span class="text-weight-bold text-justify q-mb-sm q-mr-md">
-                Description: </span
+                Description:</span
               >{{ log.context.description }}</q-item-label
             >
             <q-item-label style="margin-top: 2%">
-              <span class="text-weight-bold q-ma-md q-mb-sm"> By:</span>
+              <span class="text-weight-bold q-ma-md q-mb-sm">By:</span>
               <router-link
                 :to="'/explorer/address/' + log.context.validated_by"
                 style="text-decoration: none"
@@ -90,8 +88,8 @@
               >
             </q-item-label>
             <q-item-label class="q-ml-md" style="margin-top: 2%">
-              <span class="text-weight-bold text-justify q-mb-sm q-mr-md">
-                Timestamp:</span
+              <span class="text-weight-bold text-justify q-mb-sm q-mr-md"
+                >Timestamp:</span
               >{{ log.context.timestamp }}
               <q-card-actions align="right">
                 <q-btn
@@ -117,7 +115,7 @@
         class="q-mt-sm"
       />
 
-      <q-card-section style="margin-bottom: 0.5%">
+      <q-card-section style="margin-bottom: 3.7%">
         <div class="text-h6">Extras / Remarks</div>
         <div class="text-subtitle1">
           A set of information that can be known as
@@ -138,21 +136,21 @@
           <q-item-section class="text-h6">
             <q-item-label class="q-mb-sm">
               <span class="text-bold"> {{ extra.context.title }}</span> |
-              <span class="text-bold q-ma-sm q-mb-sm q-ml-sm"> Timestamp:</span
+              <span class="text-bold q-ma-sm q-mb-sm q-ml-sm">Timestamp:</span
               >{{ extra.context.timestamp }}</q-item-label
             >
             <q-item-label
               class="q-ml-sm text-justify q-mb-sm q-ml-lg"
               style="margin-top: 2%"
             >
-              <span class="text-weight-bold q-mb-sm q-mr-sm"> Description:</span
+              <span class="text-weight-bold q-mb-sm q-mr-sm">Description:</span
               >{{ extra.context.description }}
             </q-item-label>
             <q-item-label
               class="q-ml-sm text-justify q-mb-sm q-ml-lg"
               style="margin-top: 2%"
             >
-              <span class="text-weight-bold q-mb-sm q-mr-sm"> By:</span>
+              <span class="text-weight-bold q-mb-sm q-mr-sm">By:</span>
               <router-link
                 :to="'/explorer/address/' + extra.context.inserter"
                 style="text-decoration: none"
