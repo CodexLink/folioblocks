@@ -18,19 +18,24 @@ This endpoint should be used for generating users as a associate/organization or
 from asyncio import gather
 from datetime import datetime, timedelta
 from http import HTTPStatus
+from logging import Logger, getLogger
 from sqlite3 import IntegrityError
 
 from blueprint.models import auth_codes, users
 from blueprint.schemas import GenerateAuthInput
-from core.constants import BaseAPI, NodeAPI, RequestPayloadContext, UserEntity
+from core.constants import (
+    ASYNC_TARGET_LOOP,
+    BaseAPI,
+    NodeAPI,
+    RequestPayloadContext,
+    UserEntity,
+)
 from databases import Database
 from fastapi import APIRouter, Header, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
-from .core.constants import ASYNC_TARGET_LOOP
 from utils.email import EmailService, get_email_instance
 from utils.processors import save_database_state_to_volume_storage
-from logging import getLogger, Logger
 
 logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
