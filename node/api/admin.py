@@ -20,14 +20,19 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from sqlite3 import IntegrityError
 
-from blueprint.models import auth_codes
+from blueprint.models import auth_codes, users
 from blueprint.schemas import GenerateAuthInput
 from core.constants import BaseAPI, NodeAPI, RequestPayloadContext, UserEntity
-from utils.processors import save_database_state_to_volume_storage
-from utils.email import EmailService, get_email_instance
 from databases import Database
 from fastapi import APIRouter, Header, HTTPException
-from sqlalchemy.sql.expression import Insert
+from sqlalchemy import func, select
+from sqlalchemy.sql.expression import Insert, Select, Update
+from .core.constants import ASYNC_TARGET_LOOP
+from utils.email import EmailService, get_email_instance
+from utils.processors import save_database_state_to_volume_storage
+from logging import getLogger, Logger
+
+logger: Logger = getLogger(ASYNC_TARGET_LOOP)
 
 admin_router = APIRouter(
     prefix="/admin",
@@ -61,9 +66,10 @@ async def generate_auth_token_for_other_nodes(
 
     auth_instance: PasscodeTOTP | None = get_totp_instance()
     email_instance: EmailService | None = get_email_instance()
-    db_instance: Database | None = get_database_instance()
+    database_instance: Database | None = get_database_instance()
+    require_new_token: bool = False  # * A switch for allowing a token to be renewed by sending a new email with a new code.
 
-    if auth_instance is None or email_instance is None or db_instance is None:
+    if auth_instance is None or email_instance is None or database_instance is None:
         raise HTTPException(
             detail="Instance is not yet ready. This means, the system is not yet ready to take special requests. Try again later.",
             status_code=HTTPStatus.ACCEPTED,
@@ -90,29 +96,88 @@ async def generate_auth_token_for_other_nodes(
             generated_token: str = generate_auth_token()
 
             try:
-                insert_generated_token_query: Insert = auth_codes.insert().values(
-                    code=generated_token,
-                    account_type=payload.role,
-                    to_email=payload.email,
-                    expiration=datetime.now() + timedelta(days=2),
+                # - First check, check if this user was already an existing user via checking the 'users' table.
+                check_existing_user_via_users_query: Select = select(
+                    [func.count()]
+                ).where(users.c.email == payload.email)
+
+                user_email_exists_via_users = await database_instance.fetch_val(
+                    check_existing_user_via_users_query
                 )
 
-                await gather(
-                    db_instance.execute(insert_generated_token_query),
-                    save_database_state_to_volume_storage(),
+                if user_email_exists_via_users:
+                    raise HTTPException(
+                        detail="Cannot create authentication code due to the user already existing from the system! Please check and get their login credentials checked.",
+                        status_code=HTTPStatus.FORBIDDEN,
+                    )
+
+                # - Last check the given email from the authentication code table ('auth_codes').
+                check_existing_user_via_auth_token_query: Select = select(
+                    [func.count(), auth_codes.c.expiration]
+                ).where(auth_codes.c.to_email == payload.email)
+
+                user_context_from_auth_codes = await database_instance.fetch_val(
+                    check_existing_user_via_auth_token_query
                 )
 
+                if (
+                    user_context_from_auth_codes
+                    and datetime.now() < user_context_from_auth_codes.expiration
+                ):
+                    raise HTTPException(
+                        detail="The email associated from this request already has an authentication code!",
+                        status_code=HTTPStatus.FORBIDDEN,
+                    )
+                elif (
+                    user_context_from_auth_codes
+                    and datetime.now() >= user_context_from_auth_codes.expiration
+                ):
+                    require_new_token = True
+                    logger.warning(
+                        "An expired authentication code has been detected from one of the queried email, renewal will be processed. Check for the log regarding email services sending a renewed token."
+                    )
+
+                # - Handle new token to be renewal or literally a new one.
+                if require_new_token:
+                    update_expired_token_query: Update = (
+                        auth_codes.update()
+                        .where(auth_codes.c.to_email == payload.email)
+                        .values(token=generated_token)
+                    )
+                    await gather(
+                        database_instance.execute(update_expired_token_query),
+                        save_database_state_to_volume_storage(),
+                    )
+
+                else:
+                    insert_generated_token_query: Insert = auth_codes.insert().values(
+                        code=generated_token,
+                        account_type=payload.role,
+                        to_email=payload.email,
+                        expiration=datetime.now() + timedelta(days=2),
+                    )
+                    await gather(
+                        database_instance.execute(insert_generated_token_query),
+                        save_database_state_to_volume_storage(),
+                    )
+
+                # ! Do not change this, regardless of the token's existence and its state.
+                # - I have no time for that.
                 await email_instance.send(
                     content=f"<html><body><h1>Auth Code for the Folioblock's {payload.role.value}!</h1><p>Thank you for taking part in our ecosystem! To register, please enter the following auth code. Remember, <b>do not share this code to anyone.</b></p><h4>Auth Code: {generated_token}<b></b></h4><br><p>Didn't know who sent this? Please consult your representives of your organization / institution regarding this matter.</p><a href='https://github.com/CodexLink/folioblocks'>Learn the development progression on Github.</a></body></html>",
                     subject=f"Auth Code for Registration as a {payload.role.value} at Folioblocks",
                     to=payload.email,
                 )
 
-            except IntegrityError:
+            except IntegrityError as e:
                 raise HTTPException(
-                    detail=f"Cannot provide anymore `auth_token` to this user due to an existing not expired token. Please check their email and try again.",
+                    detail=f"Cannot provide anymore authentication token to the requested user. Please report the following error: {e}",
                     status_code=HTTPStatus.FORBIDDEN,
                 )
+
+            logger.info(
+                "Authentication code has been sent from one the requested users. Check preceeding logs for more information."
+            )
 
             return {
                 "detail": f"Invocation of the email for registration as a {payload.role.value} were successful."
