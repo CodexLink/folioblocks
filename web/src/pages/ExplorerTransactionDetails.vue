@@ -41,7 +41,8 @@
             </router-link>
 
             <p>
-              Action: <strong>{{ tx_action }}</strong>
+              Action: <strong>{{ tx_action }}</strong> (
+              {{ tx_action_number }} )
             </p>
 
             <router-link
@@ -85,13 +86,15 @@
         <q-card-section>
           <div class="text-h6">Transaction Context Signature</div>
           <div class="text-subtitle1">
-            For validity, the following fields shows the hash integrity of the
-            context, both in its <code style="color: red">encrypted</code> and
-            <code style="color: red">raw</code> form. Note that, for the case of
-            <code style="color: red">Internal Transaction</code>, you can verify
-            the encrypted hash by encrypting the context provided. For the case
-            of <code style="color: red">External Transaction</code>, you can
-            verify the raw hash by decrypting its context.
+            For validity of the payload, the following fields shows the hash
+            integrity of the context, both in its
+            <code style="color: red">encrypted</code> and
+            <code style="color: red">raw</code> form. Note that if the
+            transaction is classified as
+            <code style="color: red">internal transaction</code>, the payload is
+            already decrypted. For the case of a transaction classified as
+            <code style="color: red">user transaction</code>, the payload is
+            encrypted. Ask the administrator for the validity of the payload.
           </div>
         </q-card-section>
 
@@ -135,6 +138,7 @@ export default defineComponent({
       isLoadingContextFinished: ref(false),
       tx_hash: ref('—'),
       tx_action: ref('—'),
+      tx_action_number: ref('—'),
       tx_source_address: ref('—'),
       tx_dest_address: ref('—'),
       tx_timestamp: ref('—'),
@@ -177,6 +181,7 @@ export default defineComponent({
 
           // * Bind it from the attribute.
           this.tx_context_type = resolvedTypeValue;
+          this.tx_action_number = response.data.transaction.action;
           this.tx_context_type_classification = identifiedType;
 
           this.isLoadingContextFinished = true;
