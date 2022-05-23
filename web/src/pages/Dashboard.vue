@@ -153,7 +153,7 @@
               color="secondary"
               outlined
               type="number"
-              style="font-weight: unset !important"
+              style="font-size: unset !important; font-weight: unset !important"
               :disable="isProcessing"
               :error="auth_passcode_invalid"
               @focus="auth_passcode_invalid = false"
