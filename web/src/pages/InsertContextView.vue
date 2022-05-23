@@ -747,11 +747,11 @@
 </template>
 
 <script>
-import { ref } from 'vue';
-import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
+import { useQuasar } from 'quasar';
+import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 
 export default {
   setup() {
@@ -760,6 +760,9 @@ export default {
     const $router = useRouter();
 
     return {
+      $q,
+      $route,
+      $router,
       selected_section: ref('insert_docs'),
       targetted_address: ref(null),
       targetted_number: ref(null),

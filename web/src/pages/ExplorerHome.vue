@@ -152,12 +152,11 @@
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue';
-import { useQuasar } from 'quasar';
 import axios from 'axios';
-import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
+import { defineComponent, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import * as https from 'https';
+import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
+
 const block_cols = [
   {
     name: 'Block ID',

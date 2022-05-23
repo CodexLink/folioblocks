@@ -512,11 +512,14 @@ export default defineComponent({
   },
 
   setup() {
+    const $q = useQuasar();
     const $route = useRoute();
     const $router = useRouter();
-    const $q = useQuasar();
 
     return {
+      $q,
+      $route,
+      $router,
       tab: ref($route.params.action),
       org_options: [
         { label: 'Existing', value: null },

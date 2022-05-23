@@ -102,15 +102,14 @@
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue';
-import { useQuasar } from 'quasar';
 import axios from 'axios';
+import { defineComponent, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   MASTER_NODE_BACKEND_URL,
   resolveTransactionActions,
   TABLE_DEFAULT_ROW_COUNT,
 } from '/utils/utils.js';
-import { useRoute, useRouter } from 'vue-router';
 
 const tx_cols = [
   {

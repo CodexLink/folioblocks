@@ -214,8 +214,8 @@ export default defineComponent({
   },
   setup() {
     const $q = useQuasar();
-    const $router = useRouter();
     const $route = useRoute();
+    const $router = useRouter();
     const leftDrawerOpen = ref(false);
     const containsNoAuth =
       $q.localStorage.getItem('token') === null ? true : false;
@@ -223,6 +223,9 @@ export default defineComponent({
       $q.localStorage.getItem('role') === 'Administrator' ? true : false;
 
     return {
+      $q,
+      $route,
+      $router,
       activeLink: ref(''),
       containsNoAuth,
       isMaster,

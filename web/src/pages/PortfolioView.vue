@@ -593,6 +593,9 @@ export default defineComponent({
     const $router = useRouter();
 
     return {
+      $q,
+      $route,
+      $router,
       logModalState: ref(false),
       selectedLog: ref(null),
     };

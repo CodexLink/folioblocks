@@ -92,15 +92,14 @@
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue';
-import { useQuasar } from 'quasar';
 import axios from 'axios';
+import { useQuasar } from 'quasar';
+import { defineComponent, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
-  resolveContextType,
   MASTER_NODE_BACKEND_URL,
   resolveTransactionActions,
 } from '/utils/utils.js';
-import { useRoute, useRouter } from 'vue-router';
 
 const tx_cols = [
   {

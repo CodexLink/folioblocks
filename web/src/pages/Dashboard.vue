@@ -467,11 +467,14 @@ export default defineComponent({
     };
   },
   setup() {
+    const $q = useQuasar();
     const $route = useRoute();
     const $router = useRouter();
-    const $q = useQuasar();
 
     return {
+      $q,
+      $route,
+      $router,
       auth_user_types: [
         { label: 'Organization User', value: 'Organization Dashboard User' },
         { label: 'Archival Miner Node', value: 'Archival Miner Node User' },
