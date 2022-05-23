@@ -52,7 +52,7 @@ module.exports = configure(function (ctx) {
         TARGET_MASTER_NODE_ADDRESS_DEV: `127.0.0.1:${process.env.TARGET_MASTER_NODE_PORT}`,
         FRONTEND_ADDRESS_PROD: 'codexlink.github.io/folioblocks',
         FRONTEND_ADDRESS_DEV: `127.0.0.1:${process.env.WEB_PORT}`,
-        BUILT_LOCALLY: true
+        BUILT_LOCALLY: false
       },
       // transpile: false,
 
