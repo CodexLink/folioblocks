@@ -239,7 +239,7 @@
         </q-card>
       </q-dialog>
 
-      <div class="main" v-if="user_role !== 'Administrator'">
+      <div class="main">
         <q-card class="blocks">
           <q-linear-progress
             :value="context_right_progress_top"
@@ -275,14 +275,24 @@
               color="red"
               class="q-mt-sm"
             />
-            <p class="text-caption">Log Percentage by Bar</p>
+            <p class="text-caption" v-if="user_role !== 'Administrator'">
+              Log Percentage by Bar
+            </p>
+            <p class="text-caption" v-if="user_role === 'Administrator'">
+              Average Transactions Per Block
+            </p>
             <q-linear-progress
               :value="context_left_progress_bottom"
               rounded
               color="secondary"
               class="q-mt-sm"
             />
-            <p class="text-caption">Extra Percentage by Bar</p>
+            <p class="text-caption" v-if="user_role !== 'Administrator'">
+              Extra Percentage by Bar
+            </p>
+            <p class="text-caption" v-if="user_role === 'Administrator'">
+              Mappings over Transactions
+            </p>
           </q-card-section>
           <q-separator />
           <q-card-section style="transform: translateY(5%)">
@@ -355,14 +365,14 @@ let dashboardOptions = {
       'Refer Credentials',
       'Generate Auth Code',
     ],
-    links: ['/org/insert/new', '/org/insert/standby', ''],
+    links: ['/org/insert/new', '/org/insert/standby', '#'],
     context: {
       left: {
         title: 'Logs vs Extra Info Dominance',
         subtitle:
           'The following visualization is a percetange-equivalent of logs vs extra information being inserted frequently.',
         another:
-          'The progression bar only visualize these the provided data in terms of ratio-to-ratio, and thurs an estimation was done per page refresh.',
+          'The progression bar only visualize these provided data in terms of ratio-to-ratio, and thurs an estimation was done per page refresh.',
       },
       right_top: {
         title: 'Total Associations',
@@ -376,6 +386,23 @@ let dashboardOptions = {
   },
   master: {
     buttons: ['Generate Auth Code', '—'],
+    context: {
+      left: {
+        title: 'Node Entity Ratio Information',
+        subtitle:
+          'Here are some interesting information regarding the consistency of the transactions per block as well as the number of mappings with respect to the number of transactions.',
+        another:
+          'The progression bar only visualize these provided data in terms of ratio-to-ratio, some of these statistics are built to be a placeholder over an empty dashboard.',
+      },
+      right_top: {
+        title: 'Currently Hashing?',
+        icon: 'mdi-pound-box',
+      },
+      right_bottom: {
+        title: 'Currently Sleeping?',
+        icon: 'mdi-sleep',
+      },
+    },
   },
 };
 
@@ -619,6 +646,62 @@ export default defineComponent({
         this.user_address = this.$q.localStorage.getItem('address');
         this.user_role = this.$q.localStorage.getItem('role');
         this.exclusive_button = dashboardOptions.master.buttons[0];
+
+        this.context_left = dashboardOptions.master.context.left.title;
+        this.context_left_primary =
+          dashboardOptions.master.context.left.subtitle;
+        this.context_left_secondary =
+          dashboardOptions.master.context.left.another;
+        this.context_right_bottom =
+          dashboardOptions.master.context.right_bottom.title;
+        this.context_right_bottom_icon =
+          dashboardOptions.master.context.right_bottom.icon;
+        this.context_right_top =
+          dashboardOptions.master.context.right_top.title;
+        this.context_right_top_icon =
+          dashboardOptions.master.context.right_top.icon;
+
+        axios
+          .get(`${MASTER_NODE_BACKEND_URL}/node/info`)
+          .then((response) => {
+            // ! The value 5 is the expected average of the transactions per block.
+            this.context_left_progress_top =
+              response.data.statistics.total_transactions /
+              response.data.statistics.total_blocks /
+              5;
+            this.context_left_progress_bottom =
+              response.data.statistics.total_tx_mappings /
+              response.data.statistics.total_addresses /
+              100;
+
+            this.context_right_progress_top =
+              (response.data.properties.is_hashing ? 100 : 0) / 100;
+            this.context_right_progress_bottom =
+              (response.data.properties.is_sleeping ? 100 : 0) / 100;
+
+            this.context_right_top_primary = `The node is currently ${
+              response.data.properties.is_hashing ? 'hashing' : 'not hashing'
+            } as master nodes should only handle transactions.`;
+
+            this.context_right_bottom_primary = `The node is currently ${
+              response.data.properties.is_sleeping ? 'sleeping' : 'not sleeping'
+            } as it only give consensus cooldown timer.`;
+          })
+          .catch((e) => {
+            const responseDetail =
+              e.response.data === undefined
+                ? `${e.message}. Server may be unvailable. Please try again later.`
+                : e.response.data.detail;
+
+            this.$q.notify({
+              color: 'negative',
+              position: 'top',
+              message: `There was an error when requesting data to the node. | Info: ${responseDetail}`,
+              timeout: 5000,
+              progress: true,
+              icon: 'report_problem',
+            });
+          });
       }
     },
     submitAuthRequest() {
