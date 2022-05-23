@@ -315,7 +315,7 @@ if parsed_args.node_role is NodeType.MASTER_NODE:
 
     @api_handler.on_event("startup")
     @repeat_every(seconds=120, wait_first=True)
-    async def jwt_invalidation_on_users() -> None:
+    async def jwt_session_invalidator() -> None:
         database_instance: Database = get_database_instance()
 
         ## Query available tokens.

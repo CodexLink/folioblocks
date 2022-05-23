@@ -1212,7 +1212,7 @@ async def validate_source_and_origin_associates(
     # - Once done, check if the database returns something.
     if resolved_source_address is None:
         raise HTTPException(
-            detail="The user may be impossibly alive due to the token's state of being inactive or labelled as expired or does not exists.",
+            detail="The user may be impossibly alive due to the token's state of being inactive or labeled as expired or does not exists.",
             status_code=HTTPStatus.UNAUTHORIZED,
         )
 

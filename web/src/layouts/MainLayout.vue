@@ -123,6 +123,20 @@
             <q-item
               clickable
               v-ripple
+              to="/org/insert/new"
+              :active="activeLink === 'new-students'"
+              @click="activeLink = 'new-students'"
+              active-class="active-state"
+            >
+              <q-item-section avatar>
+                <q-icon name="mdi-account-multiple-plus" />
+              </q-item-section>
+
+              <q-item-section> Generate Student Users </q-item-section>
+            </q-item>
+            <q-item
+              clickable
+              v-ripple
               to="/org/insert/standby"
               :active="activeLink === 'new-credentials'"
               @click="activeLink = 'new-credentials'"
@@ -132,7 +146,7 @@
                 <q-icon name="mdi-file-account" />
               </q-item-section>
 
-              <q-item-section> Insert Credentials / Students </q-item-section>
+              <q-item-section> Refer Credentials </q-item-section>
             </q-item>
           </div>
 
@@ -205,10 +219,13 @@ export default defineComponent({
     const leftDrawerOpen = ref(false);
     const containsNoAuth =
       $q.localStorage.getItem('token') === null ? true : false;
+    const isMaster =
+      $q.localStorage.getItem('role') === 'Administrator' ? true : false;
 
     return {
       activeLink: ref(''),
       containsNoAuth,
+      isMaster,
       leftDrawerOpen,
       toggleLeftDrawer() {
         leftDrawerOpen.value = !leftDrawerOpen.value;
@@ -217,8 +234,7 @@ export default defineComponent({
   },
   mounted() {
     // ! Call the function from checking the path and the authentication.
-
-    if (!this.containsNoAuth) {
+    if (!this.containsNoAuth && !this.isMaster) {
       axios
         .get(`${MASTER_NODE_BACKEND_URL}/dashboard`, {
           headers: {
@@ -253,6 +269,10 @@ export default defineComponent({
           // * Clear the session.
           this.$q.localStorage.clear();
         });
+    } else if (!this.containsNoAuth && this.isMaster) {
+      this.user = '<No Name>';
+      this.html_user_avatar = 'https://ui-avatars.com/api/?name=??';
+      this.role = this.$q.localStorage.getItem('role');
     } else {
       this.checkPathAndAuth();
     }
@@ -289,8 +309,6 @@ export default defineComponent({
       if (
         // - Conditions for prohibiting non-student users from accessing respective pages, except for portfolio.
         (this.$route.path.includes('/dashboard') && this.containsNoAuth) ||
-        (this.$route.path.includes('/user_info') &&
-          this.role !== 'Student Dashboard User') ||
         // ! Condition for prohibiting students accessing `/org` endpoints.
         (this.$route.path.includes('/org') &&
           this.role !== 'Organization Dashboard User') ||
@@ -305,7 +323,7 @@ export default defineComponent({
         // ! Condition for prohibiting anonymous users from accessing the portfolio when its `address` query were invalid.
         (this.$route.path.includes('/portfolio') &&
           this.$route.query.address === undefined &&
-          this.role === 'Unidentified')
+          (this.role === 'Unidentified' || this.role === 'Administrator'))
       ) {
         void this.$router.push({
           path: this.containsNoAuth ? '/' : '/dashboard',
@@ -349,7 +367,6 @@ export default defineComponent({
 }
 
 h2 {
-  font-family: 'Poppins';
   font-size: 2.5em;
   font-weight: 500;
   text-align: center;
@@ -357,7 +374,6 @@ h2 {
 }
 
 h4 {
-  font-family: 'Poppins';
   font-size: 1.4em;
 }
 
@@ -374,12 +390,11 @@ img {
 
 .toolbar-items {
   font-size: 0.8em;
-  font-family: 'Poppins';
+
   margin-left: 5%;
 }
 
 .webtitle {
-  font-family: 'Poppins';
   margin-left: 1%;
 }
 

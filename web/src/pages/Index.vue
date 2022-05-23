@@ -196,13 +196,13 @@ export default defineComponent({
 .mb-3 {
   padding-top: 15%;
   text-align: center;
-  font-family: 'Poppins';
+
   font-size: 3.5em;
 }
 
 .mb-4 {
   text-align: center;
-  font-family: 'Poppins';
+
   font-size: 1.5em;
 }
 
@@ -259,12 +259,10 @@ p {
 h5 {
   margin-top: 10%;
   font-weight: 700;
-  font-family: 'Poppins';
 }
 
 ul,
 .info-txt {
-  font-family: 'Poppins';
   font-weight: 400;
   font-size: 1.5em;
   margin: 50px;
@@ -287,7 +285,7 @@ ul,
   margin-left: 2%;
   margin-top: 20px;
   padding: 10px;
-  font-family: 'Poppins';
+
   font-weight: 400;
 }
 
@@ -304,7 +302,6 @@ ul,
     font-size: 1.5em;
     margin-top: 10%;
     font-weight: 700;
-    font-family: 'Poppins';
   }
   p {
     font-size: 0.8rem;
@@ -326,17 +323,16 @@ ul,
   .mb-3 {
     padding-top: 30%;
     text-align: center;
-    font-family: 'Poppins';
+
     font-size: 2em;
   }
 
   .mb-4 {
     text-align: center;
-    font-family: 'Poppins';
+
     font-size: 1em;
   }
   .info-txt {
-    font-family: 'Poppins';
     font-weight: 400;
     font-size: 1.3em;
     margin: 50px;

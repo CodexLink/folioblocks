@@ -236,21 +236,21 @@ export default defineComponent({
 
 <style scoped>
 h5 {
-  font-family: 'Poppins';
+
   font-weight: 500;
   margin: 0.5%;
   margin-left: 4%;
 }
 
 h3 {
-  font-family: 'Poppins';
+
   font-weight: 500;
   margin-top: 7%;
   line-height: 25px;
 }
 
 p {
-  font-family: 'Poppins';
+
   font-size: 1.5em;
 }
 
@@ -259,7 +259,7 @@ p {
 }
 
 .user {
-  font-family: 'Poppins';
+
   font-size: 1.5em;
 }
 
@@ -305,14 +305,14 @@ p {
   }
 
   .user {
-    font-family: 'Poppins';
+
     font-size: 1.5em;
     font-weight: 600;
     line-height: 0px;
   }
 
   h3 {
-    font-family: 'Poppins';
+
     font-weight: 500;
     margin-top: 40px;
     line-height: 25px;
@@ -338,7 +338,7 @@ p {
   }
 
   .user {
-    font-family: 'Poppins';
+
     font-size: 1em;
     font-weight: 600;
     line-height: 0px;
@@ -346,7 +346,7 @@ p {
 
   h3 {
     font-size: 1.5em;
-    font-family: 'Poppins';
+
     font-weight: 500;
     margin-top: 20px;
     line-height: 25px;
@@ -361,7 +361,7 @@ p {
   }
 
   p {
-    font-family: 'Poppins';
+
     font-size: 1em;
   }
 

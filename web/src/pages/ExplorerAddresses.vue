@@ -224,7 +224,6 @@ export default defineComponent({
 }
 
 h5 {
-  font-family: 'Poppins';
   font-weight: 500;
   margin: 0.5%;
   margin-left: 4%;

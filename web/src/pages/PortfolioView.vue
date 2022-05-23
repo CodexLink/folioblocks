@@ -1006,7 +1006,6 @@ export default defineComponent({
 
 <style scoped>
 * {
-  font-family: 'Poppins';
 }
 .header {
   background-color: #a7eaff;

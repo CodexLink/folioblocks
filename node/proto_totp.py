@@ -3,16 +3,21 @@ from dotenv import load_dotenv
 from core.dependencies import PasscodeTOTP
 from time import time
 
+from core.constants import AUTH_CODE_APP_NAME, AUTH_CODE_ISSUER_NAME
+
 load_dotenv("node-env.vars")  # ! Adjust this as possible.
-otp_interval: int = 15
+otp_interval: int = 30
 
 AUTH_KEY: str | None = env.get("AUTH_KEY", None)
 SECRET_KEY: str | None = env.get("SECRET_KEY", None)
 
 if AUTH_KEY is not None and SECRET_KEY is not None:
     totp_instance: PasscodeTOTP = PasscodeTOTP(
-        base_code=[AUTH_KEY, SECRET_KEY], interval=otp_interval, issuer="local"
+        base_code=[AUTH_KEY, SECRET_KEY],
+        name=AUTH_CODE_APP_NAME,
+        issuer=AUTH_CODE_ISSUER_NAME,
     )
+
 else:
     print("`AUTH_KEY` or `SECRET_KEY` is missing.")
     exit(-1)

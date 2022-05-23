@@ -325,7 +325,6 @@ export default defineComponent({
 }
 
 .alias {
-  font-family: 'Poppins';
   font-size: 1.3em;
   text-align: center;
   margin-bottom: 5%;
@@ -350,14 +349,13 @@ export default defineComponent({
 
 .dataheader {
   font-size: 2em;
-  font-family: 'Poppins';
+
   font-weight: 500;
   line-height: 0px;
   margin-left: 10%;
 }
 
 h4 {
-  font-family: 'Poppins';
   font-size: 1.8em;
   font-weight: 400;
   margin-left: 10%;
@@ -391,13 +389,11 @@ h4 {
 }
 
 h5 {
-  font-family: 'Poppins';
   font-weight: 500;
   margin: 0%;
 }
 
 h2 {
-  font-family: 'Poppins';
   font-size: 2.5em;
   font-weight: 500;
   text-align: center;
@@ -446,7 +442,6 @@ h2 {
   }
 
   h4 {
-    font-family: 'Poppins';
     font-size: 0.8em;
     font-weight: 400;
     line-height: 30px;
@@ -455,18 +450,17 @@ h2 {
 
   p {
     font-size: 1em;
-    font-family: 'Poppins';
   }
   .dataheader {
     font-size: 1em;
-    font-family: 'Poppins';
+
     font-weight: 500;
     line-height: 0px;
     margin-left: 0%;
   }
   h5 {
     font-size: 1.3em;
-    font-family: 'Poppins';
+
     font-weight: 500;
     margin: 0%;
   }
@@ -485,7 +479,6 @@ h2 {
   }
 
   h2 {
-    font-family: 'Poppins';
     font-size: 2em;
     font-weight: 500;
     text-align: center;
@@ -494,7 +487,6 @@ h2 {
   }
 
   .alias {
-    font-family: 'Poppins';
     font-size: 1em;
     text-align: center;
     margin-bottom: 5%;
@@ -534,7 +526,6 @@ h2 {
   }
 
   h4 {
-    font-family: 'Poppins';
     font-size: 0.8em;
     font-weight: 400;
     line-height: 15px;
@@ -543,18 +534,17 @@ h2 {
 
   p {
     font-size: 1em;
-    font-family: 'Poppins';
   }
   .dataheader {
     font-size: 1em;
-    font-family: 'Poppins';
+
     font-weight: 500;
     line-height: 0px;
     margin-left: 0%;
   }
   h5 {
     font-size: 1.3em;
-    font-family: 'Poppins';
+
     font-weight: 500;
     margin: 0%;
   }
@@ -573,7 +563,6 @@ h2 {
   }
 
   h2 {
-    font-family: 'Poppins';
     font-size: 2em;
     font-weight: 500;
     text-align: center;
@@ -581,7 +570,6 @@ h2 {
   }
 
   .alias {
-    font-family: 'Poppins';
     font-size: 1em;
     text-align: center;
     margin-bottom: 5%;

@@ -6,6 +6,5 @@
 
 <style scoped>
 div {
-  font-family: 'Poppins';
 }
 </style>

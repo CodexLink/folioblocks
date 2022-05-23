@@ -461,14 +461,14 @@ class BlockchainMechanism(ConsensusMechanism):
                 # - For us to render the content with support from pydantic, ensure that we identify the transaction actions first.
                 identified_tx_action: TransactionActions = TransactionActions(
                     transaction["action"]
-                )
+                )  # # 1
 
                 # - After filtering the transaction actions, attempt to decrypt the payload.
                 # - To decrpyt the payload, we need to refer from the method `self.__resolve_transaction_payload`.
                 # * Further information regarding on why it was structured in a way like that, please go from that method to understand.
 
                 # @o Get the datetime from this action.
-                tx_action_str_literal: int = (
+                tx_action_str_literal: int = (  # # 2
                     TRANSACTION_PAYLOAD_MIN_CHAR_COUNT
                     if len(str(identified_tx_action.value)) == 2
                     else TRANSACTION_PAYLOAD_MAX_CHAR_COUNT
@@ -478,15 +478,22 @@ class BlockchainMechanism(ConsensusMechanism):
                 constructed_key_to_decrypt: bytes = (
                     str(identified_tx_action.value)
                     + transaction["from_address"][
-                        :TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX
+                        :TRANSACTION_PAYLOAD_FROM_ADDRESS_CHAR_CUTOFF_INDEX  # ! Value is 7.
                     ]
                     + transaction["to_address"][-tx_action_str_literal:]
-                    + tx_timestamp.strftime(TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY)
-                ).encode("utf-8")
+                    + tx_timestamp.strftime(
+                        TRANSACTION_PAYLOAD_TIMESTAMP_FORMAT_AS_KEY
+                    )  # ! Value is '%m%y%d%H%M%S'.
+                ).encode(
+                    "utf-8"
+                )  # # 3
 
-                decrypter_key: bytes = urlsafe_b64encode(constructed_key_to_decrypt)
+                decrypter_key: bytes = urlsafe_b64encode(
+                    constructed_key_to_decrypt
+                )  # # 4
 
                 try:
+                    # # 5
                     decrypter_instance: Fernet = Fernet(decrypter_key)
                     decrypted_content: bytes = decrypter_instance.decrypt(
                         transaction["payload"]["context"].encode("utf-8")
@@ -1727,7 +1734,7 @@ class BlockchainMechanism(ConsensusMechanism):
                     save_database_state_to_volume_storage(),
                 )
 
-                logger.info(f"Consensus Negotiation ID `{recorded_consensus_negotiation}` with the peer (receiver) address `{master_address_ref}` has been labelled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
+                logger.info(f"Consensus Negotiation ID `{recorded_consensus_negotiation}` with the peer (receiver) address `{master_address_ref}` has been labeled as {ConsensusNegotiationStatus.COMPLETED.name}!")  # type: ignore
 
                 # - Sum the mined_timer sleep phase + given random sleep timer.
                 self.__consensus_calculate_sleep_time(
@@ -2597,7 +2604,7 @@ class BlockchainMechanism(ConsensusMechanism):
                 )
 
             # - Create a custom key.
-            # @d Constraints: Should be comprised of 32-character of an `urlsafe_base64` encoded.
+            # @d Constraints: Should be comprised of 32-characters of an `urlsafe_base64` encoded.
             # @d Some models
             # @d With that, our key should consist of the following:
 

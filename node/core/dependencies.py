@@ -29,6 +29,7 @@ from pydantic import EmailStr
 from pyotp import TOTP
 from sqlalchemy import and_, false, func, select, true
 from sqlalchemy.sql.expression import Insert, Select, Update
+from core.constants import AUTH_CODE_APP_NAME, AUTH_CODE_ISSUER_NAME
 from utils.http import get_http_client_instance
 
 from core.constants import (
@@ -640,7 +641,12 @@ class EnsureAuthorized:
 
 class PasscodeTOTP:
     def __init__(
-        self, *, base_code: list[str] | str, interval: int = 10, issuer: str
+        self,
+        *,
+        base_code: list[str] | str,
+        interval: int = TOTP_PASSCODE_REFRESH_INTERVAL,
+        name: str,
+        issuer: str,
     ) -> None:
         code: str = ""
 
@@ -661,7 +667,14 @@ class PasscodeTOTP:
 
         # - Resolve by converting it into a consumable base32 output.
         resolved_code: str = b32encode(code.encode("utf-8")).decode("utf-8")
-        self.otp_auth = TOTP(resolved_code, interval=interval, issuer=issuer)
+
+        self.otp_auth = TOTP(
+            s=resolved_code, interval=interval, name=name, issuer=issuer
+        )
+
+        logger.debug(
+            f"Authentication Code Provisioning URI: {self.otp_auth.provisioning_uri(name=name, issuer_name=issuer)}"
+        )
 
     def get_code(self) -> str:
         return self.otp_auth.now()
@@ -685,8 +698,8 @@ def get_totp_instance() -> PasscodeTOTP | None:
         if env_secret is not None and env_auth is not None:
             totp_instance = PasscodeTOTP(
                 base_code=[env_secret, env_auth],
-                interval=TOTP_PASSCODE_REFRESH_INTERVAL,
-                issuer=identity_tokens[0],
+                name=AUTH_CODE_APP_NAME,
+                issuer=AUTH_CODE_ISSUER_NAME,
             )
             return totp_instance
 

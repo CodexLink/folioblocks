@@ -107,6 +107,7 @@ class DashboardContext(BaseModel):
     username: str
     role: UserEntity
     reports: DashboardStudent | DashboardOrganization
+    is_org_creator: bool
 
 
 class PortfolioLogMinimal(BaseModel):

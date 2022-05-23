@@ -214,11 +214,9 @@ export default defineComponent({
 
 .btndrawer {
   font-size: 1.3em;
-  font-family: 'Poppins';
 }
 
 h2 {
-  font-family: 'Poppins';
   font-size: 2.5em;
   font-weight: 500;
   text-align: center;
@@ -226,7 +224,6 @@ h2 {
 }
 
 h4 {
-  font-family: 'Poppins';
   font-size: 1.4em;
 }
 
@@ -243,12 +240,11 @@ img {
 
 .toolbar-items {
   font-size: 0.8em;
-  font-family: 'Poppins';
+
   margin-left: 5%;
 }
 
 .webtitle {
-  font-family: 'Poppins';
   margin-left: 1%;
 }
 
@@ -272,7 +268,6 @@ img {
 }
 
 h5 {
-  font-family: 'Poppins';
   font-weight: 500;
   margin: 0.5%;
   margin-left: 4%;

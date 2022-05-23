@@ -83,6 +83,8 @@ AUTH_ENV_FILE_NAME: Final[str] = "node-env.vars"
 
 AUTH_CODE_MIN_CONTEXT: Final[int] = 4
 AUTH_CODE_MAX_CONTEXT: Final[int] = 32
+AUTH_CODE_APP_NAME: Final[str] = "Folioblocks-Web"
+AUTH_CODE_ISSUER_NAME: Final[str] = "Registration Authority"
 
 # # Constants, Blockchain
 BLOCKCHAIN_HASH_BLOCK_DIFFICULTY: Final[int] = 4
@@ -129,7 +131,7 @@ JWT_DAY_EXPIRATION: Final[int] = 7
 JWT_ALGORITHM: Final[str] = "HS256"
 
 # # Constants, Auth: Time-based OTP (TOTP).
-TOTP_PASSCODE_REFRESH_INTERVAL: Final[int] = 15
+TOTP_PASSCODE_REFRESH_INTERVAL: Final[int] = 30
 TOTP_VALID_WINDOW_SECONDS: Final[int] = 3
 
 # # Constants, FastAPI Configs

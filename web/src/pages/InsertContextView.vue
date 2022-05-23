@@ -1260,7 +1260,7 @@ export default {
 .title {
   padding: 2%;
   font-size: 1.5em;
-  font-family: 'Poppins';
+
   font-weight: 600;
 }
 .input {
@@ -1302,7 +1302,7 @@ export default {
 
 .add {
   width: 20%;
-  font-family: 'Poppins';
+
   margin-bottom: 1%;
 }
 
@@ -1310,14 +1310,12 @@ export default {
   margin-left: 3%;
   width: 150px;
   margin-top: 5%;
-  font-family: 'Poppins';
 }
 
 .close {
   margin-right: 3%;
   width: 150px;
   margin-top: 5%;
-  font-family: 'Poppins';
 }
 
 @media (max-width: 90em) {
@@ -1380,7 +1378,7 @@ export default {
 
   h1 {
     font-size: 1.5em;
-    font-family: 'Poppins';
+
     font-weight: 600;
   }
   .input {
@@ -1396,14 +1394,12 @@ export default {
     margin-left: 0%;
     width: 150px;
     margin-top: 3%;
-    font-family: 'Poppins';
   }
 
   .close {
     margin-right: 0%;
     width: 150px;
     margin-top: 3%;
-    font-family: 'Poppins';
   }
 }
 </style>

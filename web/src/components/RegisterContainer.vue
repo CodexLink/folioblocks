@@ -9,7 +9,6 @@ div {
   margin-top: 0%;
   margin-left: 35%;
   margin-right: 35%;
-  font-family: 'Poppins';
 }
 
 @media (max-width: 100em) {
@@ -17,7 +16,6 @@ div {
     margin: 0%;
     margin-left: 30%;
     margin-right: 30%;
-    font-family: 'Poppins';
   }
 }
 
@@ -26,7 +24,6 @@ div {
     margin: 0%;
     margin-left: 10%;
     margin-right: 10%;
-    font-family: 'Poppins';
   }
 }
 </style>

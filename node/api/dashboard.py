@@ -90,6 +90,9 @@ async def get_dashboard_data(
 ) -> DashboardContext:
     # - Get the context of this user.
 
+    # - Dynamic Variable
+    is_org_creator: bool = False
+
     if entity_address_ref is None:
         raise HTTPException(
             detail="Entity address does reference does not exist.",
@@ -103,6 +106,7 @@ async def get_dashboard_data(
             users.c.username,
             users.c.type,
             users.c.association,
+            users.c.date_registered,
         ]
     ).where(users.c.unique_address == entity_address_ref)
 
@@ -110,9 +114,29 @@ async def get_dashboard_data(
 
     if user_basic_context is None:
         raise HTTPException(
-            detail="No information is provided from the user, but does exists.",
+            detail="Information from this user cannot be found, but was able to get authenticated. Please report this problem to the administrator.",
             status_code=HTTPStatus.NOT_FOUND,
         )
+
+    # - Get the association of this user (if its identified as an `UserEntity.ORGANIZATION_DASHBOARD_USER`) and compare against other date registration of other associates to see if it is valid for the 'is_org_creator'.
+    # ? 'is_org_creator' is a flag or a switch to identify if this user is allowed to create an authentication code from new organization users. Please refer to the admin.py for more information regarding this implementation.
+
+    if user_basic_context.type is UserEntity.ORGANIZATION_DASHBOARD_USER:  # type: ignore
+
+        # - Filter out these users by getting the their address and the date.
+        covered_associates_via_date_query: Select = select([func.count()]).where(
+            (users.c.date_registered < user_basic_context.date_registered)
+            & (users.c.association == user_basic_context.association)
+        )  # type: ignore
+
+        # - Compare this address against others from their address.
+        covered_associates = await database_instance.fetch_val(
+            covered_associates_via_date_query
+        )
+
+        # ! False statement is already set, when this address is an org creator then set the org creator as `True`.
+        if not covered_associates:
+            is_org_creator = True
 
     resolved_reports: DashboardStudent | DashboardOrganization | None = None
 
@@ -248,6 +272,7 @@ async def get_dashboard_data(
         username=user_basic_context.username,
         role=user_basic_context.type,
         reports=resolved_reports,
+        is_org_creator=is_org_creator,
     )
 
 

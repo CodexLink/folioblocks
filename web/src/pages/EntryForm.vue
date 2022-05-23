@@ -539,15 +539,12 @@ export default defineComponent({
         .then((response) => {
           try {
             // * Check condition wherein we prohibit other `ARCHIVAL_MINER_NODES` and `MASTER_NODES` from logging in since they have nothing to do with the dashboard.
-            if (
-              response.data.user_role == 'Master Node User' ||
-              response.data.user_role == 'Archival Miner Node User'
-            ) {
+            if (response.data.user_role == 'Archival Miner Node User') {
               this.$q.notify({
                 color: 'negative',
                 position: 'top',
                 message:
-                  'Node-related account is not allowed to use the dashboard. Your account can be used in logging at folioblocks-node-cli.',
+                  'Archival node accounts are not allowed to use the dashboard. Your account can only be used at logging in folioblocks-cli.',
                 timeout: 5000,
                 progress: true,
                 icon: 'mdi-account-cancel-outline',
@@ -573,7 +570,12 @@ export default defineComponent({
               // * Then set the current token and the address.
               this.$q.localStorage.set('token', response.data.jwt_token);
               this.$q.localStorage.set('address', response.data.user_address);
-              this.$q.localStorage.set('role', response.data.user_role);
+              this.$q.localStorage.set(
+                'role',
+                response.data.user_role === 'Master Node User'
+                  ? 'Administrator'
+                  : response.data.user_role
+              );
 
               // * Some some toast.
               this.$q.notify({
@@ -728,7 +730,6 @@ export default defineComponent({
             ...defaultPayload,
           })
           .then((_response) => {
-            console.log(_response);
             this.$q.notify({
               color: 'green',
               position: 'top',
@@ -867,14 +868,14 @@ h2 {
   font-size: 1.7em;
   font-weight: 600;
   line-height: 5px;
-  font-family: 'Poppins';
+
   margin-left: 3%;
 }
 
 h4 {
   font-size: 1em;
   line-height: 20px;
-  font-family: 'Poppins';
+
   margin-left: 3%;
 }
 
@@ -923,7 +924,7 @@ h4 {
     font-size: 1.5em;
     font-weight: 600;
     line-height: 20px;
-    font-family: 'Poppins';
+
     margin-left: 3%;
   }
 

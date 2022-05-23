@@ -572,5 +572,5 @@ async def logout_entity(
 
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND,
-        detail="The inferred token does not exist or is already labelled as expired!",
+        detail="The inferred token does not exist or is already labeled as expired!",
     )

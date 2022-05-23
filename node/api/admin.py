@@ -1,5 +1,5 @@
 """
-Admin API — Exclusive endpoints for allowing actions that requires authorization from higher-ups to allow users for use of the platform.
+Admin API — Exclusive endpoints for allowing actions that requires authentication from higher-ups to allow users for use of the platform.
 
 This file is part of FolioBlocks.
 
@@ -31,9 +31,10 @@ from core.constants import (
     UserEntity,
 )
 from databases import Database
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.sql.expression import Insert, Select, Update
+from core.dependencies import EnsureAuthorized
 from utils.email import EmailService, get_email_instance
 from utils.processors import save_database_state_to_volume_storage
 
@@ -48,16 +49,25 @@ admin_router = APIRouter(
 @admin_router.post(
     "/generate_auth",
     tags=[NodeAPI.GENERAL_NODE_API.value],
-    summary="Generates token for registration of user as node or as a normal user.",
+    summary="Generates token for the registration of the user as a node or as a normal user.",
     description="An exclusive API endpoint that generates token for users to register. This should be triggered by an admin.",
     status_code=HTTPStatus.ACCEPTED,
 )
-async def generate_auth_token_for_other_nodes(
+async def generate_auth_token_for_entities(
     *,
     payload: GenerateAuthInput,
     x_passcode: str = Header(
         ...,
         description="The special passcode that allows the generation of `auth_code`.",
+    ),
+    authorizer_address=Depends(
+        EnsureAuthorized(
+            _as=[
+                UserEntity.MASTER_NODE_USER,
+                UserEntity.ORGANIZATION_DASHBOARD_USER,
+            ],
+            return_address_from_token=True,
+        )
     ),
 ) -> RequestPayloadContext:
 
@@ -69,9 +79,55 @@ async def generate_auth_token_for_other_nodes(
         get_totp_instance,
     )
 
+    database_instance: Database = (
+        get_database_instance()
+    )  # - Prioritize this instance before any other.
+
+    # - Get necessary information from this address.
+    authorizer_address_info_query: Select = select(
+        [users.c.association, users.c.type, users.c.date_registered]
+    ).where(
+        (users.c.unique_address == authorizer_address)
+        & (
+            (users.c.type == UserEntity.MASTER_NODE_USER)
+            | (users.c.type == UserEntity.ORGANIZATION_DASHBOARD_USER)
+        )
+    )
+
+    authorizer_address_info = await database_instance.fetch_one(
+        authorizer_address_info_query
+    )
+
+    if authorizer_address_info is None:
+        raise HTTPException(
+            detail="User attributes were not found. This is not possible due to being able to be authenticated in the first-layer. Please report this problem from the administrator.",
+            status_code=HTTPStatus.NOT_FOUND,
+        )
+
+    # - Only handle for the organization, since it has multiple association entries.
+    # ! For the case of the master node, we don't need to do some extra validation.
+    if authorizer_address_info.type is UserEntity.ORGANIZATION_DASHBOARD_USER:  # type: ignore
+        # - Filter out these users by getting the their address and the date.
+        validate_date_registration_from_associates_query: Select = select(
+            [func.count()]
+        ).where(
+            (users.c.date_registered < authorizer_address_info.date_registered)
+            & (users.c.association == authorizer_address_info.association)
+        )  # type: ignore
+
+        # - Compare this address against others from their address.
+        covered_by_date_associates = await database_instance.fetch_val(
+            validate_date_registration_from_associates_query
+        )
+
+        if covered_by_date_associates:
+            raise HTTPException(
+                detail="You are not authorized to create the authentication code. Please ask the creator of the organization from the system.",
+                status_code=HTTPStatus.UNAUTHORIZED,
+            )
+
     auth_instance: PasscodeTOTP | None = get_totp_instance()
     email_instance: EmailService | None = get_email_instance()
-    database_instance: Database | None = get_database_instance()
     require_new_token: bool = False  # * A switch for allowing a token to be renewed by sending a new email with a new code.
 
     if auth_instance is None or email_instance is None or database_instance is None:
@@ -91,7 +147,7 @@ async def generate_auth_token_for_other_nodes(
     elif payload.role is UserEntity.STUDENT_DASHBOARD_USER:
         raise HTTPException(
             detail=(
-                f"Requesting an auth code through this role ({UserEntity.STUDENT_DASHBOARD_USER.value}) is not allowed.",
+                f"Requesting an authentication code through this role ('{UserEntity.STUDENT_DASHBOARD_USER.value}') is not allowed.",
             ),
             status_code=HTTPStatus.FORBIDDEN,
         )
@@ -116,17 +172,17 @@ async def generate_auth_token_for_other_nodes(
                         status_code=HTTPStatus.FORBIDDEN,
                     )
 
-                # - Last check the given email from the authentication code table ('auth_codes').
+                # - Last step, check the given email from the authentication code table ('auth_codes').
                 check_existing_user_via_auth_token_query: Select = select(
                     [func.count(), auth_codes.c.expiration]
                 ).where(auth_codes.c.to_email == payload.email)
 
-                user_context_from_auth_codes = await database_instance.fetch_val(
+                user_context_from_auth_codes = await database_instance.fetch_one(
                     check_existing_user_via_auth_token_query
                 )
 
                 if (
-                    user_context_from_auth_codes
+                    user_context_from_auth_codes.count
                     and datetime.now() < user_context_from_auth_codes.expiration
                 ):
                     raise HTTPException(
@@ -134,7 +190,7 @@ async def generate_auth_token_for_other_nodes(
                         status_code=HTTPStatus.FORBIDDEN,
                     )
                 elif (
-                    user_context_from_auth_codes
+                    user_context_from_auth_codes.count
                     and datetime.now() >= user_context_from_auth_codes.expiration
                 ):
                     require_new_token = True
@@ -185,7 +241,7 @@ async def generate_auth_token_for_other_nodes(
             )
 
             return {
-                "detail": f"Invocation of the email for registration as a {payload.role.value} were successful."
+                "detail": f"Invocation of the email for a registration as a '{payload.role.value}' were successful. Advise to check their email."
             }
 
         else:
