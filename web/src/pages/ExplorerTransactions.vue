@@ -250,7 +250,9 @@ img {
 
 .logo {
   margin-right: 1.5%;
-  margin: 0.5%;
+  margin-bottom: 0.5%;
+  margin-top: 0.5%;
+  margin-left: 0.5%;
 }
 
 /* Navigation bar end*/

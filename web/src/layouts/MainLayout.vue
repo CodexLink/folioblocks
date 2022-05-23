@@ -179,7 +179,7 @@
       >
         <div class="absolute-bottom bg-transparent">
           <q-avatar size="56px" class="q-mb-sm">
-            <img :src="html_user_avatar" />
+            <img alt="User Avatar" :src="html_user_avatar" />
           </q-avatar>
           <div class="text-weight-bold">{{ user }}</div>
           <div>{{ role }}</div>
@@ -400,7 +400,9 @@ img {
 
 .logo {
   margin-right: 1.5%;
-  margin: 0.5%;
+  margin-left: 0.5%;
+  margin-top: 0.5%;
+  margin-bottom: 0.5%;
 }
 
 .menu-list .q-item {

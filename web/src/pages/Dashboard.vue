@@ -133,6 +133,7 @@
             <q-select
               class="data"
               color="secondary"
+              style="font-size: unset !important; font-weight: unset !important"
               outlined
               v-model="auth_user_type_chosen"
               :options="auth_user_types"
@@ -152,6 +153,7 @@
               color="secondary"
               outlined
               type="number"
+              style="font-weight: unset !important"
               :disable="isProcessing"
               :error="auth_passcode_invalid"
               @focus="auth_passcode_invalid = false"
@@ -179,6 +181,7 @@
                   </div>
                 </q-card-section>
                 <vue-qrcode
+                  v-if="user_role === 'Administrator' || is_org_creator"
                   :value="qr_code_context"
                   style="width: 128; height: 128; display: block; margin-left: auto; margin-right: auto; }"
                 ></vue-qrcode>
@@ -188,6 +191,7 @@
                     <a
                       href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2"
                       target="_blank"
+                      rel="noopener"
                       >Google Authenticator</a
                     ></strong
                   >) app and scan the QR code. Once scanned, get the 6 digits on
@@ -255,7 +259,7 @@
           </div>
         </q-card>
 
-        <q-card flat bordered class="seminar">
+        <q-card class="seminar">
           <q-card-section>
             <div class="text-h6">{{ context_left }}</div>
           </q-card-section>
@@ -281,7 +285,7 @@
             <p class="text-caption">Extra Percentage by Bar</p>
           </q-card-section>
           <q-separator />
-          <q-card-section>
+          <q-card-section style="transform: translateY(5%)">
             {{ context_left_secondary }}
           </q-card-section>
         </q-card>
@@ -358,7 +362,7 @@ let dashboardOptions = {
         subtitle:
           'The following visualization is a percetange-equivalent of logs vs extra information being inserted frequently.',
         another:
-          'The progression bar only visualizes and thurs an estimation as per page refresh.',
+          'The progression bar only visualize these the provided data in terms of ratio-to-ratio, and thurs an estimation was done per page refresh.',
       },
       right_top: {
         title: 'Total Associations',
@@ -863,7 +867,7 @@ img {
 }
 
 .data {
-  font-size: 1.3em;
+  font-size: 1.7em;
   font-weight: 700;
 }
 

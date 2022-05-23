@@ -1,6 +1,7 @@
 <template>
   <img
     class="background"
+    alt="Folioblocks Main Background"
     src="~assets/pagebackground.png"
     style="background-attachment: fixed"
   />
