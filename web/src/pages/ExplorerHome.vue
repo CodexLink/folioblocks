@@ -226,7 +226,9 @@ export default defineComponent({
 
   setup() {
     const $router = useRouter();
+
     return {
+      $router,
       transaction_cols,
       transaction_rows: ref([]),
       block_cols,

@@ -632,7 +632,7 @@ export default defineComponent({
                 portfolio_truthy_count / portfolio_total_props;
             }
           })
-          .catch((e) => {
+          .catch((_e) => {
             this.$q.notify({
               color: 'red',
               position: 'top',

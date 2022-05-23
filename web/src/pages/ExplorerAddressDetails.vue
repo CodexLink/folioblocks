@@ -159,11 +159,14 @@ export default defineComponent({
     };
   },
   setup() {
+    const $q = useQuasar();
     const $route = useRoute();
     const $router = useRouter();
-    const $q = useQuasar();
 
     return {
+      $q,
+      $route,
+      $router,
       tx_cols,
     };
   },
@@ -198,7 +201,10 @@ export default defineComponent({
             resolved_txs.push(fetched_tx);
           }
 
-          this.tx_rows = resolved_txs.reverse();
+          // ! Assign then reverse.
+          this.tx_rows = resolved_txs;
+          this.tx_rows.reverse()
+
           this.associated_tx_loading_state = false;
         })
         .catch((e) => {

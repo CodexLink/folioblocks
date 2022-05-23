@@ -170,7 +170,10 @@ export default defineComponent({
   setup() {
     const $route = useRoute();
     const $router = useRouter();
+
     return {
+      $route,
+      $router,
       tx_cols,
       tx_rows: ref([]),
     };
@@ -205,7 +208,10 @@ export default defineComponent({
             resolved_txs.push(fetched_tx);
           }
 
-          this.tx_rows = resolved_txs.reverse();
+          // ! Assign then reverse it.
+          this.tx_rows = resolved_txs;
+          this.tx_rows.reverse();
+
           this.associated_tx_loading_state = false;
         })
         .catch((e) => {

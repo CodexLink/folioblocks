@@ -708,7 +708,7 @@ export default defineComponent({
             },
           }
         )
-        .then((response) => {
+        .then((_response) => {
           this.$q.notify({
             color: 'green',
             position: 'top',
@@ -768,7 +768,7 @@ export default defineComponent({
             },
           }
         )
-        .then((response) => {
+        .then((_response) => {
           this.$q.notify({
             color: 'green',
             position: 'top',
@@ -1008,8 +1008,6 @@ export default defineComponent({
 </script>
 
 <style scoped>
-* {
-}
 .header {
   background-color: #a7eaff;
   margin: 2%;

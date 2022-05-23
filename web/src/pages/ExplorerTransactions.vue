@@ -168,7 +168,10 @@ export default defineComponent({
             resolved_txs.push(fetched_tx);
           }
 
-          this.tx_rows = resolved_txs.reverse();
+          // ! Assign then reverse it.
+          this.tx_rows = resolved_txs;
+          this.tx_rows.reverse();
+
           this.txs_loading_state = false;
 
           if (!this.first_instance)

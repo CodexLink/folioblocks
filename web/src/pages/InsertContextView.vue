@@ -1358,10 +1358,6 @@ export default {
     width: 100%;
   }
 
-  .users {
-    width: 100%;
-  }
-
   .my-card {
     width: 100%;
   }
