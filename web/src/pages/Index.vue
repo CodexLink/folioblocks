@@ -134,7 +134,7 @@
             technology.
           </li>
           <li>
-            Provides secure location and platform fo validated credentials.
+            Provides secure location and platform for validated credentials.
           </li>
           <li>Suitable for people looking for trustworthy employees.</li>
         </ul>

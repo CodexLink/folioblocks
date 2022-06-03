@@ -163,7 +163,7 @@
               <router-link
                 :to="'/explorer/transaction/' + extra.tx_hash"
                 style="text-decoration: none"
-                >{{ extra.context.inserter }}</router-link
+                >{{ extra.tx_hash }}</router-link
               >
             </q-item-label>
           </q-item-section>
