@@ -128,9 +128,7 @@
         <q-item
           v-for="extra in portfolio_extra_container"
           :key="extra.tx_hash"
-          :to="'/explorer/transaction/' + extra.tx_hash"
           style="text-decoration: none"
-          clickable
           class="logdata"
         >
           <q-item-section class="text-h6">
@@ -153,6 +151,17 @@
               <span class="text-weight-bold q-mb-sm q-mr-sm">By:</span>
               <router-link
                 :to="'/explorer/address/' + extra.context.inserter"
+                style="text-decoration: none"
+                >{{ extra.context.inserter }}</router-link
+              >
+            </q-item-label>
+            <q-item-label
+              class="q-ml-sm text-justify q-mb-sm q-ml-lg"
+              style="margin-top: 2%"
+            >
+              <span class="text-weight-bold q-mb-sm q-mr-sm">Transaction:</span>
+              <router-link
+                :to="'/explorer/transaction/' + extra.tx_hash"
                 style="text-decoration: none"
                 >{{ extra.context.inserter }}</router-link
               >
@@ -660,7 +669,7 @@ export default defineComponent({
         .then((response) => {
           this.editable_info_description = response.data.description;
           this.editable_info_preferred_role = response.data.preferred_role;
-          this.editable_info_personal_skills = response.data.personal_skills;
+          // ! this.editable_info_personal_skills was already being loaded at function loadPortfolioSettings!
 
           this.isProcessing = false;
         })
@@ -885,6 +894,8 @@ export default defineComponent({
           });
 
           // - Assign User's Information
+          let deRefPersonalSkills = null;
+
           this.portfolio_user_address = response.data.address;
           this.portfolio_user_association = response.data.association;
           this.portfolio_user_program = response.data.program;
@@ -896,6 +907,11 @@ export default defineComponent({
             response.data.personal_skills === null
               ? 'No information.'
               : response.data.personal_skills;
+
+          // ! This is just a work around!
+          deRefPersonalSkills = this.portfolio_user_personal_skills;
+          this.editable_info_personal_skills = deRefPersonalSkills;
+
           this.portfolio_user_preferred_role = response.data.preferred_role;
           this.portfolio_user_email_contact =
             response.data.email === null

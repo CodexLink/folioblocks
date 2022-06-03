@@ -868,7 +868,8 @@ export default {
           this.$q.notify({
             color: 'green',
             position: 'top',
-            message: `Student registration finished! | Info: ${response.data.detail}`,
+            message:
+              'Student registration finished! Please let them know that an email has been sent.',
             timeout: 5000,
             progress: true,
             icon: 'report_problem',
