@@ -31,7 +31,7 @@
       >
       </q-input>
 
-      <q-separator style="margin-top: 4%; maring-bottom: 2%" />
+      <q-separator style="margin-top: 4%; margin-bottom: 2%" />
 
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item
