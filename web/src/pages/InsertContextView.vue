@@ -3,7 +3,6 @@
     <q-btn
       outline
       class="add"
-      color="secondary"
       label="New Student"
       icon="mdi-plus"
       :disable="isProcessing"
@@ -15,14 +14,28 @@
       "
     />
 
-    <q-card class="users">
+    <q-card class="users" style="background-color: unset !important">
       <q-linear-progress v-if="isFetchingStudent" query color="red" />
       <h5 class="text-body1" style="margin-left: 4%">
         <strong>Students Available</strong>
       </h5>
+      <q-input
+        v-model="existingStudentFilterString"
+        outlined
+        color="secondary"
+        label="Filter Entries"
+        debounce="500"
+        hint="This can filter the name, address and the program."
+        style="margin-left: 3.5%; margin-right: 3.5%"
+        clearable
+      >
+      </q-input>
+
+      <q-separator style="margin-top: 4%; maring-bottom: 2%" />
+
       <q-scroll-area style="height: 100%; max-width: 100%">
         <q-item
-          v-for="student in students"
+          v-for="student in resolved_student_list"
           :key="student.id"
           clickable
           v-ripple
@@ -749,7 +762,7 @@
 <script>
 import axios from 'axios';
 import { useQuasar } from 'quasar';
-import { ref } from 'vue';
+import { ref, toRaw } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { MASTER_NODE_BACKEND_URL } from '/utils/utils.js';
 
@@ -771,7 +784,8 @@ export default {
 
   data() {
     return {
-      students: ref([]),
+      resolved_student_list: ref([]),
+      stored_students: ref([]),
       focused_portfolio_address: ref(''),
 
       new_student_first_name: ref(''),
@@ -797,6 +811,7 @@ export default {
       new_student_show_confirm_password: ref(false),
 
       existing_user: ref(false),
+      existingStudentFilterString: ref(null),
       new_user: ref(false),
       isProcessing: ref(false),
       isFetchingStudent: ref(true),
@@ -1102,7 +1117,6 @@ export default {
           icon: 'mdi-account-check',
         });
     },
-
     submitRemark() {
       this.isProcessing = true;
 
@@ -1202,7 +1216,7 @@ export default {
     },
     setActiveFieldForForm(id) {
       this.targetted_number = id;
-      this.targetted_address = this.students[id - 1].address;
+      this.targetted_address = this.available_students[id - 1].address;
       this.clearRemarkForm(false);
       this.clearLogForm(false);
     },
@@ -1223,7 +1237,10 @@ export default {
             student_index += 1;
             resolved_students.push(each_student);
           }
-          this.students = resolved_students;
+          this.available_students = resolved_students;
+
+          // ! This was added for initial page load.
+          this.resolved_student_list = resolved_students;
 
           this.isFetchingStudent = false;
         })
@@ -1245,6 +1262,41 @@ export default {
         path: '/portfolio',
         query: { address: this.targetted_address },
       });
+    },
+  },
+  watch: {
+    existingStudentFilterString() {
+      var raw_proxy_student_list = toRaw(this.available_students);
+      let filtered_student_list = [];
+
+      // - We use type check to validate the content as string instead of using 'string'.length.
+      // ! With the quasar's default behavior towards 'clearable' making the variable null instead of empty string, it will lead to an error.
+
+      if (typeof this.existingStudentFilterString === 'string') {
+        raw_proxy_student_list.filter((context) => {
+          // ! Upon check, note that we cannot use some() to a dictionary. It has to be a list to consider that function for filtering purposes.
+          // - First name and last name has to be reversed because the argument of includes is a substring against the completed string you type.
+          // * Doing the opposite will not make it work, or it would work only on one substring and when both names combined, both statement will not be truthful.
+          if (
+            this.existingStudentFilterString
+              .toLowerCase()
+              .includes(context.first_name.toLowerCase()) ||
+            this.existingStudentFilterString
+              .toLowerCase()
+              .includes(context.last_name.toLowerCase()) ||
+            context.address
+              .toLowerCase()
+              .includes(this.existingStudentFilterString.toLowerCase()) ||
+            context.program
+              .toLowerCase()
+              .includes(this.existingStudentFilterString.toLowerCase())
+          )
+            filtered_student_list.push(context);
+        });
+        this.resolved_student_list = filtered_student_list;
+      } else {
+        this.resolved_student_list = this.available_students;
+      }
     },
   },
 };

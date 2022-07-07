@@ -64,6 +64,7 @@
           v-for="log in portfolio_log_container"
           :key="log.id"
           class="logdata"
+          style="text-decoration: none; background-color: unset !important"
         >
           <q-item-section class="text-h6">
             <q-item-label
@@ -128,7 +129,7 @@
         <q-item
           v-for="extra in portfolio_extra_container"
           :key="extra.tx_hash"
-          style="text-decoration: none"
+          style="text-decoration: none; background-color: unset !important"
           class="logdata"
         >
           <q-item-section class="text-h6">
@@ -1055,9 +1056,9 @@ export default defineComponent({
 
 .logs {
   height: 1000px;
-  width: 47%;
+  width: 48%;
   border-radius: 2%;
-  margin-left: 2%;
+  margin-left: 1%;
 }
 
 .log {
@@ -1082,6 +1083,7 @@ export default defineComponent({
   border-width: 2px;
   border-radius: 10px;
   background-color: #a7eaff;
+  display: grid;
 }
 
 .view {

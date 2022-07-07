@@ -16,6 +16,30 @@
           <strong>FolioBlocks</strong>
         </q-toolbar-title>
 
+        <q-form
+          @submit.prevent="toPortfolio"
+          style="padding-right: 1.5%; width: 23%"
+        >
+          <q-input
+            dark
+            dense
+            standout
+            v-model="portfolioField"
+            input-class="text-left"
+            placeholder="Enter Applicant's Portfolio Address Here"
+          >
+            <template v-slot:append>
+              <q-icon
+                v-if="portfolioField === '' || portfolioField === null"
+                name="search"
+              />
+              <q-icon v-else name="clear" class="cursor-pointer" />
+            </template>
+          </q-input>
+        </q-form>
+
+        <q-separator vertical inset />
+
         <div class="gt-md">
           <q-btn
             flat
@@ -156,6 +180,7 @@
 
 <script lang="ts">
 import { defineComponent, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 
 export default defineComponent({
@@ -163,6 +188,7 @@ export default defineComponent({
 
   setup() {
     const $q = useQuasar();
+    const $router = useRouter();
 
     const leftDrawerOpen = ref(false);
     const containsAuth = $q.localStorage.getItem('token') !== null;
@@ -172,10 +198,20 @@ export default defineComponent({
     return {
       leftDrawerOpen,
       isAuthorized,
+      portfolioField: ref(null),
+
       toggleLeftDrawer() {
         leftDrawerOpen.value = !leftDrawerOpen.value;
       },
     };
+  },
+  methods: {
+    toPortfolio() {
+      this.$router.push({
+        path: '/portfolio',
+        query: { address: this.portfolioField },
+      });
+    },
   },
 });
 </script>
