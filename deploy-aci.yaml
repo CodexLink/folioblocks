@@ -1,0 +1,110 @@
+# https://www.raeffs.dev/blog/2021/05-mai/25-autogenerate-ssl-certificates-for-aci/
+# https://itnext.io/automatic-https-with-azure-container-instances-aci-4c4c8b03e8c9
+api-version: 2021-03-01
+location: southeastasia
+name: folioblocks
+properties:
+  imageRegistryCredentials:
+    - server: folio.azurecr.io
+      username: ...
+      password: ...
+  containers:
+    - name: caddy-sidecar-ssl-generator
+      properties:
+        image: caddy:latest
+        command:
+          [
+            "caddy",
+            "reverse-proxy",
+            "--from",
+            "folioblocks.southeastasia.azurecontainer.io",
+            "--to",
+            "localhost:6001",
+          ]
+        ports:
+          - port: 80
+            protocol: TCP
+          - port: 443
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 0.5
+            memoryInGB: 0.5
+        volumeMounts:
+          - name: foliostorage
+            mountPath: /data
+            readOnly: false
+
+    - name: folioblocks-master-node
+      properties:
+        image: folio.azurecr.io/folioblocks-node-master:latest
+        ports:
+          - port: 6001
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 0.5
+            memoryInGB: 1.5
+        volumeMounts:
+          - name: foliostorage
+            mountPath: /usr/local/node-resources
+            readOnly: false
+    - name: folioblocks-archival-node-1
+      properties:
+        image: folio.azurecr.io/folioblocks-node-archival-1:latest
+        ports:
+          - port: 5001
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 1.0
+            memoryInGB: 1.5
+        volumeMounts:
+          - name: foliostorage
+            mountPath: /usr/local/node-resources
+            readOnly: false
+    - name: folioblocks-archival-node-2
+      properties:
+        image: folio.azurecr.io/folioblocks-node-archival-2:latest
+        ports:
+          - port: 5002
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 1.0
+            memoryInGB: 1.5
+        volumeMounts:
+          - name: foliostorage
+            mountPath: /usr/local/node-resources
+            readOnly: false
+    - name: folioblocks-archival-node-3
+      properties:
+        image: folio.azurecr.io/folioblocks-node-archival-3:latest
+        ports:
+          - port: 5003
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 1.0
+            memoryInGB: 1.5
+        volumeMounts:
+          - name: foliostorage
+            mountPath: /usr/local/node-resources
+            readOnly: false
+  volumes:
+    - name: foliostorage
+      azureFile:
+        sharename: folio-file-share
+        storageAccountName: foliostorage
+        storageAccountKey: ...
+  ipAddress:
+    ports:
+      - port: 80
+        protocol: TCP
+      - port: 443
+        protocol: TCP
+    type: Public
+    dnsNameLabel: folioblocks
+  osType: Linux
+tags: null
+type: Microsoft.ContainerInstance/containerGroups
