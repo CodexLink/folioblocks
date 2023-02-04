@@ -45,7 +45,7 @@ The following links are references that we used at a certain section of the docu
 
 > References may be included from the paper but references from the paper **will not be included!**
 
-## Calculation Basis
+### Calculation Basis
 
 References contains an article to which was modified by the lead developer in order to accomodate 5 metrics that differs to the 3 consensus mechanisms.
 
@@ -119,7 +119,7 @@ This part of the reference section contains alot! They are the onces that helped
 - _Python: Logging an Exception_ - <https://www.geeksforgeeks.org/how-to-log-a-python-exception/>
 - _Python Async Databases: Issue about `PRAGMA` foreign_keys_ - <https://github.com/encode/databases/issues/169>
 - _Python AsyncIO: Understanding `run_in_executor` for IO operation_ - <https://docs.python.org/3/library/asyncio-eventloop.html#asyncio.loop.run_in_executor>
-- _Python AsyncIO: Avoiding Issues when Waiting Multiple Events - <https://python.plainenglish.io/how-to-avoid-issues-when-waiting-on-multiple-events-in-python-asyncio-48e22d148de7>
+- _Python AsyncIO: Avoiding Issues when Waiting Multiple Events_ - <https://python.plainenglish.io/how-to-avoid-issues-when-waiting-on-multiple-events-in-python-asyncio-48e22d148de7>
 - _Python Cryptography: Asymmetric Cryptography with Python (Implementing RSA and ECC, but was unused in implementation, but rather, the general idea)_ - <https://medium.com/@ashiqgiga07/asymmetric-cryptography-with-python-5eed86772731>
 - _Python Cryptography: Switching to Full-Crypto-Based Functions and Identifying Unsafe Functions for randomization_ - <https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#secure-random-number-generation>
 - _Python Cryptography: Using AES to decrypt/encrypt contents to render in the main system_ - <https://stackoverflow.com/questions/61420893/python-3-encrypt-and-decrypt-image-using-aes>
@@ -180,9 +180,12 @@ References are some of the standards that was used initially, but was changed th
 
 ### Standards: Finalized
 
-TODO
+This sub-section contains some list from the sub-section `Standards: Initial`, they were changed due to misaligned goals or just incomprehensible to the point where it does not directly shows as a solution or a factor to consider when making the design.
 
-### Stackoverflow References
+
+- _PEP 8 — Style Guidelines for Python Code_ - <https://www.python.org/dev/peps/pep-0008/>
+
+### StackOverflow References
 
 This subsection of the reference is literally very long than the entire README! Please use `Table of Contents` to skip this section if you don't want to scroll through it!
 
