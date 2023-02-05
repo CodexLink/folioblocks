@@ -209,7 +209,7 @@ Also, this contains references that helped me further debug and do complex imple
 - _Python `ArgumentParser` Library: Best practices for the validation of the context passed in the parameter_ - <https://stackoverflow.com/questions/37471636/python-argument-parsing-validation-best-practices>
 - _Python AsyncIO: Implementing an Asynchronous `__init__` method for class and use `await` for instantiation_ - <https://stackoverflow.com/questions/33128325/how-to-set-class-attribute-with-await-in-init>
 - _Python AsyncIO: Keyword arguments to pass on a async function (**Afaik, this search was made possible by creating a wrapper library that takes `aiohttp` and create an queueing system**)_ - <https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments>
-- _Python AsyncIO: Understanding the calls for an async method from a class - <https://stackoverflow.com/questions/42009202/how-to-call-a-async-function-contained-in-a-class>
+- _Python AsyncIO: Understanding the calls for an async method from a class_ - <https://stackoverflow.com/questions/42009202/how-to-call-a-async-function-contained-in-a-class>
 - _Python AsyncIO: Understanding why `run_in_executor`() is fine vs. multithreading library_ - <https://stackoverflow.com/questions/55027940/is-run-in-executor-optimized-for-running-in-a-loop-with-coroutines>
 - _Python AsyncIO: Pythonic way on waiting a coroutine to finish, (**I forgot to do this, and instead I used their low level API to wait instead of creating an `Event` flag**)_ - <https://stackoverflow.com/questions/65352682/python-asyncio-pythonic-way-of-waiting-until-condition-satisfied>
 - _Python AsyncIO: Waiting for `stdin` input stream while there's a background process_ - <https://stackoverflow.com/questions/58454190/python-async-waiting-for-stdin-input-while-doing-other-stuff>
@@ -218,10 +218,10 @@ Also, this contains references that helped me further debug and do complex imple
 - _Python Dictionary: Copying a dictionary without modifying the original reference (**This issue was inspired from the C's datetime object problem wherein a copied object reflects the changes to the original object**)_ - <https://stackoverflow.com/questions/2465921/how-to-copy-a-dictionary-and-only-edit-the-copy>
 - _Python Enum Object: Checking if string exists in Enum of Strings_ - <https://stackoverflow.com/questions/63335753/how-to-check-if-string-exists-in-enum-of-strings>
 - _Python Enum Objet: Checking if there's an `int` inside of an Enum object_ - <https://stackoverflow.com/questions/43634618/how-do-i-test-if-int-value-exists-in-python-enum-without-using-try-catch>
-- _Python Environmental Variable Display on `pwsh` prompt is duplicated - <https://stackoverflow.com/questions/16257950/how-to-create-a-python-virtualenv-environment-without-prompt-prefix>
-- _Python Exceptions: How to properly ignore them? - <https://stackoverflow.com/questions/730764/how-to-properly-ignore-exceptions>
-- _Python Function Definition: Understanding the Bare Asterisk (`*`) in the function parameter - <https://stackoverflow.com/questions/14301967/bare-asterisk-in-function-parameters>
-- _Python Function Definition: Restricting a function to only receive a keyname + value after Bare Asterisk (`*`) - <https://stackoverflow.com/questions/2965271/forced-naming-of-parameters-in-python/14298976#14298976>
+- _Python Environmental Variable Display on `pwsh` prompt is duplicated_ - <https://stackoverflow.com/questions/16257950/how-to-create-a-python-virtualenv-environment-without-prompt-prefix>
+- _Python Exceptions: How to properly ignore them?_ - <https://stackoverflow.com/questions/730764/how-to-properly-ignore-exceptions>
+- _Python Function Definition: Understanding the Bare Asterisk (`*`) in the function parameter_ - <https://stackoverflow.com/questions/14301967/bare-asterisk-in-function-parameters>
+- _Python Function Definition: Restricting a function to only receive a keyname + value after Bare Asterisk (`*`)_ - <https://stackoverflow.com/questions/2965271/forced-naming-of-parameters-in-python/14298976#14298976>
 - _Python IO: Going one back three with `Pathlib`_ - <https://stackoverflow.com/questions/67251538/python-how-to-go-one-folder-back-in-pathlib>
 - _Python IO: Checking if a directory exists_ - <https://stackoverflow.com/questions/8933237/how-do-i-check-if-directory-exists-in-python>
 - _Python Limits: Identifying the maximum and minimum value of an `Integer`_ - <https://stackoverflow.com/questions/7604966/maximum-and-minimum-values-for-ints>
