@@ -187,10 +187,70 @@ This sub-section contains some list from the sub-section `Standards: Initial`, t
 
 ### StackOverflow References
 
-This subsection of the reference is literally very long than the entire README! Please use `Table of Contents` to skip this section if you don't want to scroll through it!
+**This subsection of the reference is literally very long than the entire README!** I don't blame my willingness to include the credibility of these people from asking these questions! Please use `Table of Contents` to skip this section if you don't want to scroll through it!
 
-TODO
+Also, this contains references that helped me further debug and do complex implementations, wherein specific cases are very rare to find. Link archiving started from February 01, 2022 and onwards, this implies that I did some early research but not alot than the specified date due to the time set for prototyping a system.
 
+- _API Best Practice Advise: 'Logout: GET or POST?' (Debating what HTTP method should I used for API endpoint `/logout`)_ - <https://stackoverflow.com/questions/3521290/logout-get-or-post>
+- _Docker, `dockerfile`: Conditional `COPY`_ - <https://stackoverflow.com/questions/63728819/conditional-copy-in-dockerfile>
+- _Docker, `dockerfile`: Conditional `ENV`_ - <https://stackoverflow.com/questions/37057468/conditional-env-in-dockerfile>
+- _Docker, `dockerfile`: Passing `ARG` value to the `ENTRYPOINT`_ - <https://stackoverflow.com/questions/34324277/how-to-pass-arg-value-to-entrypoint>
+- _Docker, `dockerfile`: `if-else` condition with external arguments_ - <https://stackoverflow.com/questions/43654656/dockerfile-if-else-condition-with-external-arguments>
+- _FastAPI: Attempting to multi-thread to do blockchain hashing mechanism without blocking the main thread ('came to a conclusion of using `asyncio.run_in_executor()`')_ - <https://stackoverflow.com/questions/66541289/python-fastapi-multi-threading-processing-start-stop-process-with-api-endpo>
+- _FastAPI: API endpoints from Docker is not detected or registered through the logging system_ - <https://stackoverflow.com/questions/63510041/adding-python-logging-to-fastapi-endpoints-hosted-on-docker-doesnt-display-api>
+- _FastAPI: Patching the logging system with a customized format through library `logging`_ - <https://stackoverflow.com/questions/62934384/how-to-add-timestamp-to-each-request-in-uvicorn-logs>
+- _FastAPI: Understanding the `loggers` and its `handlers` and applying changes to filter levels with `dictConfig()`_ - <https://stackoverflow.com/questions/25187083/python-logging-to-multiple-handlers-at-different-log-levels>
+- _FastAPI (Uvicorn Backend), Problem enabling Uvicorn auto-restart when launching programmatically with uvicorn.run_ - <https://stackoverflow.com/questions/52784924/problem-enabling-uvicorn-auto-restart-when-launching-programmatically-with-uvico>
+- _FastAPI Models: Value Error Missing when using POST (This was due to `response_model` not set)_ - <https://stackoverflow.com/questions/68139116/value-error-missing-when-using-post-with-fastapi>
+- _FastAPI Security: Securing FastAPI with JWT TOken-based Authentication_ - <https://testdriven.io/blog/fastapi-jwt-auth/#jwt-authentication>
+- _Function Naming Convention: what was the opposite of `init()`_ - <https://softwareengineering.stackexchange.com/questions/163004/what-is-the-opposite-of-initialize-or-init>
+- _HTTP Code, Finding Suitability based on Situation: What is the HTTP Code for `Not Ready Yet, Try Again Later?`_ - <https://stackoverflow.com/questions/9794696/which-http-status-code-means-not-ready-yet-try-again-later#:~:text=Retry%2DAfter%20is%20also%20valid,too%20much%20work%20to%20do>
+- _MyPy: Unable to detect modules from other directories_ - <https://stackoverflow.com/questions/60873894/mypy-cant-find-submodule>
+- _Python `ArgumentParser` Library: Best practices for the validation of the context passed in the parameter_ - <https://stackoverflow.com/questions/37471636/python-argument-parsing-validation-best-practices>
+- _Python AsyncIO: Implementing an Asynchronous `__init__` method for class and use `await` for instantiation_ - <https://stackoverflow.com/questions/33128325/how-to-set-class-attribute-with-await-in-init>
+- _Python AsyncIO: Keyword arguments to pass on a async function (**Afaik, this search was made possible by creating a wrapper library that takes `aiohttp` and create an queueing system**)_ - <https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments>
+- _Python AsyncIO: Understanding the calls for an async method from a class - <https://stackoverflow.com/questions/42009202/how-to-call-a-async-function-contained-in-a-class>
+- _Python AsyncIO: Understanding why `run_in_executor`() is fine vs. multithreading library_ - <https://stackoverflow.com/questions/55027940/is-run-in-executor-optimized-for-running-in-a-loop-with-coroutines>
+- _Python AsyncIO: Pythonic way on waiting a coroutine to finish, (**I forgot to do this, and instead I used their low level API to wait instead of creating an `Event` flag**)_ - <https://stackoverflow.com/questions/65352682/python-asyncio-pythonic-way-of-waiting-until-condition-satisfied>
+- _Python AsyncIO: Waiting for `stdin` input stream while there's a background process_ - <https://stackoverflow.com/questions/58454190/python-async-waiting-for-stdin-input-while-doing-other-stuff>
+- _Python `datetime`: Converting a string back `isoformat()` to a `datetime` object_ - <https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-object>
+- _Python Dictionary: Sorting a list from the dictionary_ - <https://stackoverflow.com/questions/72899/how-do-i-sort-a-list-of-dictionaries-by-a-value-of-the-dictionary>
+- _Python Dictionary: Copying a dictionary without modifying the original reference (**This issue was inspired from the C's datetime object problem wherein a copied object reflects the changes to the original object**)_ - <https://stackoverflow.com/questions/2465921/how-to-copy-a-dictionary-and-only-edit-the-copy>
+- _Python Enum Object: Checking if string exists in Enum of Strings_ - <https://stackoverflow.com/questions/63335753/how-to-check-if-string-exists-in-enum-of-strings>
+- _Python Enum Objet: Checking if there's an `int` inside of an Enum object_ - <https://stackoverflow.com/questions/43634618/how-do-i-test-if-int-value-exists-in-python-enum-without-using-try-catch>
+- _Python Environmental Variable Display on `pwsh` prompt is duplicated - <https://stackoverflow.com/questions/16257950/how-to-create-a-python-virtualenv-environment-without-prompt-prefix>
+- _Python Exceptions: How to properly ignore them? - <https://stackoverflow.com/questions/730764/how-to-properly-ignore-exceptions>
+- _Python Function Definition: Understanding the Bare Asterisk (`*`) in the function parameter - <https://stackoverflow.com/questions/14301967/bare-asterisk-in-function-parameters>
+- _Python Function Definition: Restricting a function to only receive a keyname + value after Bare Asterisk (`*`) - <https://stackoverflow.com/questions/2965271/forced-naming-of-parameters-in-python/14298976#14298976>
+- _Python IO: Going one back three with `Pathlib`_ - <https://stackoverflow.com/questions/67251538/python-how-to-go-one-folder-back-in-pathlib>
+- _Python IO: Checking if a directory exists_ - <https://stackoverflow.com/questions/8933237/how-do-i-check-if-directory-exists-in-python>
+- _Python Limits: Identifying the maximum and minimum value of an `Integer`_ - <https://stackoverflow.com/questions/7604966/maximum-and-minimum-values-for-ints>
+- _Python MyPy: Untyped decorator makes function untyped (I was unable to resolve this due to the complexity argument of my own decorator, which also takes an argument)_ - <https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped>
+- _Python Object: Checking the possibility wherein a singe object is called throughout the whole file (**This search was made possible due to the issue of circular dependencies**)_ - <https://stackoverflow.com/questions/63189935/is-it-possible-to-use-the-same-object-in-multiple-files>
+- _Python Object: Determining an object's size_ - <https://stackoverflow.com/questions/449560/how-do-i-determine-the-size-of-an-object-in-python>
+- _Python Object Manipulation: Changing a dictionary whilst another changes were done, the workaround_ - <https://stackoverflow.com/questions/11941817/how-can-i-avoid-runtimeerror-dictionary-changed-size-during-iteration-error>
+- _Python Object Manipulation: Combining two dictionaries in shorthand_ - <https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression>
+- _Python Object: Static methods and how do I call them (**This is just a revisit from actually using `@staticmethod()`)_ - <https://stackoverflow.com/questions/1859959/static-methods-how-to-call-a-method-from-another-method>
+- _Python `sockets`: Identifying a port number's state whether it's in-use or not_ - <https://stackoverflow.com/questions/2470971/fast-way-to-test-if-a-port-is-in-use-using-python>
+- _Python SQLAlchemy: Concepts behind `backred` and `back_populate`_ - <https://stackoverflow.com/questions/51335298/concepts-of-backref-and-back-populate-in-sqlalchemy>
+- _Python SQLAlchemy: Counting a `SELECT *` (**This search was made possible due to the difficulty of finding appropriate API for interacting with the Database**)_ - <https://stackoverflow.com/questions/12941416/how-to-count-rows-with-select-count-with-sqlalchemy>
+- _Python SQLAlchemy: `default` parameter doesn't work after sending a payload in the database_ - <https://stackoverflow.com/questions/20348801/why-isnt-sqlalchemys-default-column-value-working>
+- _Python SQLAlchemy: `default` parameter for the `datetime` field_ - <https://stackoverflow.com/questions/13370317/sqlalchemy-default-datetime>
+- _Python SQLAlchemy: `Encrypt a column without automatically decrypting upon retrieval`, (used as a concept but scraped later on and turned in an idea instead)_ - <https://stackoverflow.com/questions/49560609/sqlalchemy-encrypt-a-column-without-automatically-decrypting-upon-retrieval>
+- _Python SQLAlchemy: Understanding the use of `back_populate`_ - <https://stackoverflow.com/questions/39869793/when-do-i-need-to-use-sqlalchemy-back-populates>
+- _Python STMP: Sending an email with Gmail as provider_ - <https://stackoverflow.com/questions/10147455/how-to-send-an-email-with-gmail-as-provider-using-python>
+- _Python STMP: Understanding the SSL version error (**This occured during my prototyping session with the email**)_ - <https://stackoverflow.com/questions/57715289/how-to-fix-ssl-sslerror-ssl-wrong-version-number-wrong-version-number-ssl>
+- _Python Stacktrace: Silencing the stacktrace (**This search was made possible due to some coroutines failed to close the connection or do `close`() after attempting to do `CTRL + C` during debugging days**)_ - <https://stackoverflow.com/questions/17784849/print-an-error-message-without-printing-a-traceback-and-close-the-program-when-a>
+- _Python `string`: Check if multiple strings exists from the another_ - <https://stackoverflow.com/questions/3389574/check-if-multiple-strings-exist-in-another-string>
+- _Python Terminal Call Libraries: Understanding the differences between `subprocess.Popen` and `os.system`_ - <https://stackoverflow.com/questions/4813238/difference-between-subprocess-popen-and-os-system>
+- _Python Typing: Cannot import `NoneType`_ - <https://stackoverflow.com/questions/15844714/why-am-i-getting-an-error-message-in-python-cannot-import-name-nonetype>
+- _Python Typing: TypeError: unhashable type: 'dict' (Implementation complexity leads me to this error)_ - <https://stackoverflow.com/questions/13264511/typeerror-unhashable-type-dict>
+- _Python Type Annotation: Annotating a `class` instead of the `instance`_ - <https://stackoverflow.com/questions/41417679/how-to-annotate-a-type-thats-a-class-object-instead-of-a-class-instance>
+- _Python Type Object Conversion (bytes to dict, used to serialize and restore blockchain system)_ - <https://stackoverflow.com/questions/19232011/convert-dictionary-to-bytes-and-back-again-python>
+- _Vim: How to get vim to open multiple files into tabs at once (I'm using Visual Studio Code + Vim Extension)_ - <https://superuser.com/questions/171763/how-to-get-vim-to-open-multiple-files-into-tabs-at-once>
+- _VSCode: How to allow `.jsonc`?_ - <https://stackoverflow.com/questions/47834825/in-vs-code-disable-error-comments-are-not-permitted-in-json>
+- _VSCode: Keybinds for 'Hovering Info' on Cursor (I have to know since my diagnostics tab contains enormous amount of diagnostics)_ - <https://stackoverflow.com/questions/49146283/how-to-show-errors-warnings-by-hotkey-in-vscode/49147540>
+- _VSCode: Keybind for searching a file through the 'File Explorer'_ - <https://stackoverflow.com/questions/30095376/how-do-i-search-for-files-in-visual-studio-code>
 ### Utilities / Tools Used
 
 References indicated are tools or utilities that I used to debug, generate entities for PoC, and etc.
