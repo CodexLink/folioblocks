@@ -61,10 +61,10 @@ Consortium was in favor with the system that is supposed to be integrated along 
 
 - _Consortium Blockchain-Based Decentralized Stock Exchange Platform_ - <https://ieeexplore.ieee.org/abstract/document/9127940>
 - _DefenseChain: Consortium Blockchain for Cyber Threat Intelligence Sharing and Defense_ - <https://ieeexplore.ieee.org/abstract/document/9223313>
-- _Design Consideration: Calling Conventions for the Participating Nodes in the Blockchain - <https://www.sofi.com/learn/content/what-are-nodes/>
-- _Design Consideration: Choosing the right consensus mechanism: Sawtooth's Proof-of-Elapsed-Time (PoET) (Used for extra information) - <https://www.geeksforgeeks.org/consensus-algorithms-in-blockchain/>
+- _Design Consideration: Calling Conventions for the Participating Nodes in the Blockchain_ - <https://www.sofi.com/learn/content/what-are-nodes/>
+- _Design Consideration: Choosing the right consensus mechanism: Sawtooth's Proof-of-Elapsed-Time (PoET) (Used for extra information)_ - <https://www.geeksforgeeks.org/consensus-algorithms-in-blockchain/>
 - _Design Consideration: Understanding the blockchain vulnerabilities such as the 51% attack_ - <https://s3.ap-northeast-2.amazonaws.com/journal-home/journal/jips/fullText/90/jips_530.pdf>
-- _Design Consideration: Understanding Consensus Mechanism and its internal steps to produce consensus, `What Are Consensus Mechanisms in Blockchain and Cryptocurrency?` - <https://www.investopedia.com/terms/c/consensus-mechanism-cryptocurrency.asp>
+- _Design Consideration: Understanding Consensus Mechanism and its internal steps to produce consensus_, `What Are Consensus Mechanisms in Blockchain and Cryptocurrency?` - <https://www.investopedia.com/terms/c/consensus-mechanism-cryptocurrency.asp>
 - _Hybrid-IoT: Hybrid Blockchain Architecture for Internet of Things - PoW Sub-blockchains_ - <https://arxiv.org/pdf/1804.03903.pdf>
 - _Proof-of-Elapsed-Time, Concensus of Choice, Backed by Performance ANalaysis from the Sawtooth Blockchain Framework (Used as a final choice as a bias for the development of the blockchain system)_ - <https://www.cs.uoregon.edu/Reports/MS-201906-Corso.pdf>
 - _Public, Private, Permissioned Blockchains Compared_ - <https://www.investopedia.com/news/public-private-permissioned-blockchains-compared/>
@@ -95,7 +95,7 @@ This sub-part of the reference includes git issues and repositories that further
 
 This part of the reference section contains alot! They are the onces that helped me the most when I had no one else to help in the development. With that, these references helped me understood some technologies that I have never used.
 
-- _Azure Container Instance: Creating a YAML single file to multi-container whilst single deploy - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-reference-yaml>
+- _Azure Container Instance: Creating a YAML single file to multi-container whilst single deploy_ - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-reference-yaml>
 - _Azure Container Instance: Deploy a multi-container group_ - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-multi-container-yaml>
 - _Azure Container Instance: Deploying a container_ - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-tutorial-deploy-app>
 - _Azure Container Instance: Enabling a TLS endpoint in a sidecar container_ - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-container-group-ssl>
