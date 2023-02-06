@@ -95,10 +95,6 @@ This sub-part of the reference includes git issues and repositories that further
 
 This part of the reference section contains alot! They are the onces that helped me the most when I had no one else to help in the development. With that, these references helped me understood some technologies that I have never used.
 
-- _Building An Vue.js App With Azure Static Web Apps Services_ - <https://medium.com/bb-tutorials-and-thoughts/building-an-vue-js-app-with-azure-static-web-apps-service-270be990e39d>
-- _Docker: Reference documentation_ - <https://docs.docker.com/reference/>
-- _Docker Configuration: How to Set Docker Memory and CPU Usage Limit_ - <https://phoenixnap.com/kb/docker-memory-and-cpu-limit>
-- _Docker Configuration: Understanding codenames with respect to sizes_ - <https://medium.com/swlh/alpine-slim-stretch-buster-jessie-bullseye-bookworm-what-are-the-differences-in-docker-62171ed4531d>
 - _Azure Container Instance: Creating a YAML single file to multi-container whilst single deploy - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-reference-yaml>
 - _Azure Container Instance: Deploy a multi-container group_ - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-multi-container-yaml>
 - _Azure Container Instance: Deploying a container_ - <https://learn.microsoft.com/en-us/azure/container-instances/container-instances-tutorial-deploy-app>
@@ -192,27 +188,54 @@ This sub-section contains some list from the sub-section `Standards: Initial`, t
 Also, this contains references that helped me further debug and do complex implementations, wherein specific cases are very rare to find. Link archiving started from February 01, 2022 and onwards, this implies that I did some early research but not alot than the specified date due to the time set for prototyping a system.
 
 - _API Best Practice Advise: 'Logout: GET or POST?' (Debating what HTTP method should I used for API endpoint `/logout`)_ - <https://stackoverflow.com/questions/3521290/logout-get-or-post>
+- _Azure Container Instances: How to inter-communicaate containers_ - <https://stackoverflow.com/questions/60628748/inter-container-communication-in-azure-container-instances>
+- _Azure Container Registry: Deleting a docker image_ - <https://stackoverflow.com/questions/41446962/how-to-delete-image-from-azure-container-registry>
+- _Cryptography, Why choose SHA-256 over SHA-512 for SSL/TLS certificate?_ - <https://security.stackexchange.com/questions/165559/why-would-i-choose-sha-256-over-sha-512-for-a-ssl-tls-certificate>
+- _CSS: Image size, fill and its properties_: <https://stackoverflow.com/questions/11757537/css-image-size-how-to-fill-but-not-stretch>
 - _Docker, `dockerfile`: Conditional `COPY`_ - <https://stackoverflow.com/questions/63728819/conditional-copy-in-dockerfile>
+- _Docker, `dockerfile`: Conditional `ADD/COPY`_ - <https://stackoverflow.com/questions/31528384/conditional-copy-add-in-dockerfile>
 - _Docker, `dockerfile`: Conditional `ENV`_ - <https://stackoverflow.com/questions/37057468/conditional-env-in-dockerfile>
 - _Docker, `dockerfile`: Passing `ARG` value to the `ENTRYPOINT`_ - <https://stackoverflow.com/questions/34324277/how-to-pass-arg-value-to-entrypoint>
+- _Docker, `dockerfile` `.env` file is ignored during `COPY`_ - <https://stackoverflow.com/questions/42132475/hidden-file-env-not-copied-using-docker-copy>
 - _Docker, `dockerfile`: `if-else` condition with external arguments_ - <https://stackoverflow.com/questions/43654656/dockerfile-if-else-condition-with-external-arguments>
+- _Docker, forcing to `docker clean` for every build_ - <https://stackoverflow.com/questions/35594987/how-to-force-docker-for-a-clean-build-of-an-image>
+- _Docker, `if-else` condition with external arguments_ - <https://stackoverflow.com/questions/43654656/dockerfile-if-else-condition-with-external-arguments>
+- _Docker Container Runtime: `ping`: command not found_ - <https://stackoverflow.com/questions/39901311/docker-ubuntu-bash-ping-command-not-found>
+- _Encoding, attempting to do `base64` in the terminal_ - <https://superuser.com/questions/120796/how-to-encode-base64-via-command-line>
 - _FastAPI: Attempting to multi-thread to do blockchain hashing mechanism without blocking the main thread ('came to a conclusion of using `asyncio.run_in_executor()`')_ - <https://stackoverflow.com/questions/66541289/python-fastapi-multi-threading-processing-start-stop-process-with-api-endpo>
 - _FastAPI: API endpoints from Docker is not detected or registered through the logging system_ - <https://stackoverflow.com/questions/63510041/adding-python-logging-to-fastapi-endpoints-hosted-on-docker-doesnt-display-api>
+- _FastAPI: Catching real client IP address (**This was used to communicate with other nodes that is containerized**)_ - <https://stackoverflow.com/questions/60098005/fastapi-starlette-get-client-real-ip>
 - _FastAPI: Patching the logging system with a customized format through library `logging`_ - <https://stackoverflow.com/questions/62934384/how-to-add-timestamp-to-each-request-in-uvicorn-logs>
+- _FastAPI: Returning an image_ - <https://stackoverflow.com/questions/55873174/how-do-i-return-an-image-in-fastapi>
 - _FastAPI: Understanding the `loggers` and its `handlers` and applying changes to filter levels with `dictConfig()`_ - <https://stackoverflow.com/questions/25187083/python-logging-to-multiple-handlers-at-different-log-levels>
-- _FastAPI (Uvicorn Backend), Problem enabling Uvicorn auto-restart when launching programmatically with uvicorn.run_ - <https://stackoverflow.com/questions/52784924/problem-enabling-uvicorn-auto-restart-when-launching-programmatically-with-uvico>
+- _FastAPI Uvicorn Backend, Problem enabling Uvicorn auto-restart when launching programmatically with uvicorn.run_ - <https://stackoverflow.com/questions/52784924/problem-enabling-uvicorn-auto-restart-when-launching-programmatically-with-uvico>
+- _FastAPI Debugging: with VSCode_ - <https://stackoverflow.com/questions/60205056/debug-fastapi-application-in-vscode>
 - _FastAPI Models: Value Error Missing when using POST (This was due to `response_model` not set)_ - <https://stackoverflow.com/questions/68139116/value-error-missing-when-using-post-with-fastapi>
 - _FastAPI Security: Securing FastAPI with JWT TOken-based Authentication_ - <https://testdriven.io/blog/fastapi-jwt-auth/#jwt-authentication>
 - _Function Naming Convention: what was the opposite of `init()`_ - <https://softwareengineering.stackexchange.com/questions/163004/what-is-the-opposite-of-initialize-or-init>
+- _Git, Patterns for Ignore: Excluding file only from the root folder of the working directory_ - <https://stackoverflow.com/questions/3637660/how-to-exclude-file-only-from-root-folder-in-git>
+- _Git, Cloning a specific folder from a repository_ - <https://stackoverflow.com/questions/651038/how-do-i-clone-a-git-repository-into-a-specific-folder>
 - _HTTP Code, Finding Suitability based on Situation: What is the HTTP Code for `Not Ready Yet, Try Again Later?`_ - <https://stackoverflow.com/questions/9794696/which-http-status-code-means-not-ready-yet-try-again-later#:~:text=Retry%2DAfter%20is%20also%20valid,too%20much%20work%20to%20do>
+- _HTTP Request: Request is blocked, content must be served over `HTTPS`_ - <https://stackoverflow.com/questions/52130918/web-api-error-this-request-has-been-blocked-the-content-must-be-served-over-h>
+- _HTTP Request Tool, `curl`: Retry mechanism_ - <https://stackoverflow.com/questions/42873285/curl-retry-mechanism>
 - _MyPy: Unable to detect modules from other directories_ - <https://stackoverflow.com/questions/60873894/mypy-cant-find-submodule>
+- _Node.js, Package Manager: Yarn-equivalent of `npm ci`_ - <https://stackoverflow.com/questions/58482655/what-is-the-closest-to-npm-ci-in-yarn>
+- _Node.js, Axios Library: Downloading a file in `POST` method_ - <https://stackoverflow.com/questions/61230581/download-file-with-axios-post-method-in-vue-js>
+- _Node.js, Axios Library: Forcing `GET` request to download an asset_ - <https://stackoverflow.com/questions/43432892/force-download-get-request-using-axios>
+- _Node.js, Axios Library: Passing `headers` in the `POST` request_ - <https://stackoverflow.com/questions/44617825/passing-headers-with-axios-post-request>
+- _Javascript: How to get the target of the proxy?_ - <https://stackoverflow.com/questions/51096547/how-to-get-the-target-of-a-javascript-proxy>
+- _Javascript: Date Incrementation_ - <https://stackoverflow.com/questions/3674539/incrementing-a-date-in-javascript>
+- _Javascript: Understanding the dollar sign `$`_ - <https://stackoverflow.com/questions/846585/what-is-the-purpose-of-the-dollar-sign-in-javascript>
 - _Python `ArgumentParser` Library: Best practices for the validation of the context passed in the parameter_ - <https://stackoverflow.com/questions/37471636/python-argument-parsing-validation-best-practices>
 - _Python AsyncIO: Implementing an Asynchronous `__init__` method for class and use `await` for instantiation_ - <https://stackoverflow.com/questions/33128325/how-to-set-class-attribute-with-await-in-init>
 - _Python AsyncIO: Keyword arguments to pass on a async function (**Afaik, this search was made possible by creating a wrapper library that takes `aiohttp` and create an queueing system**)_ - <https://stackoverflow.com/questions/23946895/requests-in-asyncio-keyword-arguments>
 - _Python AsyncIO: Understanding the calls for an async method from a class_ - <https://stackoverflow.com/questions/42009202/how-to-call-a-async-function-contained-in-a-class>
 - _Python AsyncIO: Understanding why `run_in_executor`() is fine vs. multithreading library_ - <https://stackoverflow.com/questions/55027940/is-run-in-executor-optimized-for-running-in-a-loop-with-coroutines>
 - _Python AsyncIO: Pythonic way on waiting a coroutine to finish, (**I forgot to do this, and instead I used their low level API to wait instead of creating an `Event` flag**)_ - <https://stackoverflow.com/questions/65352682/python-asyncio-pythonic-way-of-waiting-until-condition-satisfied>
+- _Python AsyncIO: `RuntimeError: Exception ignored in: <function _ProactorBasePipeTransport>`_ - <https://stackoverflow.com/questions/65682221/runtimeerror-exception-ignored-in-function-proactorbasepipetransport>
+- _Python AsyncIO: `TypeError: Can't pickle coroutine objects when using asyncio.loop.run_in_executor()`_ - <https://stackoverflow.com/questions/65557258/typeerror-cant-pickle-coroutine-objects-when-i-am-using-asyncio-loop-run-in-ex>
 - _Python AsyncIO: Waiting for `stdin` input stream while there's a background process_ - <https://stackoverflow.com/questions/58454190/python-async-waiting-for-stdin-input-while-doing-other-stuff>
+- _Python Database, SQLite: `database is locked`_ - <https://stackoverflow.com/questions/2740806/python-sqlite-database-is-locked>
 - _Python `datetime`: Converting a string back `isoformat()` to a `datetime` object_ - <https://stackoverflow.com/questions/28331512/how-to-convert-pythons-isoformat-string-back-into-datetime-object>
 - _Python Dictionary: Sorting a list from the dictionary_ - <https://stackoverflow.com/questions/72899/how-do-i-sort-a-list-of-dictionaries-by-a-value-of-the-dictionary>
 - _Python Dictionary: Copying a dictionary without modifying the original reference (**This issue was inspired from the C's datetime object problem wherein a copied object reflects the changes to the original object**)_ - <https://stackoverflow.com/questions/2465921/how-to-copy-a-dictionary-and-only-edit-the-copy>
@@ -222,24 +245,31 @@ Also, this contains references that helped me further debug and do complex imple
 - _Python Exceptions: How to properly ignore them?_ - <https://stackoverflow.com/questions/730764/how-to-properly-ignore-exceptions>
 - _Python Function Definition: Understanding the Bare Asterisk (`*`) in the function parameter_ - <https://stackoverflow.com/questions/14301967/bare-asterisk-in-function-parameters>
 - _Python Function Definition: Restricting a function to only receive a keyname + value after Bare Asterisk (`*`)_ - <https://stackoverflow.com/questions/2965271/forced-naming-of-parameters-in-python/14298976#14298976>
-- _Python IO: Going one back three with `Pathlib`_ - <https://stackoverflow.com/questions/67251538/python-how-to-go-one-folder-back-in-pathlib>
+- _Python IO: Going one back directory tree with `Pathlib`_ - <https://stackoverflow.com/questions/67251538/python-how-to-go-one-folder-back-in-pathlib>
 - _Python IO: Checking if a directory exists_ - <https://stackoverflow.com/questions/8933237/how-do-i-check-if-directory-exists-in-python>
 - _Python Limits: Identifying the maximum and minimum value of an `Integer`_ - <https://stackoverflow.com/questions/7604966/maximum-and-minimum-values-for-ints>
 - _Python MyPy: Untyped decorator makes function untyped (I was unable to resolve this due to the complexity argument of my own decorator, which also takes an argument)_ - <https://stackoverflow.com/questions/65621789/mypy-untyped-decorator-makes-function-my-method-untyped>
+- _Python Naming Convention: Understanding the single and double underscore prefixes_ - <https://stackoverflow.com/questions/1301346/what-is-the-meaning-of-single-and-double-underscore-before-an-object-name>
 - _Python Object: Checking the possibility wherein a singe object is called throughout the whole file (**This search was made possible due to the issue of circular dependencies**)_ - <https://stackoverflow.com/questions/63189935/is-it-possible-to-use-the-same-object-in-multiple-files>
+- _Python Object: Attempting to validate objects instance with `isinstance()` in loop approach_ - <https://stackoverflow.com/questions/43870709/how-to-apply-isinstance-on-objects-in-a-python-dictionary-using-a-for-loop>
 - _Python Object: Determining an object's size_ - <https://stackoverflow.com/questions/449560/how-do-i-determine-the-size-of-an-object-in-python>
+- _Python Object: Static methods and how do I call them (**This is just a revisit from actually using `@staticmethod()`)_ - <https://stackoverflow.com/questions/1859959/static-methods-how-to-call-a-method-from-another-method>
 - _Python Object Manipulation: Changing a dictionary whilst another changes were done, the workaround_ - <https://stackoverflow.com/questions/11941817/how-can-i-avoid-runtimeerror-dictionary-changed-size-during-iteration-error>
 - _Python Object Manipulation: Combining two dictionaries in shorthand_ - <https://stackoverflow.com/questions/38987/how-do-i-merge-two-dictionaries-in-a-single-expression>
-- _Python Object: Static methods and how do I call them (**This is just a revisit from actually using `@staticmethod()`)_ - <https://stackoverflow.com/questions/1859959/static-methods-how-to-call-a-method-from-another-method>
+- _Python Object Manipulation: Custom implementation of the `list` sorting_ - <https://stackoverflow.com/questions/11850425/custom-python-list-sorting>
+- _Python Object Manipulation: Doing a reverse list without for loop method_ - <https://stackoverflow.com/questions/4183506/python-list-sort-in-descending-order>
 - _Python `sockets`: Identifying a port number's state whether it's in-use or not_ - <https://stackoverflow.com/questions/2470971/fast-way-to-test-if-a-port-is-in-use-using-python>
+- _Python Process Runtime Error: `OSError: [Errno 18] Invalid cross-device link`_ - <https://stackoverflow.com/questions/42392600/oserror-errno-18-invalid-cross-device-link>
 - _Python SQLAlchemy: Concepts behind `backred` and `back_populate`_ - <https://stackoverflow.com/questions/51335298/concepts-of-backref-and-back-populate-in-sqlalchemy>
 - _Python SQLAlchemy: Counting a `SELECT *` (**This search was made possible due to the difficulty of finding appropriate API for interacting with the Database**)_ - <https://stackoverflow.com/questions/12941416/how-to-count-rows-with-select-count-with-sqlalchemy>
 - _Python SQLAlchemy: `default` parameter doesn't work after sending a payload in the database_ - <https://stackoverflow.com/questions/20348801/why-isnt-sqlalchemys-default-column-value-working>
 - _Python SQLAlchemy: `default` parameter for the `datetime` field_ - <https://stackoverflow.com/questions/13370317/sqlalchemy-default-datetime>
 - _Python SQLAlchemy: `Encrypt a column without automatically decrypting upon retrieval`, (used as a concept but scraped later on and turned in an idea instead)_ - <https://stackoverflow.com/questions/49560609/sqlalchemy-encrypt-a-column-without-automatically-decrypting-upon-retrieval>
+- _Python SQLAlchemy: `IS NOT NULL` select approach, how-to_ - <https://stackoverflow.com/questions/21784851/sqlalchemy-is-not-null-select>
+- _Python SQLAlchemy: `select` where condition contains boolean expression `is False`_ - <https://stackoverflow.com/questions/48274553/sqlalchemy-core-select-where-condition-contains-boolean-expression-is-false>
 - _Python SQLAlchemy: Understanding the use of `back_populate`_ - <https://stackoverflow.com/questions/39869793/when-do-i-need-to-use-sqlalchemy-back-populates>
-- _Python STMP: Sending an email with Gmail as provider_ - <https://stackoverflow.com/questions/10147455/how-to-send-an-email-with-gmail-as-provider-using-python>
-- _Python STMP: Understanding the SSL version error (**This occured during my prototyping session with the email**)_ - <https://stackoverflow.com/questions/57715289/how-to-fix-ssl-sslerror-ssl-wrong-version-number-wrong-version-number-ssl>
+- _Python SMTP: Sending an email with Gmail as provider_ - <https://stackoverflow.com/questions/10147455/how-to-send-an-email-with-gmail-as-provider-using-python>
+- _Python SMTP: Understanding the SSL version error (**This occured during my prototyping session with the email**)_ - <https://stackoverflow.com/questions/57715289/how-to-fix-ssl-sslerror-ssl-wrong-version-number-wrong-version-number-ssl>
 - _Python Stacktrace: Silencing the stacktrace (**This search was made possible due to some coroutines failed to close the connection or do `close`() after attempting to do `CTRL + C` during debugging days**)_ - <https://stackoverflow.com/questions/17784849/print-an-error-message-without-printing-a-traceback-and-close-the-program-when-a>
 - _Python `string`: Check if multiple strings exists from the another_ - <https://stackoverflow.com/questions/3389574/check-if-multiple-strings-exist-in-another-string>
 - _Python Terminal Call Libraries: Understanding the differences between `subprocess.Popen` and `os.system`_ - <https://stackoverflow.com/questions/4813238/difference-between-subprocess-popen-and-os-system>
@@ -247,10 +277,24 @@ Also, this contains references that helped me further debug and do complex imple
 - _Python Typing: TypeError: unhashable type: 'dict' (Implementation complexity leads me to this error)_ - <https://stackoverflow.com/questions/13264511/typeerror-unhashable-type-dict>
 - _Python Type Annotation: Annotating a `class` instead of the `instance`_ - <https://stackoverflow.com/questions/41417679/how-to-annotate-a-type-thats-a-class-object-instead-of-a-class-instance>
 - _Python Type Object Conversion (bytes to dict, used to serialize and restore blockchain system)_ - <https://stackoverflow.com/questions/19232011/convert-dictionary-to-bytes-and-back-again-python>
+- _Sockets: Checking which process uses TCP or UDP port_ - <https://stackoverflow.com/questions/48198/how-do-i-find-out-which-process-is-listening-on-a-tcp-or-udp-port-on-windows>
+- _SMTP: Google flags SMTP as less secure applications_ - <https://stackoverflow.com/questions/47451890/google-smtp-less-secure-applications>
+- _SMTP: Gmail error, SMTP server requires a secure connection or the client was not authenticated._ - <https://stackoverflow.com/questions/20906077/gmail-error-the-smtp-server-requires-a-secure-connection-or-the-client-was-not>
 - _Vim: How to get vim to open multiple files into tabs at once (I'm using Visual Studio Code + Vim Extension)_ - <https://superuser.com/questions/171763/how-to-get-vim-to-open-multiple-files-into-tabs-at-once>
 - _VSCode: How to allow `.jsonc`?_ - <https://stackoverflow.com/questions/47834825/in-vs-code-disable-error-comments-are-not-permitted-in-json>
 - _VSCode: Keybinds for 'Hovering Info' on Cursor (I have to know since my diagnostics tab contains enormous amount of diagnostics)_ - <https://stackoverflow.com/questions/49146283/how-to-show-errors-warnings-by-hotkey-in-vscode/49147540>
 - _VSCode: Keybind for searching a file through the 'File Explorer'_ - <https://stackoverflow.com/questions/30095376/how-do-i-search-for-files-in-visual-studio-code>
+- _Vue.js 3, ESLint: `The template root requires exactly one element`_ - <https://stackoverflow.com/questions/64867504/vue-3-the-template-root-requires-exactly-one-element-eslint-plugin-vue>
+- _Vue.js 3, Identifying `events` on route change_ - <https://stackoverflow.com/questions/46402809/vuejs-event-on-route-change>
+- _Vue.js 3, Quasar Framework: Accessing `$route`_ - <https://stackoverflow.com/questions/69767642/access-to-route-in-vue3-quasar2>
+- _Vue.js 3, Quasar Framework: Adding `href` to a `<q-table>`_ - <https://stackoverflow.com/questions/56514641/how-can-i-add-an-href-to-a-q-table-quasar-data-table>
+- _Vue.js 3, Quasar Framework: `Onclick even on q-table stops working after passing props to template`_ - <https://stackoverflow.com/questions/64879628/onclick-event-on-q-table-stop-working-after-passing-props-to-template>
+- _Vue.js 3, Quasar Framework: Submitting a form with `Enter` key_ - <https://stackoverflow.com/questions/64828512/vue-js-how-can-i-submit-a-form-with-the-enter-key>
+- _Vue.js 3, Vue Router: Adding dynamic link in `<router-link>`_ - <https://stackoverflow.com/questions/55449363/how-to-give-dynamic-url-in-router-link-in-vuejs>
+- _Vue.js 3, Vue Router: Apply `active` styles_ - <https://stackoverflow.com/questions/46083220/how-to-vuejs-router-link-active-style>
+- _Vue.js 3, Vue Router: Using `regex` as path for optimization_ - <https://stackoverflow.com/questions/51302405/use-regex-in-vue-router-paths>
+- _Vue.js 3, Knowing how to go back/route-back_ - <https://stackoverflow.com/questions/48104842/how-can-i-go-back-route-back-on-vue-router>
+
 ### Utilities / Tools Used
 
 References indicated are tools or utilities that I used to debug, generate entities for PoC, and etc.
